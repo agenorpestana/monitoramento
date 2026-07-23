@@ -103,6 +103,9 @@ async function startServer() {
   });
 
   app.post('/api/cameras', (req, res) => {
+    const reqHost = (req.get('host') || 'localhost').split(':')[0];
+    const reqProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+
     const {
       name,
       location,
@@ -126,16 +129,18 @@ async function startServer() {
       return res.status(400).json({ error: 'O nome da câmera é obrigatório' });
     }
 
+    const defaultKey = streamKey || `cam_${Date.now().toString().slice(-6)}`;
+
     const newCamera: Camera = {
       id: `cam-${Date.now().toString().slice(-4)}`,
       name,
       location: location || `${city ? city + ' - ' : ''}${stateUf || 'Localização ITL'}`,
       protocol: protocol || 'RTSP',
       rtspUrl: rtspUrl || 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0',
-      rtmpUrl: rtmpUrl || fullRtmpUrl || `rtmp://aerocam.itlfibra.com:1935/live/${streamKey || 'cam_' + Date.now().toString().slice(-6)}`,
-      streamKey: streamKey || `cam_${Date.now().toString().slice(-6)}`,
-      rtmpServerUrl: rtmpServerUrl || 'rtmp://aerocam.itlfibra.com:1935/live',
-      fullRtmpUrl: fullRtmpUrl || `https://aerocam.itlfibra.com/live/${streamKey || 'cam_' + Date.now().toString().slice(-6)}`,
+      rtmpUrl: rtmpUrl || fullRtmpUrl || `rtmp://${reqHost}:1935/live/${defaultKey}`,
+      streamKey: defaultKey,
+      rtmpServerUrl: rtmpServerUrl || `rtmp://${reqHost}:1935/live`,
+      fullRtmpUrl: fullRtmpUrl || `${reqProto}://${reqHost}/live/${defaultKey}`,
       stateUf: stateUf || '',
       city: city || '',
       status: 'ONLINE',

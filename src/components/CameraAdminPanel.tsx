@@ -67,11 +67,33 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   const [protocol, setProtocol] = useState<'RTSP' | 'RTMP'>('RTMP');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  const getCurrentHost = () => {
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      return window.location.hostname;
+    }
+    return 'localhost';
+  };
+
+  const getCurrentProtocol = () => {
+    if (typeof window !== 'undefined' && window.location && window.location.protocol) {
+      return window.location.protocol;
+    }
+    return 'https:';
+  };
+
   // Form states
   const [cameraName, setCameraName] = useState('');
   const [streamKey, setStreamKey] = useState('cam_wpg8tz');
-  const [rtmpServer, setRtmpServer] = useState('rtmp://aerocam.itlfibra.com:1935/live');
+  const [rtmpServer, setRtmpServer] = useState(() => `rtmp://${getCurrentHost()}:1935/live`);
   const [rtspUrl, setRtspUrl] = useState('rtsp://admin:itl2026@192.168.1.100:554/live/ch0');
+
+  // Update RTMP server automatically when hostname is available
+  useEffect(() => {
+    const host = getCurrentHost();
+    if (host && rtmpServer.includes('localhost') && host !== 'localhost') {
+      setRtmpServer(`rtmp://${host}:1935/live`);
+    }
+  }, []);
 
   // IBGE States & Cities
   const [ufs, setUfs] = useState<{ sigla: string; nome: string }[]>(FALLBACK_UFS);
@@ -135,8 +157,10 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
     setStreamKey(`cam_${rand}`);
   };
 
+  const currentHost = getCurrentHost();
+  const currentProtocol = getCurrentProtocol();
   const fullRtmpUrl = `${rtmpServer}/${streamKey}`;
-  const generatedHttpLink = `https://aerocam.itlfibra.com/live/${streamKey}`;
+  const generatedHttpLink = `${currentProtocol}//${currentHost}/live/${streamKey}`;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
