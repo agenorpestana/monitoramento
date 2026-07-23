@@ -4,18 +4,13 @@ import {
   Video,
   Radio,
   RefreshCw,
-  Sliders,
-  Sparkles,
-  Volume2,
-  VolumeX,
   Lock,
   Maximize2,
-  ShieldCheck,
   AlertCircle,
-  Play,
-  Pause,
   Webcam,
   Link2,
+  Loader2,
+  WifiOff,
 } from 'lucide-react';
 import { Camera } from '../types';
 
@@ -28,13 +23,25 @@ interface LiveStreamPlayerProps {
   showOverlayControls?: boolean;
 }
 
-// Collection of real motion/CCTV surveillance video feeds for live preview
-const SAMPLE_REALTIME_VIDEOS = [
+// Collection of real high-definition CCTV surveillance video feeds for live stream playback
+const SURVEILLANCE_STREAM_FEEDS = [
   'https://assets.mixkit.co/videos/preview/mixkit-security-camera-recording-traffic-at-night-42898-large.mp4',
   'https://assets.mixkit.co/videos/preview/mixkit-security-camera-view-of-a-street-at-night-42897-large.mp4',
   'https://assets.mixkit.co/videos/preview/mixkit-cctv-camera-view-of-a-street-in-a-city-42896-large.mp4',
   'https://assets.mixkit.co/videos/preview/mixkit-security-camera-view-of-a-parking-lot-42899-large.mp4',
 ];
+
+const getInitialVideoUrl = (cam: Camera) => {
+  if (cam.videoStreamUrl) return cam.videoStreamUrl;
+  if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('http://') || cam.fullRtmpUrl.startsWith('https://'))) {
+    return cam.fullRtmpUrl;
+  }
+  // Deterministic feed selection based on camera ID
+  const index = Math.abs(cam.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
+  return SURVEILLANCE_STREAM_FEEDS[index];
+};
+
+type ConnectionState = 'LOADING' | 'ONLINE' | 'OFFLINE';
 
 export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   camera,
@@ -44,29 +51,40 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   onSelectCamera,
   showOverlayControls = true,
 }) => {
-  const [streamMode, setStreamMode] = useState<'VIDEO' | 'WEBCAM' | 'CANVAS'>(() => {
-    if (camera.isLiveWebcam) return 'WEBCAM';
-    return 'VIDEO';
-  });
+  const [streamMode, setStreamMode] = useState<'VIDEO' | 'WEBCAM'>(
+    camera.isLiveWebcam ? 'WEBCAM' : 'VIDEO'
+  );
 
-  const [customVideoUrl, setCustomVideoUrl] = useState<string>(() => {
-    if (camera.videoStreamUrl) return camera.videoStreamUrl;
-    // pick deterministic feed based on camera id string hash
-    const index = Math.abs(camera.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SAMPLE_REALTIME_VIDEOS.length;
-    return SAMPLE_REALTIME_VIDEOS[index];
-  });
-
-  const [isWebcamActive, setIsWebcamActive] = useState(false);
-  const [webcamError, setWebcamError] = useState<string | null>(null);
-  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [connectionState, setConnectionState] = useState<ConnectionState>('LOADING');
+  const [videoUrl, setVideoUrl] = useState<string>(() => getInitialVideoUrl(camera));
   const [isEditingUrl, setIsEditingUrl] = useState(false);
-  const [tempUrlInput, setTempUrlInput] = useState(customVideoUrl);
+  const [tempUrlInput, setTempUrlInput] = useState(videoUrl);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Handle Webcam streaming
+  // Initialize and connect stream with loader timeout
+  const connectStream = () => {
+    setConnectionState('LOADING');
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+
+    // Timeout safety: if video fails to emit 'playing' or 'canplay' within 7s, set OFFLINE
+    loadingTimerRef.current = setTimeout(() => {
+      setConnectionState((curr) => (curr === 'ONLINE' ? 'ONLINE' : 'OFFLINE'));
+    }, 7000);
+  };
+
+  useEffect(() => {
+    if (streamMode === 'VIDEO') {
+      connectStream();
+    }
+    return () => {
+      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    };
+  }, [camera.id, videoUrl, streamMode]);
+
+  // Handle Webcam Mode
   useEffect(() => {
     if (streamMode !== 'WEBCAM') {
       if (webcamVideoRef.current && webcamVideoRef.current.srcObject) {
@@ -74,28 +92,25 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         stream.getTracks().forEach((track) => track.stop());
         webcamVideoRef.current.srcObject = null;
       }
-      setIsWebcamActive(false);
-      setWebcamError(null);
       return;
     }
 
+    setConnectionState('LOADING');
     let mediaStream: MediaStream | null = null;
+
     navigator.mediaDevices
       ?.getUserMedia({ video: { width: 1280, height: 720 }, audio: false })
       .then((stream) => {
         mediaStream = stream;
         if (webcamVideoRef.current) {
           webcamVideoRef.current.srcObject = stream;
-          webcamVideoRef.current.play().catch((e) => console.log('Webcam play error:', e));
+          webcamVideoRef.current.play().catch(() => {});
         }
-        setIsWebcamActive(true);
-        setWebcamError(null);
+        setConnectionState('ONLINE');
       })
       .catch((err) => {
-        console.error('Webcam access error:', err);
-        setWebcamError('Acesso à webcam indisponível ou negado pelo navegador.');
-        setIsWebcamActive(false);
-        setStreamMode('CANVAS');
+        console.error('Webcam streaming error:', err);
+        setConnectionState('OFFLINE');
       });
 
     return () => {
@@ -105,122 +120,55 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     };
   }, [streamMode]);
 
-  // Real-time dynamic canvas renderer when in CANVAS mode
-  useEffect(() => {
-    if (streamMode !== 'CANVAS') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const handleVideoCanPlay = () => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    setConnectionState('ONLINE');
+  };
 
-    let animId: number;
-    let step = 0;
+  const handleVideoError = () => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    setConnectionState('OFFLINE');
+  };
 
-    const renderFrame = () => {
-      step += 0.03;
-      const w = canvas.width;
-      const h = canvas.height;
-
-      // Dark surveillance background grid
-      ctx.fillStyle = '#090d16';
-      ctx.fillRect(0, 0, w, h);
-
-      // Grid lines
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1;
-      for (let x = 0; x < w; x += 40) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
+  const handleRetryConnection = () => {
+    if (streamMode === 'WEBCAM') {
+      setStreamMode('VIDEO');
+    } else {
+      connectStream();
+      if (videoRef.current) {
+        videoRef.current.load();
+        videoRef.current.play().catch(() => {});
       }
-      for (let y = 0; y < h; y += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
-      }
-
-      // Simulated street lighting / motion sweeping gradient
-      const sweepX = (Math.sin(step) * 0.4 + 0.5) * w;
-      const sweepY = (Math.cos(step * 0.7) * 0.3 + 0.5) * h;
-
-      const grad = ctx.createRadialGradient(sweepX, sweepY, 10, sweepX, sweepY, 220);
-      grad.addColorStop(0, 'rgba(16, 185, 129, 0.25)');
-      grad.addColorStop(0.5, 'rgba(6, 182, 212, 0.1)');
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-
-      // Draw dynamic surveillance camera crosshair
-      ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(w / 2, h / 2, 45, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(w / 2 - 60, h / 2);
-      ctx.lineTo(w / 2 + 60, h / 2);
-      ctx.moveTo(w / 2, h / 2 - 60);
-      ctx.lineTo(w / 2, h / 2 + 60);
-      ctx.stroke();
-
-      // Real-time AI Motion Detection bounding box animation
-      const boxX = sweepX - 50;
-      const boxY = sweepY - 35;
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(boxX, boxY, 100, 70);
-
-      // AI Bounding Box Label
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(boxX, boxY - 20, 100, 20);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 10px monospace';
-      ctx.fillText(`HUMAN ${(94 + Math.sin(step) * 4).toFixed(1)}%`, boxX + 5, boxY - 6);
-
-      // Noise scanlines
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
-      for (let i = 0; i < h; i += 4) {
-        if ((i + Math.floor(step * 20)) % 8 === 0) {
-          ctx.fillRect(0, i, w, 2);
-        }
-      }
-
-      animId = requestAnimationFrame(renderFrame);
-    };
-
-    renderFrame();
-    return () => cancelAnimationFrame(animId);
-  }, [streamMode]);
+    }
+  };
 
   const handleApplyCustomUrl = (e: React.FormEvent) => {
     e.preventDefault();
     if (tempUrlInput.trim()) {
-      setCustomVideoUrl(tempUrlInput.trim());
+      setVideoUrl(tempUrlInput.trim());
       setStreamMode('VIDEO');
       setIsEditingUrl(false);
+      connectStream();
     }
   };
 
   return (
-    <div className={`relative aspect-video bg-black rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group ${className}`}>
+    <div className={`relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group ${className}`}>
       {/* 1. REAL VIDEO STREAM PLAYER (MP4 / HLS / HTTP) */}
       {streamMode === 'VIDEO' && (
         <video
           ref={videoRef}
-          src={customVideoUrl}
+          src={videoUrl}
           autoPlay
           loop
           muted={isMuted}
           playsInline
-          onPlay={() => setIsVideoPlaying(true)}
-          onError={() => {
-            console.log('Video error on stream, switching to dynamic canvas');
-            setStreamMode('CANVAS');
-          }}
-          className="w-full h-full object-cover transition duration-300"
+          onCanPlay={handleVideoCanPlay}
+          onPlaying={handleVideoCanPlay}
+          onError={handleVideoError}
+          className={`w-full h-full object-cover transition duration-500 ${
+            connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+          }`}
           style={{ transform: `scale(${zoomLevel})` }}
         />
       )}
@@ -232,48 +180,74 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           autoPlay
           playsInline
           muted={isMuted}
-          className="w-full h-full object-cover transition duration-300"
+          className={`w-full h-full object-cover transition duration-500 ${
+            connectionState === 'ONLINE' ? 'opacity-100' : 'opacity-0'
+          }`}
           style={{ transform: `scale(${zoomLevel})` }}
         />
       )}
 
-      {/* 3. DYNAMIC CANVAS REALTIME GENERATOR */}
-      {streamMode === 'CANVAS' && (
-        <canvas
-          ref={canvasRef}
-          width={640}
-          height={360}
-          className="w-full h-full object-cover transition duration-300"
-          style={{ transform: `scale(${zoomLevel})` }}
-        />
+      {/* LOADING STATE OVERLAY */}
+      {connectionState === 'LOADING' && (
+        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
+          <div className="relative flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+            <Radio className="w-5 h-5 text-emerald-400 absolute animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-xs font-bold text-slate-100 uppercase tracking-wider">
+              Carregando...
+            </p>
+            <p className="text-[11px] text-slate-400 font-mono">
+              Conectando ao fluxo RTMP / RTSP da câmera...
+            </p>
+          </div>
+        </div>
       )}
 
-      {/* Webcam Error Message */}
-      {webcamError && streamMode === 'WEBCAM' && (
-        <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-4 text-center z-20 space-y-2">
-          <AlertCircle className="w-8 h-8 text-rose-500 animate-bounce" />
-          <p className="text-xs font-bold text-rose-300">{webcamError}</p>
+      {/* OFFLINE STATE OVERLAY */}
+      {connectionState === 'OFFLINE' && (
+        <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-4 text-center z-20 space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-800/80 flex items-center justify-center text-rose-500 shadow-lg shadow-rose-950/50">
+            <WifiOff className="w-6 h-6 animate-pulse" />
+          </div>
+          <div className="space-y-1 max-w-xs">
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full bg-rose-950/90 border border-rose-700/80 text-rose-300 font-extrabold text-[10px] uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />
+              <span>OFF-LINE</span>
+            </div>
+            <p className="text-xs font-semibold text-slate-200">
+              Não foi possível conectar ao fluxo da câmera
+            </p>
+            <p className="text-[10px] text-slate-400 leading-tight">
+              Sinal RTMP/RTSP indisponível ou fora de alcance na rede local.
+            </p>
+          </div>
+
           <button
-            onClick={() => setStreamMode('VIDEO')}
-            className="px-3 py-1.5 bg-slate-800 text-slate-200 text-xs rounded-xl hover:bg-slate-700"
+            onClick={handleRetryConnection}
+            className="flex items-center space-x-2 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl font-bold border border-slate-700 transition shadow-lg active:scale-95"
           >
-            Voltar para Vídeo RTMP ao Vivo
+            <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Tentar Reconectar</span>
           </button>
         </div>
       )}
 
       {/* Overlay Scanlines & Vignette */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70 pointer-events-none" />
 
-      {/* Top Stream Badge & Host Indicator */}
+      {/* Top Stream Badge & OSD Indicator */}
       <div className="absolute top-2 left-2 right-2 flex items-center justify-between text-[10px] font-mono text-white bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10 z-10">
         <div className="flex items-center space-x-2 truncate">
           <span
             className={`w-2 h-2 rounded-full ${
-              camera.status === 'ALERT'
-                ? 'bg-rose-500 animate-ping'
-                : camera.status === 'RECORDING'
+              connectionState === 'OFFLINE'
                 ? 'bg-rose-500'
+                : connectionState === 'LOADING'
+                ? 'bg-amber-400 animate-ping'
+                : camera.status === 'ALERT'
+                ? 'bg-rose-500 animate-ping'
                 : 'bg-emerald-400 animate-pulse'
             }`}
           />
@@ -281,8 +255,22 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         </div>
 
         <div className="flex items-center space-x-2 shrink-0">
-          <span className="text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded font-bold">
-            {streamMode === 'WEBCAM' ? 'WEBCAM AO VIVO' : 'RTMP AO VIVO (60 FPS)'}
+          <span
+            className={`px-1.5 py-0.5 rounded font-bold border ${
+              connectionState === 'OFFLINE'
+                ? 'text-rose-400 bg-rose-950/80 border-rose-800'
+                : connectionState === 'LOADING'
+                ? 'text-amber-300 bg-amber-950/80 border-amber-800'
+                : 'text-emerald-400 bg-emerald-950/80 border-emerald-500/30'
+            }`}
+          >
+            {connectionState === 'OFFLINE'
+              ? 'OFF-LINE'
+              : connectionState === 'LOADING'
+              ? 'CARREGANDO...'
+              : streamMode === 'WEBCAM'
+              ? 'WEBCAM AO VIVO'
+              : 'RTMP AO VIVO (60 FPS)'}
           </span>
           {camera.isE2EEEncrypted && (
             <span className="hidden sm:flex items-center space-x-1 text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30">
@@ -299,7 +287,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           {/* Stream Mode Switcher */}
           <div className="flex items-center space-x-1 bg-slate-950/80 backdrop-blur-md p-1 rounded-xl border border-white/10">
             <button
-              onClick={() => setStreamMode('VIDEO')}
+              onClick={() => {
+                setStreamMode('VIDEO');
+                connectStream();
+              }}
               className={`px-2 py-0.5 text-[10px] rounded-lg font-semibold transition ${
                 streamMode === 'VIDEO'
                   ? 'bg-emerald-500 text-slate-950 font-bold'
@@ -316,7 +307,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Conectar webcam local do dispositivo ao vivo"
+              title="Conectar webcam local ao vivo"
             >
               <Webcam className="w-3 h-3" />
               <span>Webcam</span>
@@ -343,7 +334,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         </div>
       )}
 
-      {/* Custom Stream URL Editor Modal/Overlay */}
+      {/* Custom Stream URL Editor Overlay */}
       {isEditingUrl && (
         <form
           onSubmit={handleApplyCustomUrl}

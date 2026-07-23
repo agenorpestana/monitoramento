@@ -92,7 +92,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
-            Matriz de Monitoramento Gabriel
+            Matriz de Monitoramento Central ITL
           </h2>
           <p className="text-xs text-slate-400">
             {cameras.length} Câmeras conectadas via RTSP | Transmissão de áudio bidirecional RTMP
