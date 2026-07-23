@@ -20,6 +20,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { Camera, User } from '../types';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface CameraDetailModalProps {
   camera: Camera;
@@ -114,11 +115,11 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
           {/* Main Video Screen */}
           <div className="lg:col-span-2 space-y-3">
             <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center">
-              <img
-                src={camera.thumbnailUrl}
-                alt={camera.name}
-                className="w-full h-full object-cover transition duration-300"
-                style={{ transform: `scale(${zoomLevel})` }}
+              <LiveStreamPlayer
+                camera={camera}
+                zoomLevel={zoomLevel}
+                isMuted={isMuted}
+                showOverlayControls={true}
               />
 
               {/* Timestamp OSD */}

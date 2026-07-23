@@ -21,6 +21,7 @@ import {
   Video,
 } from 'lucide-react';
 import { Camera, User } from '../types';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface CameraGridProps {
   cameras: Camera[];
@@ -153,58 +154,14 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                   : 'border-slate-800 hover:border-slate-700'
               }`}
             >
-              {/* Camera Video Stream Canvas Container */}
+              {/* Camera Live Video Player */}
               <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
-                {/* Simulated live video stream background */}
-                <img
-                  src={camera.thumbnailUrl}
-                  alt={camera.name}
-                  className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition duration-500"
+                <LiveStreamPlayer
+                  camera={camera}
+                  isMuted={isMuted}
+                  onSelectCamera={onSelectCamera}
+                  showOverlayControls={true}
                 />
-
-                {/* RTSP Live Scanlines Effect */}
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-500/5 to-transparent pointer-events-none" />
-
-                {/* Top OSD Bar */}
-                <div className="absolute top-2 left-2 right-2 flex items-center justify-between text-[11px] font-mono text-white bg-slate-950/70 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
-                  <div className="flex items-center space-x-2 truncate">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        camera.status === 'ALERT'
-                          ? 'bg-rose-500 animate-ping'
-                          : camera.status === 'RECORDING'
-                          ? 'bg-rose-500'
-                          : 'bg-emerald-400 animate-pulse'
-                      }`}
-                    />
-                    <span className="font-semibold text-slate-200 truncate">{camera.name}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-2 shrink-0">
-                    {camera.isE2EEEncrypted && (
-                      <span className="flex items-center space-x-1 text-[10px] text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>E2EE</span>
-                      </span>
-                    )}
-                    <span className="text-slate-400 hidden sm:inline">{camera.resolution}</span>
-                  </div>
-                </div>
-
-                {/* Bottom OSD Bar (Timestamp & RTSP Protocol Tag) */}
-                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[10px] font-mono text-slate-300 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg border border-white/10">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-emerald-400 font-bold">{camera.fps} FPS</span>
-                    <span className="text-slate-500">|</span>
-                    <span className="truncate">{liveTimestamps[camera.id] || 'AO VIVO'}</span>
-                  </div>
-
-                  <div className="flex items-center space-x-1">
-                    <span className="text-cyan-400 bg-cyan-950/60 px-1 py-0.5 rounded border border-cyan-800">
-                      RTSP H.265
-                    </span>
-                  </div>
-                </div>
 
                 {/* Live 2-Way RTMP Audio Active Bar */}
                 {isMicActive && (

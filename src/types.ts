@@ -57,6 +57,8 @@ export interface Camera {
   lng: number;
   createdAt?: string;
   thumbnailUrl?: string;
+  videoStreamUrl?: string;
+  isLiveWebcam?: boolean;
 }
 
 export interface MotionAlert {
