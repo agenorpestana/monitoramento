@@ -184,7 +184,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
       name: cameraName.trim(),
       location: `${selectedCity} - ${selectedUf}`,
       protocol,
-      rtspUrl: protocol === 'RTSP' ? rtspUrl : 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0',
+      rtspUrl: protocol === 'RTSP' ? rtspUrl : (rtspUrl && !rtspUrl.includes('192.168.1.100') ? rtspUrl : ''),
       rtmpUrl: fullRtmpUrl,
       streamKey: protocol === 'RTMP' ? streamKey : undefined,
       rtmpServerUrl: rtmpServer,

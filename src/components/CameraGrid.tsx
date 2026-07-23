@@ -204,7 +204,9 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               <div className="p-3 bg-slate-900 flex items-center justify-between border-t border-slate-800">
                 <div className="truncate pr-2">
                   <p className="text-xs font-semibold text-slate-200 truncate">{camera.location}</p>
-                  <p className="text-[10px] text-slate-500 truncate font-mono">{camera.rtspUrl}</p>
+                  <p className="text-[10px] text-slate-400 truncate font-mono">
+                    {camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || camera.videoStreamUrl || 'Transmissão Ao Vivo'}
+                  </p>
                 </div>
 
                 <div className="flex items-center space-x-1 shrink-0">

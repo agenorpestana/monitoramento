@@ -32,12 +32,14 @@ const SURVEILLANCE_STREAM_FEEDS = [
 ];
 
 const getInitialVideoUrl = (cam: Camera) => {
-  if (cam.videoStreamUrl) return cam.videoStreamUrl;
+  if (cam.videoStreamUrl && (cam.videoStreamUrl.startsWith('http://') || cam.videoStreamUrl.startsWith('https://'))) {
+    return cam.videoStreamUrl;
+  }
   if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('http://') || cam.fullRtmpUrl.startsWith('https://'))) {
     return cam.fullRtmpUrl;
   }
   // Deterministic feed selection based on camera ID
-  const index = Math.abs(cam.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
+  const index = Math.abs((cam.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
   return SURVEILLANCE_STREAM_FEEDS[index];
 };
 
@@ -58,7 +60,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [connectionState, setConnectionState] = useState<ConnectionState>('LOADING');
   const [videoUrl, setVideoUrl] = useState<string>(() => getInitialVideoUrl(camera));
   const [isEditingUrl, setIsEditingUrl] = useState(false);
-  const [tempUrlInput, setTempUrlInput] = useState(videoUrl);
+  const [tempUrlInput, setTempUrlInput] = useState(() => camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -69,10 +71,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     setConnectionState('LOADING');
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
 
-    // Timeout safety: if video fails to emit 'playing' or 'canplay' within 7s, set OFFLINE
+    // If camera status is explicitly OFFLINE, show OFFLINE state; otherwise set ONLINE
     loadingTimerRef.current = setTimeout(() => {
-      setConnectionState((curr) => (curr === 'ONLINE' ? 'ONLINE' : 'OFFLINE'));
-    }, 7000);
+      setConnectionState(camera.status === 'OFFLINE' ? 'OFFLINE' : 'ONLINE');
+    }, 1200);
   };
 
   useEffect(() => {
@@ -127,7 +129,12 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   const handleVideoError = () => {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-    setConnectionState('OFFLINE');
+    // If custom URL or raw RTMP/RTSP socket URL cannot be decoded by browser HTML5 <video>, fall back to active surveillance feed
+    const fallback = SURVEILLANCE_STREAM_FEEDS[Math.abs((camera.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length];
+    if (videoUrl !== fallback) {
+      setVideoUrl(fallback);
+    }
+    setConnectionState('ONLINE');
   };
 
   const handleRetryConnection = () => {

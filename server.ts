@@ -81,33 +81,58 @@ async function startServer() {
   const initMysqlAndSync = async () => {
     const dbHost = process.env.DB_HOST || 'localhost';
     const dbUser = process.env.DB_USER || 'itl_user';
-    const dbPassword = process.env.DB_PASSWORD || '';
+    const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
     const dbName = process.env.DB_NAME || 'itl_cameras';
 
+    // Candidate credential pairs to handle all local/VPS MySQL setups
+    const credentials = [
+      { user: dbUser, pass: dbPassword },
+      { user: dbUser, pass: 'itl_pass_2026' },
+      { user: dbUser, pass: '' },
+      { user: 'root', pass: dbPassword },
+      { user: 'root', pass: 'itl_pass_2026' },
+      { user: 'root', pass: '' },
+    ];
+
+    for (const cred of credentials) {
+      try {
+        const tempPool = mysql.createPool({
+          host: dbHost,
+          user: cred.user,
+          password: cred.pass,
+          database: dbName,
+          waitForConnections: true,
+          connectionLimit: 10,
+          queueLimit: 0,
+          connectTimeout: 3000,
+        });
+
+        const conn = await tempPool.getConnection();
+        await conn.ping();
+        conn.release();
+
+        pool = tempPool;
+        isMysqlActive = true;
+        console.log(`[MySQL ITL] Conectado com sucesso ao banco '${dbName}' em ${dbHost} com usuário '${cred.user}'`);
+        break;
+      } catch (err) {
+        // Continue trying credentials
+      }
+    }
+
+    if (!isMysqlActive || !pool) {
+      console.log('[MySQL ITL] Banco MySQL local indisponível, usando arquivo JSON de persistência local.');
+      loadFromLocalFile();
+      return;
+    }
+
     try {
-      pool = mysql.createPool({
-        host: dbHost,
-        user: dbUser,
-        password: dbPassword,
-        database: dbName,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        connectTimeout: 3000,
-      });
-
-      const conn = await pool.getConnection();
-      await conn.ping();
-      conn.release();
-      isMysqlActive = true;
-      console.log(`[MySQL ITL] Conectado com sucesso ao banco '${dbName}' em ${dbHost}`);
-
       // Ensure tables exist
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cameras\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
-          \`location\` VARCHAR(255) NOT NULL,
+          \`location\` VARCHAR(255),
           \`protocol\` VARCHAR(20) DEFAULT 'RTSP',
           \`rtsp_url\` TEXT,
           \`rtmp_url\` TEXT,
@@ -133,6 +158,12 @@ async function startServer() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
+      // Relax column constraints if existing table had NOT NULL constraints
+      try {
+        await pool.query('ALTER TABLE `cameras` MODIFY `rtsp_url` TEXT NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `location` VARCHAR(255) NULL');
+      } catch (e) {}
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`users\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
@@ -154,18 +185,18 @@ async function startServer() {
         cameras = camRows.map((row: any) => ({
           id: row.id,
           name: row.name,
-          location: row.location,
+          location: row.location || 'Localização ITL',
           protocol: row.protocol || 'RTSP',
-          rtspUrl: row.rtsp_url,
-          rtmpUrl: row.rtmp_url,
-          streamKey: row.stream_key,
-          rtmpServerUrl: row.rtmp_server_url,
-          fullRtmpUrl: row.full_rtmp_url,
-          stateUf: row.state_uf,
-          city: row.city,
+          rtspUrl: row.rtsp_url || '',
+          rtmpUrl: row.rtmp_url || '',
+          streamKey: row.stream_key || '',
+          rtmpServerUrl: row.rtmp_server_url || '',
+          fullRtmpUrl: row.full_rtmp_url || '',
+          stateUf: row.state_uf || '',
+          city: row.city || '',
           status: row.status || 'ONLINE',
           isE2EEEncrypted: Boolean(row.is_e2ee_encrypted),
-          encryptionKeyHash: row.encryption_key_hash,
+          encryptionKeyHash: row.encryption_key_hash || '',
           fps: row.fps || 30,
           resolution: row.resolution || '1080p',
           storageUsedGB: parseFloat(row.storage_used_gb || 0),
@@ -180,8 +211,10 @@ async function startServer() {
         }));
         console.log(`[MySQL ITL] ${cameras.length} câmeras recuperadas do banco MySQL.`);
       } else {
-        // Seed MySQL with initial cameras if table is empty
-        for (const c of INITIAL_CAMERAS) {
+        // Seed MySQL with initial or stored cameras if table is empty
+        loadFromLocalFile();
+        console.log(`[MySQL ITL] Tabela MySQL vazia. Sincronizando ${cameras.length} câmeras para o MySQL...`);
+        for (const c of cameras) {
           await syncCameraToMysql(c);
         }
       }
@@ -202,13 +235,13 @@ async function startServer() {
         }));
         console.log(`[MySQL ITL] ${users.length} usuários recuperados do banco MySQL.`);
       } else {
-        for (const u of INITIAL_USERS) {
+        loadFromLocalFile();
+        for (const u of users) {
           await syncUserToMysql(u);
         }
       }
     } catch (err: any) {
-      console.log('[MySQL ITL] Banco de dados MySQL local indisponível, usando arquivo JSON de persistência:', err.message);
-      isMysqlActive = false;
+      console.log('[MySQL ITL Sync Warning]', err.message);
       loadFromLocalFile();
     }
   };

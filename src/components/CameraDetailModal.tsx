@@ -281,12 +281,16 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
               <p className="font-bold text-slate-300 border-b border-slate-800 pb-2">Especificações Técnicas</p>
               <div className="space-y-1.5 text-slate-400 font-mono">
                 <div className="flex justify-between">
-                  <span>URL RTSP:</span>
-                  <span className="text-slate-200 truncate max-w-[150px]">{camera.rtspUrl}</span>
+                  <span>URL Stream/RTSP:</span>
+                  <span className="text-slate-200 truncate max-w-[180px]" title={camera.rtspUrl || camera.fullRtmpUrl || camera.rtmpUrl}>
+                    {camera.rtspUrl || camera.fullRtmpUrl || camera.rtmpUrl || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>URL RTMP:</span>
-                  <span className="text-slate-200 truncate max-w-[150px]">{camera.rtmpUrl || 'N/A'}</span>
+                  <span>Link RTMP/HTTP:</span>
+                  <span className="text-cyan-300 truncate max-w-[180px]" title={camera.fullRtmpUrl || camera.rtmpUrl}>
+                    {camera.fullRtmpUrl || camera.rtmpUrl || 'N/A'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Resolução:</span>

@@ -18,9 +18,9 @@ CREATE TABLE IF NOT EXISTS `users` (
 CREATE TABLE IF NOT EXISTS `cameras` (
   `id` VARCHAR(64) PRIMARY KEY,
   `name` VARCHAR(255) NOT NULL,
-  `location` VARCHAR(255) NOT NULL,
+  `location` VARCHAR(255),
   `protocol` ENUM('RTSP', 'RTMP') DEFAULT 'RTSP',
-  `rtsp_url` TEXT NOT NULL,
+  `rtsp_url` TEXT,
   `rtmp_url` TEXT,
   `stream_key` VARCHAR(100),
   `rtmp_server_url` TEXT,
