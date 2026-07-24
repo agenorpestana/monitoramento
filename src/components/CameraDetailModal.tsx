@@ -144,7 +144,7 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-3 p-4 sm:p-6 gap-6 overflow-y-auto">
           {/* Main Video Screen */}
           <div className="lg:col-span-2 space-y-3">
-            <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center">
+            <div className="relative w-full">
               <LiveStreamPlayer
                 camera={camera}
                 zoomLevel={zoomLevel}
@@ -152,22 +152,16 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
                 showOverlayControls={true}
               />
 
-              {/* Timestamp OSD */}
-              <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-lg border border-slate-700 text-xs font-mono text-emerald-400 flex items-center space-x-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                <span>AO VIVO | {new Date().toLocaleString('pt-BR')}</span>
-              </div>
-
               {/* PTZ Action Notice */}
               {ptzNotice && (
-                <div className="absolute top-3 right-3 bg-cyan-950/90 text-cyan-200 border border-cyan-500/50 px-3 py-1.5 rounded-xl text-xs font-semibold animate-pulse shadow-lg">
+                <div className="absolute top-3 right-3 bg-cyan-950/90 text-cyan-200 border border-cyan-500/50 px-3 py-1.5 rounded-xl text-xs font-semibold animate-pulse shadow-lg z-30">
                   {ptzNotice}
                 </div>
               )}
 
               {/* RTMP Transmit Overlay */}
               {isMicTransmitting && (
-                <div className="absolute inset-x-0 bottom-4 mx-auto w-11/12 bg-rose-950/90 border border-rose-500/80 rounded-2xl p-3 flex items-center justify-between text-white backdrop-blur-md shadow-2xl">
+                <div className="absolute inset-x-0 bottom-16 mx-auto w-11/12 bg-rose-950/90 border border-rose-500/80 rounded-2xl p-3 flex items-center justify-between text-white backdrop-blur-md shadow-2xl z-30">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 rounded-full bg-rose-600 flex items-center justify-center animate-pulse">
                       <Mic className="w-4 h-4 text-white" />
@@ -193,7 +187,7 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
 
               {/* Snapshot Success Notification */}
               {snapshotSuccess && (
-                <div className="absolute bottom-4 left-4 bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs px-3 py-2 rounded-xl font-medium shadow-xl">
+                <div className="absolute bottom-16 left-4 bg-emerald-950/90 border border-emerald-500 text-emerald-300 text-xs px-3 py-2 rounded-xl font-medium shadow-xl z-30">
                   ✓ Captura de tela gerada e salva no histórico!
                 </div>
               )}

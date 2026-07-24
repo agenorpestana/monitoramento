@@ -11,25 +11,43 @@ const activeFfmpegProcesses = new Map<string, ChildProcess>();
 const lastFfmpegLogs = new Map<string, string[]>();
 const activeRtspUrls = new Map<string, string>();
 
+function getValidStreamSource(cam: any): string {
+  if (!cam) return '';
+  const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
+  const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
+
+  if (cam.protocol === 'RTSP' && cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
+    return cam.rtspUrl.trim();
+  }
+
+  if (cam.protocol === 'RTMP') {
+    if (cam.rtmpUrl && cam.rtmpUrl.trim().startsWith('rtmp://')) {
+      let url = cam.rtmpUrl.trim();
+      if (url.includes('localhost:1935') || url.includes('127.0.0.1:1935')) {
+        url = url.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
+      }
+      return url;
+    }
+    if (cam.rtmpServerUrl && cam.rtmpServerUrl.trim().startsWith('rtmp://')) {
+      const cleanServer = cam.rtmpServerUrl.trim().replace(/\/$/, '');
+      return `${cleanServer}/cam_${cleanKey}`;
+    }
+    return `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+  }
+
+  if (cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
+    return cam.rtspUrl.trim();
+  }
+
+  return `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+}
+
 function startCameraRtspStream(cam: Camera, forceRestart = false) {
   if (!cam) return;
   const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
   const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
 
-  let streamSource = '';
-  if (cam.protocol === 'RTSP' && cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
-    streamSource = cam.rtspUrl.trim();
-  } else if (cam.protocol === 'RTMP') {
-    if (cam.rtmpUrl && (cam.rtmpUrl.startsWith('rtmp://') || cam.rtmpUrl.startsWith('http'))) {
-      streamSource = cam.rtmpUrl.trim();
-    } else if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('rtmp://') || cam.fullRtmpUrl.startsWith('http'))) {
-      streamSource = cam.fullRtmpUrl.trim();
-    } else {
-      streamSource = `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
-    }
-  } else if (cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
-    streamSource = cam.rtspUrl.trim();
-  }
+  let streamSource = getValidStreamSource(cam);
 
   if (streamSource.includes('localhost:1935') || streamSource.includes('127.0.0.1:1935')) {
     streamSource = streamSource.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
@@ -605,18 +623,12 @@ async function startServer() {
 
     let targetUrl = '';
 
-    if (queryUrl && (queryUrl.startsWith('rtsp://') || queryUrl.startsWith('rtmp://') || queryUrl.startsWith('http://') || queryUrl.startsWith('https://'))) {
+    if (queryUrl && (queryUrl.startsWith('rtsp://') || queryUrl.startsWith('rtmp://'))) {
+      targetUrl = queryUrl;
+    } else if (queryUrl && queryUrl.startsWith('http') && !queryUrl.includes('/live/') && !queryUrl.endsWith('.m3u8')) {
       targetUrl = queryUrl;
     } else if (matchedCam) {
-      if (matchedCam.protocol === 'RTSP' && matchedCam.rtspUrl && matchedCam.rtspUrl.trim().startsWith('rtsp://')) {
-        targetUrl = matchedCam.rtspUrl.trim();
-      } else if (matchedCam.rtmpUrl && (matchedCam.rtmpUrl.startsWith('rtmp://') || matchedCam.rtmpUrl.startsWith('http'))) {
-        targetUrl = matchedCam.rtmpUrl.trim();
-      } else if (matchedCam.fullRtmpUrl && (matchedCam.fullRtmpUrl.startsWith('rtmp://') || matchedCam.fullRtmpUrl.startsWith('http'))) {
-        targetUrl = matchedCam.fullRtmpUrl.trim();
-      } else if (matchedCam.rtspUrl && matchedCam.rtspUrl.trim().startsWith('rtsp://')) {
-        targetUrl = matchedCam.rtspUrl.trim();
-      }
+      targetUrl = getValidStreamSource(matchedCam);
     }
 
     if (!targetUrl && cleanKey) {

@@ -123,14 +123,20 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
       return;
     }
 
+    const cleanKey = streamKey.trim().replace(/^cam-/, '').replace(/^cam_/, '');
+    const validKey = `cam_${cleanKey}`;
+    const rtmpStreamSource = fullRtmpUrl.trim().startsWith('rtmp://')
+      ? fullRtmpUrl.trim()
+      : `${rtmpServerUrl.trim().replace(/\/$/, '')}/${validKey}`;
+
     const updatedData: Partial<Camera> = {
       name: name.trim(),
       protocol,
       rtspUrl: protocol === 'RTSP' ? rtspUrl.trim() : '',
-      streamKey: streamKey.trim(),
+      streamKey: validKey,
       rtmpServerUrl: rtmpServerUrl.trim(),
-      rtmpUrl: fullRtmpUrl.trim() || `${rtmpServerUrl.trim()}/${streamKey.trim()}`,
-      fullRtmpUrl: fullRtmpUrl.trim() || `${rtmpServerUrl.trim()}/${streamKey.trim()}`,
+      rtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
+      fullRtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
       stateUf,
       city,
       location: `${city} - ${stateUf}`,

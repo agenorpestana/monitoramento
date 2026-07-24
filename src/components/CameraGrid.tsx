@@ -160,7 +160,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               }`}
             >
               {/* Camera Live Video Player */}
-              <div className="relative aspect-video bg-black overflow-hidden flex items-center justify-center">
+              <div className="w-full relative">
                 <LiveStreamPlayer
                   camera={camera}
                   isMuted={isMuted}
@@ -191,18 +191,6 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                     </div>
                   </div>
                 )}
-
-                {/* Camera Click Overlay to Inspector */}
-                <button
-                  onClick={() => onSelectCamera(camera)}
-                  className="absolute inset-0 w-full h-full opacity-0 hover:opacity-100 bg-slate-950/40 backdrop-blur-[2px] flex items-center justify-center transition duration-200 group"
-                  title="Clique para abrir detalhes e controle PTZ completo"
-                >
-                  <div className="bg-slate-900/90 text-slate-100 border border-slate-700 px-4 py-2 rounded-xl flex items-center space-x-2 font-medium text-xs shadow-xl group-hover:scale-105 transition">
-                    <Maximize2 className="w-4 h-4 text-emerald-400" />
-                    <span>Abrir Tela Cheia & PTZ</span>
-                  </div>
-                </button>
               </div>
 
               {/* Controls Footer */}

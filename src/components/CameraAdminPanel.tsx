@@ -229,16 +229,18 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
     }
 
     const key = streamKey || `cam_${Math.random().toString(36).substring(2, 8)}`;
+    const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
+    const rtmpStreamSource = `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
 
     const newCamData: Partial<Camera> = {
       name: cameraName.trim(),
       location: `${selectedCity} - ${selectedUf}`,
       protocol,
       rtspUrl: protocol === 'RTSP' ? rtspUrl : '',
-      rtmpUrl: fullRtmpUrl,
-      streamKey: key,
-      rtmpServerUrl: rtmpServer,
-      fullRtmpUrl: cleanDoubleUrl(`${currentProtocol}//${currentHost}/live/${key}.m3u8`),
+      rtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
+      streamKey: `cam_${cleanKey}`,
+      rtmpServerUrl: rtmpServer || 'rtmp://aerocam.itlfibra.com:1935/live',
+      fullRtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
       stateUf: selectedUf,
       city: selectedCity,
       lat: parseFloat(lat) || -17.0397,
