@@ -9,22 +9,28 @@ import { createServer as createViteServer } from 'vite';
 // Map to manage active FFmpeg processes for RTSP/RTMP conversion
 const activeFfmpegProcesses = new Map<string, ChildProcess>();
 const lastFfmpegLogs = new Map<string, string[]>();
+const activeRtspUrls = new Map<string, string>();
 
-function startCameraRtspStream(cam: Camera) {
+function startCameraRtspStream(cam: Camera, forceRestart = false) {
   if (!cam) return;
   const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
-
-  // Stop previous process if exists
-  if (activeFfmpegProcesses.has(key)) {
-    try {
-      activeFfmpegProcesses.get(key)?.kill('SIGKILL');
-    } catch (e) {}
-    activeFfmpegProcesses.delete(key);
-  }
 
   // Only attempt FFmpeg conversion if camera protocol is RTSP and has a valid RTSP URL
   if (cam && cam.protocol === 'RTSP' && cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
     const rtsp = cam.rtspUrl.trim();
+
+    // If already running with the exact same RTSP URL and process is alive, keep running!
+    if (!forceRestart && activeFfmpegProcesses.has(key) && activeRtspUrls.get(key) === rtsp) {
+      const existingProc = activeFfmpegProcesses.get(key);
+      if (existingProc && existingProc.exitCode === null && !existingProc.killed) {
+        console.log(`[FFmpeg ITL] Câmera '${cam.name}' (${key}) já possui processo FFmpeg ativo e conectando. Mantendo fluxo.`);
+        return;
+      }
+    }
+
+    // Stop previous process if restarting or changing URL
+    stopCameraRtspStream(key);
+
     console.log(`[FFmpeg ITL] Conectando fluxo RTSP -> HLS para a câmera '${cam.name}' (${key})...`);
     const hlsDir = '/tmp/hls';
     if (!fs.existsSync(hlsDir)) {
@@ -34,16 +40,21 @@ function startCameraRtspStream(cam: Camera) {
 
     const logList: string[] = [`[${new Date().toLocaleTimeString()}] Conectando ao fluxo: ${rtsp}`];
     lastFfmpegLogs.set(key, logList);
+    activeRtspUrls.set(key, rtsp);
 
     const proc = spawn('ffmpeg', [
       '-rtsp_transport', 'tcp',
+      '-analyzeduration', '1000000',
+      '-probesize', '1000000',
       '-i', rtsp,
       '-c:v', 'copy',
       '-c:a', 'aac',
+      '-ar', '44100',
+      '-ac', '2',
       '-f', 'hls',
-      '-hls_time', '3',
-      '-hls_list_size', '10',
-      '-hls_flags', 'delete_segments',
+      '-hls_time', '2',
+      '-hls_list_size', '6',
+      '-hls_flags', 'delete_segments+omit_endlist+discont_start',
       '-y',
       hlsPath,
     ]);
@@ -52,7 +63,7 @@ function startCameraRtspStream(cam: Camera) {
       const line = data.toString().trim();
       if (line) {
         logList.push(line);
-        if (logList.length > 25) logList.shift();
+        if (logList.length > 30) logList.shift();
       }
     });
 
@@ -60,12 +71,14 @@ function startCameraRtspStream(cam: Camera) {
       console.log(`[FFmpeg ITL] Processo da câmera '${key}' finalizou com código ${code}`);
       logList.push(`Processo finalizado com código ${code}`);
       activeFfmpegProcesses.delete(key);
+      activeRtspUrls.delete(key);
     });
 
     proc.on('error', (err) => {
       console.log(`[FFmpeg ITL Warning] Falha na inicialização FFmpeg para '${key}': ${err.message}`);
       logList.push(`Erro FFmpeg: ${err.message}`);
       activeFfmpegProcesses.delete(key);
+      activeRtspUrls.delete(key);
     });
 
     activeFfmpegProcesses.set(key, proc);
@@ -78,6 +91,7 @@ function stopCameraRtspStream(streamKey: string) {
       activeFfmpegProcesses.get(streamKey)?.kill('SIGKILL');
     } catch (e) {}
     activeFfmpegProcesses.delete(streamKey);
+    activeRtspUrls.delete(streamKey);
   }
 }
 import {
@@ -551,7 +565,7 @@ async function startServer() {
   });
 
   // Handler para reprodução de vídeo e transmissões HLS
-  app.all('/live/*', (req, res) => {
+  app.all('/live/*', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -565,6 +579,14 @@ async function startServer() {
     const hlsDir = '/tmp/hls';
     const targetFile = path.join(hlsDir, subPath);
 
+    // Se o arquivo ainda não existe (ex: primeiro segmento sendo gerado em ~1s), aguarda até 2.5s
+    if (!fs.existsSync(targetFile)) {
+      for (let i = 0; i < 10; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        if (fs.existsSync(targetFile)) break;
+      }
+    }
+
     if (fs.existsSync(targetFile) && fs.statSync(targetFile).isFile()) {
       if (targetFile.endsWith('.ts')) {
         res.setHeader('Content-Type', 'video/mp2t');
@@ -577,10 +599,9 @@ async function startServer() {
       return res.sendFile(targetFile);
     }
 
-    // Se a câmera não estiver transmitindo via RTMP no momento (arquivo HLS ausente):
-    // Retorna HTTP 404 sem nenhum redirecionamento para vídeo externo!
+    // Se a câmera não estiver transmitindo no momento (arquivo HLS ausente):
     return res.status(404).json({
-      error: 'Câmera offline ou sem transmissão RTMP ativa no momento',
+      error: 'Câmera offline ou sem transmissão ativa no momento',
       streamKey: subPath.replace(/\.m3u8$/, ''),
     });
   });
@@ -596,12 +617,15 @@ async function startServer() {
     if (fs.existsSync(hlsFile)) {
       try {
         const stat = fs.statSync(hlsFile);
-        isHlsActive = true;
+        if (Date.now() - stat.mtimeMs < 20000) {
+          isHlsActive = true;
+        }
         lastModified = stat.mtime;
       } catch (e) {}
     }
 
     const logs = lastFfmpegLogs.get(key) || [];
+    const logsJoined = logs.join(' ');
     const targetProtocol = protocol || (rtspUrl && rtspUrl.trim().startsWith('rtsp://') ? 'RTSP' : 'RTMP');
 
     if (targetProtocol === 'RTSP') {
@@ -616,11 +640,39 @@ async function startServer() {
           logs,
         });
       }
-      
-      // Execute ffprobe with 5s timeout to verify RTSP stream responsiveness
+
+      // Start stream in background if not running yet
+      const matchedCam = cameras.find((c) => (c.streamKey || c.id) === key) || {
+        id: key,
+        name: 'Teste de Diagnóstico',
+        protocol: 'RTSP',
+        rtspUrl: targetRtsp,
+        streamKey: key,
+      };
+      startCameraRtspStream(matchedCam as Camera);
+
+      // Verify if FFmpeg process or log confirms successful connection
+      const isFfmpegConnected = logsJoined.includes('Stream mapping') || logsJoined.includes('Press [q] to stop') || logsJoined.includes('Output #0, hls') || logsJoined.includes('frame=');
+
+      if (isHlsActive || isFfmpegConnected) {
+        return res.json({
+          success: true,
+          protocol: 'RTSP',
+          targetUrl: targetRtsp,
+          streamKey: key,
+          hlsActive: true,
+          message: 'Sinal RTSP Conectado com Sucesso! A câmera está respondendo na rede e retransmitindo via HLS em tempo real.',
+          codecs: 'H264 / AAC',
+          logs: lastFfmpegLogs.get(key) || logs,
+        });
+      }
+
+      // Execute ffprobe with fast probe parameters and 8s timeout
       const ffprobeProc = spawn('ffprobe', [
         '-v', 'error',
         '-rtsp_transport', 'tcp',
+        '-analyzeduration', '1000000',
+        '-probesize', '1000000',
         '-i', targetRtsp,
         '-show_entries', 'format=duration,stream=codec_name',
         '-of', 'default=noprint_wrappers=1:nokey=1'
@@ -634,17 +686,32 @@ async function startServer() {
         if (!finished) {
           finished = true;
           try { ffprobeProc.kill('SIGKILL'); } catch (e) {}
+
+          const currentLogs = lastFfmpegLogs.get(key) || logs;
+          const currentLogsJoined = currentLogs.join(' ');
+          if (currentLogsJoined.includes('Stream mapping') || currentLogsJoined.includes('Press [q] to stop') || fs.existsSync(hlsFile)) {
+            return res.json({
+              success: true,
+              protocol: 'RTSP',
+              targetUrl: targetRtsp,
+              streamKey: key,
+              hlsActive: true,
+              message: 'Sinal RTSP Conectado com Sucesso! A câmera está ativamente transmitindo via HLS no servidor.',
+              logs: currentLogs,
+            });
+          }
+
           return res.json({
             success: false,
             protocol: 'RTSP',
             targetUrl: targetRtsp,
             streamKey: key,
             hlsActive: isHlsActive,
-            message: 'Timeout ao conectar na câmera RTSP (5s). Verifique se o IP da câmera e a porta 554 estão abertos e acessíveis na rede local ou roteador.',
-            logs,
+            message: 'Timeout ao conectar na câmera RTSP. Verifique se o IP e a porta 554 estão acessíveis pelo servidor.',
+            logs: currentLogs,
           });
         }
-      }, 5000);
+      }, 8000);
 
       ffprobeProc.stdout.on('data', (d) => { output += d.toString(); });
       ffprobeProc.stderr.on('data', (d) => { errOutput += d.toString(); });
@@ -653,16 +720,20 @@ async function startServer() {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
-        if (code === 0) {
+
+        const currentLogs = lastFfmpegLogs.get(key) || logs;
+        const currentLogsJoined = currentLogs.join(' ');
+
+        if (code === 0 || currentLogsJoined.includes('Stream mapping') || currentLogsJoined.includes('Press [q] to stop') || fs.existsSync(hlsFile)) {
           return res.json({
             success: true,
             protocol: 'RTSP',
             targetUrl: targetRtsp,
             streamKey: key,
-            hlsActive: isHlsActive,
+            hlsActive: true,
             message: 'Conexão RTSP estabelecida com sucesso! Câmera ativamente transmitindo vídeo.',
             codecs: output.trim() || 'H264 / AAC',
-            logs,
+            logs: currentLogs,
           });
         } else {
           return res.json({
@@ -673,7 +744,7 @@ async function startServer() {
             hlsActive: isHlsActive,
             message: 'Falha na conexão RTSP. O IP, porta (554) ou credenciais (usuário/senha) da câmera estão inacessíveis ou incorretos.',
             details: errOutput.trim() || `Código de saída ffprobe: ${code}`,
-            logs,
+            logs: currentLogs,
           });
         }
       });
