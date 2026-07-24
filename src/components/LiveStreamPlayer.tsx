@@ -81,8 +81,8 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           protocol: camera.protocol || (camera.rtspUrl ? 'RTSP' : 'RTMP'),
-          rtspUrl: camera.rtspUrl,
-          rtmpUrl: camera.rtmpUrl,
+          rtspUrl: camera.protocol === 'RTSP' ? camera.rtspUrl : '',
+          rtmpUrl: camera.rtmpUrl || camera.fullRtmpUrl,
           streamKey: camera.streamKey || camera.id,
         }),
       });
@@ -429,6 +429,8 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               ? 'CARREGANDO...'
               : streamMode === 'WEBCAM'
               ? 'WEBCAM AO VIVO'
+              : camera.protocol === 'RTSP'
+              ? 'RTSP HLS AO VIVO'
               : 'RTMP AO VIVO (60 FPS)'}
           </span>
           {camera.isE2EEEncrypted && (
@@ -455,9 +457,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Transmitir vídeo RTMP/HLS em tempo real"
+              title={camera.protocol === 'RTSP' ? "Transmitir fluxo RTSP/HLS em tempo real" : "Transmitir vídeo RTMP/HLS em tempo real"}
             >
-              Vídeo RTMP
+              {camera.protocol === 'RTSP' ? 'Vídeo RTSP' : 'Vídeo RTMP'}
             </button>
             <button
               onClick={() => setStreamMode('WEBCAM')}

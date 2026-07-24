@@ -102,9 +102,9 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
 
   // Form states
   const [cameraName, setCameraName] = useState('');
-  const [streamKey, setStreamKey] = useState('cam_wpg8tz');
+  const [streamKey, setStreamKey] = useState(() => `cam_${Math.random().toString(36).substring(2, 8)}`);
   const [rtmpServer, setRtmpServer] = useState(() => `rtmp://${getCurrentHost()}:1935/live`);
-  const [rtspUrl, setRtspUrl] = useState('rtsp://admin:itl2026@192.168.1.100:554/live/ch0');
+  const [rtspUrl, setRtspUrl] = useState('');
 
   // Update RTMP server automatically when hostname is available
   useEffect(() => {
@@ -189,11 +189,12 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   const handleTestConnection = async (targetCam?: Partial<Camera>) => {
     setTestResult({ loading: true });
     try {
+      const isTargetRtsp = targetCam ? targetCam.protocol === 'RTSP' : protocol === 'RTSP';
       const payload = {
         protocol: targetCam ? targetCam.protocol : protocol,
-        rtspUrl: targetCam ? targetCam.rtspUrl : rtspUrl,
-        rtmpUrl: targetCam ? targetCam.rtmpUrl : fullRtmpUrl,
-        streamKey: targetCam ? targetCam.streamKey || targetCam.id : streamKey,
+        rtspUrl: isTargetRtsp ? (targetCam ? targetCam.rtspUrl : rtspUrl) : '',
+        rtmpUrl: targetCam ? (targetCam.rtmpUrl || targetCam.fullRtmpUrl) : fullRtmpUrl,
+        streamKey: targetCam ? (targetCam.streamKey || targetCam.id) : streamKey,
       };
       const res = await fetch('/api/cameras/test-connection', {
         method: 'POST',
@@ -216,6 +217,11 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
 
     if (!cameraName.trim()) {
       alert('Por favor, informe o Nome Identificador da Câmera.');
+      return;
+    }
+
+    if (protocol === 'RTSP' && !rtspUrl.trim()) {
+      alert('Por favor, informe a URL RTSP da câmera (ex: rtsp://admin:senha@192.168.1.100:554/live/ch0).');
       return;
     }
 
@@ -639,16 +645,20 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-800/60">
               {cameras.map((cam) => {
-                const isRtmp = cam.protocol === 'RTMP' || !!cam.streamKey;
-                const displayUrl = cam.fullRtmpUrl || cam.rtspUrl;
+                const isRtsp = cam.protocol === 'RTSP';
+                const displayUrl = isRtsp ? (cam.rtspUrl || cam.fullRtmpUrl) : (cam.fullRtmpUrl || cam.rtmpUrl);
 
                 return (
                   <tr key={cam.id} className="hover:bg-slate-800/40 transition">
                     <td className="p-3.5">
                       <div className="font-bold text-white flex items-center gap-2">
                         <span>{cam.name}</span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700">
-                          {isRtmp ? 'RTMP' : 'RTSP'}
+                        <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded border ${
+                          isRtsp
+                            ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800'
+                            : 'bg-slate-800 text-emerald-400 border-slate-700'
+                        }`}>
+                          {isRtsp ? 'RTSP' : 'RTMP'}
                         </span>
                       </div>
                       <div className="text-[10px] text-slate-400">{cam.location}</div>

@@ -22,10 +22,10 @@ function startCameraRtspStream(cam: Camera) {
     activeFfmpegProcesses.delete(key);
   }
 
-  // Only attempt FFmpeg conversion if an RTSP or external stream URL is defined
-  const rtsp = cam.rtspUrl || (cam.rtmpUrl && !cam.rtmpUrl.includes('localhost') && !cam.rtmpUrl.includes('127.0.0.1') ? cam.rtmpUrl : '');
-  if (rtsp && (rtsp.startsWith('rtsp://') || rtsp.startsWith('rtmp://'))) {
-    console.log(`[FFmpeg ITL] Tentando conectar fluxo RTSP -> HLS para a câmera '${cam.name}' (${key})...`);
+  // Only attempt FFmpeg conversion if camera protocol is RTSP and has a valid RTSP URL
+  if (cam && cam.protocol === 'RTSP' && cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
+    const rtsp = cam.rtspUrl.trim();
+    console.log(`[FFmpeg ITL] Conectando fluxo RTSP -> HLS para a câmera '${cam.name}' (${key})...`);
     const hlsDir = '/tmp/hls';
     if (!fs.existsSync(hlsDir)) {
       try { fs.mkdirSync(hlsDir, { recursive: true }); } catch (e) {}
@@ -602,9 +602,20 @@ async function startServer() {
     }
 
     const logs = lastFfmpegLogs.get(key) || [];
+    const targetProtocol = protocol || (rtspUrl && rtspUrl.trim().startsWith('rtsp://') ? 'RTSP' : 'RTMP');
 
-    if (protocol === 'RTSP' || (rtspUrl && rtspUrl.startsWith('rtsp://'))) {
-      const targetRtsp = rtspUrl || 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0';
+    if (targetProtocol === 'RTSP') {
+      const targetRtsp = rtspUrl ? rtspUrl.trim() : '';
+      if (!targetRtsp) {
+        return res.json({
+          success: false,
+          protocol: 'RTSP',
+          streamKey: key,
+          hlsActive: isHlsActive,
+          message: 'Nenhuma URL RTSP foi cadastrada para esta câmera.',
+          logs,
+        });
+      }
       
       // Execute ffprobe with 5s timeout to verify RTSP stream responsiveness
       const ffprobeProc = spawn('ffprobe', [
@@ -761,13 +772,14 @@ async function startServer() {
     }
 
     const defaultKey = streamKey || `cam_${Date.now().toString().slice(-6)}`;
+    const isRtsp = protocol === 'RTSP';
 
     const newCamera: Camera = {
       id: `cam-${Date.now().toString().slice(-4)}`,
       name,
       location: location || `${city ? city + ' - ' : ''}${stateUf || 'Localização ITL'}`,
       protocol: protocol || 'RTSP',
-      rtspUrl: rtspUrl || 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0',
+      rtspUrl: isRtsp ? (rtspUrl ? rtspUrl.trim() : '') : '',
       rtmpUrl: cleanDoubleUrl(rtmpUrl || fullRtmpUrl || `rtmp://${reqHost}:1935/live/${defaultKey}`),
       streamKey: defaultKey,
       rtmpServerUrl: cleanDoubleUrl(rtmpServerUrl || `rtmp://${reqHost}:1935/live`),
