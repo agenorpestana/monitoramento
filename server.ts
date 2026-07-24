@@ -82,9 +82,7 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
 
   const ffmpegArgs: string[] = [];
   if (streamSource.startsWith('rtsp://')) {
-    ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '5000000');
-  } else if (streamSource.startsWith('rtmp://')) {
-    ffmpegArgs.push('-rw_timeout', '5000000');
+    ffmpegArgs.push('-rtsp_transport', 'tcp');
   }
 
   ffmpegArgs.push(
@@ -660,9 +658,7 @@ async function startServer() {
     const ffmpegArgs: string[] = [];
 
     if (targetUrl.startsWith('rtsp://')) {
-      ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '5000000');
-    } else if (targetUrl.startsWith('rtmp://')) {
-      ffmpegArgs.push('-rw_timeout', '5000000');
+      ffmpegArgs.push('-rtsp_transport', 'tcp');
     }
 
     ffmpegArgs.push(

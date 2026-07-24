@@ -186,16 +186,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }
   };
 
-  // Auto transition LOADING to ONLINE for MJPEG stream after brief delay if no error
-  useEffect(() => {
-    if (useMjpegStream && streamMode === 'VIDEO' && connectionState === 'LOADING') {
-      const timer = setTimeout(() => {
-        setConnectionState('ONLINE');
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [useMjpegStream, streamMode, retryCount, connectionState]);
-
   // Video playback and Hls.js initialization
   useEffect(() => {
     if (streamMode !== 'VIDEO' || !videoUrl) return;
