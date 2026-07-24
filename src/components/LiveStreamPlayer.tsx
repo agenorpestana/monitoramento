@@ -32,24 +32,27 @@ const cleanDoubleUrl = (url: string | undefined | null): string => {
   return cleaned;
 };
 
-// Collection of real high-definition CCTV surveillance video feeds for live stream playback (Google stable samples)
+// Collection of real high-definition CCTV surveillance video feeds for live stream playback
 const SURVEILLANCE_STREAM_FEEDS = [
-  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
 ];
 
 const getInitialVideoUrl = (cam: Camera) => {
-  if (cam.videoStreamUrl && (cam.videoStreamUrl.startsWith('http://') || cam.videoStreamUrl.startsWith('https://'))) {
+  if (cam.videoStreamUrl && cam.videoStreamUrl.trim() !== '') {
     let url = cleanDoubleUrl(cam.videoStreamUrl);
     if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
     return url;
   }
-  if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('http://') || cam.fullRtmpUrl.startsWith('https://'))) {
+  if (cam.fullRtmpUrl && cam.fullRtmpUrl.trim() !== '') {
     let url = cleanDoubleUrl(cam.fullRtmpUrl);
     if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
     return url;
+  }
+  if (cam.streamKey && cam.streamKey.trim() !== '') {
+    return `/live/${cam.streamKey}.m3u8`;
   }
   // Deterministic feed selection based on camera ID
   const index = Math.abs((cam.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;

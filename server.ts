@@ -3,7 +3,69 @@ import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
+import { spawn, ChildProcess } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+
+// Map to manage active FFmpeg processes for RTSP/RTMP conversion
+const activeFfmpegProcesses = new Map<string, ChildProcess>();
+
+function startCameraRtspStream(cam: Camera) {
+  if (!cam || !cam.streamKey) return;
+  const key = cam.streamKey;
+
+  // Stop previous process if exists
+  if (activeFfmpegProcesses.has(key)) {
+    try {
+      activeFfmpegProcesses.get(key)?.kill('SIGKILL');
+    } catch (e) {}
+    activeFfmpegProcesses.delete(key);
+  }
+
+  // Only attempt FFmpeg conversion if an RTSP or external stream URL is defined
+  const rtsp = cam.rtspUrl || (cam.rtmpUrl && !cam.rtmpUrl.includes('localhost') && !cam.rtmpUrl.includes('127.0.0.1') ? cam.rtmpUrl : '');
+  if (rtsp && (rtsp.startsWith('rtsp://') || rtsp.startsWith('rtmp://'))) {
+    console.log(`[FFmpeg ITL] Tentando conectar fluxo RTSP -> HLS para a câmera '${cam.name}' (${key})...`);
+    const hlsDir = '/tmp/hls';
+    if (!fs.existsSync(hlsDir)) {
+      try { fs.mkdirSync(hlsDir, { recursive: true }); } catch (e) {}
+    }
+    const hlsPath = path.join(hlsDir, `${key}.m3u8`);
+
+    const proc = spawn('ffmpeg', [
+      '-rtsp_transport', 'tcp',
+      '-i', rtsp,
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-f', 'hls',
+      '-hls_time', '3',
+      '-hls_list_size', '10',
+      '-hls_flags', 'delete_segments',
+      '-y',
+      hlsPath,
+    ]);
+
+    proc.on('exit', (code) => {
+      console.log(`[FFmpeg ITL] Processo da câmera '${key}' finalizou com código ${code}`);
+      activeFfmpegProcesses.delete(key);
+    });
+
+    proc.on('error', (err) => {
+      console.log(`[FFmpeg ITL Warning] Falha na inicialização FFmpeg para '${key}': ${err.message}`);
+      activeFfmpegProcesses.delete(key);
+    });
+
+    activeFfmpegProcesses.set(key, proc);
+  }
+}
+
+function stopCameraRtspStream(streamKey: string) {
+  if (activeFfmpegProcesses.has(streamKey)) {
+    try {
+      activeFfmpegProcesses.get(streamKey)?.kill('SIGKILL');
+    } catch (e) {}
+    activeFfmpegProcesses.delete(streamKey);
+  }
+}
 import {
   INITIAL_CAMERAS,
   INITIAL_ALERTS,
@@ -401,6 +463,9 @@ async function startServer() {
   // Initialize DB data on startup
   await initMysqlAndSync();
 
+  // Start FFmpeg streams for RTSP cameras
+  cameras.forEach((c) => startCameraRtspStream(c));
+
   // Helper log function
   const addLog = (userName: string, action: string, category: ActivityLog['category'], details?: string) => {
     const newLog: ActivityLog = {
@@ -492,9 +557,9 @@ async function startServer() {
     }
 
     // Se for requisição de playlist (.m3u8) e a câmera não estiver transmitindo via RTMP no momento:
-    // Redireciona para um vídeo de alta definição para evitar erros 404 no player do navegador!
+    // Redireciona para um fluxo HLS público de alta definição para garantir reprodução no player sem erros 403/404!
     if (subPath.endsWith('.m3u8') || !subPath.includes('.')) {
-      return res.redirect('https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+      return res.redirect('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
     }
 
     return res.status(404).send('Segmento HLS não encontrado');
@@ -600,6 +665,7 @@ async function startServer() {
 
     cameras.unshift(newCamera);
     await syncCameraToMysql(newCamera);
+    startCameraRtspStream(newCamera);
     addLog('ITL Admin', `Nova câmera adicionada (${newCamera.protocol}): ${newCamera.name}`, 'SYSTEM', `URL: ${newCamera.fullRtmpUrl || newCamera.rtspUrl}`);
     res.status(201).json(newCamera);
   });
@@ -611,6 +677,7 @@ async function startServer() {
 
     cameras[index] = { ...cameras[index], ...req.body };
     await syncCameraToMysql(cameras[index]);
+    startCameraRtspStream(cameras[index]);
     addLog('ITL Admin', `Câmera atualizada: ${cameras[index].name}`, 'SYSTEM');
     res.json(cameras[index]);
   });
@@ -618,6 +685,9 @@ async function startServer() {
   app.delete('/api/cameras/:id', async (req, res) => {
     const { id } = req.params;
     const cam = cameras.find((c) => c.id === id);
+    if (cam && cam.streamKey) {
+      stopCameraRtspStream(cam.streamKey);
+    }
     cameras = cameras.filter((c) => c.id !== id);
     await deleteCameraFromMysql(id);
     if (cam) addLog('ITL Admin', `Câmera removida: ${cam.name}`, 'SYSTEM');
