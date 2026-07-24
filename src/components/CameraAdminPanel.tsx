@@ -91,9 +91,10 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
 
   const getCurrentHost = () => {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      return window.location.hostname;
+      const h = window.location.hostname;
+      if (h && h !== 'localhost' && h !== '127.0.0.1') return h;
     }
-    return 'localhost';
+    return 'monitoramento.unityautomacoes.com.br';
   };
 
   const getCurrentProtocol = () => {
@@ -228,9 +229,13 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
       return;
     }
 
+    const host = getCurrentHost();
     const key = streamKey || `cam_${Math.random().toString(36).substring(2, 8)}`;
     const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
-    const rtmpStreamSource = `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+    const serverBase = rtmpServer && rtmpServer.trim()
+      ? rtmpServer.trim().replace(/\/$/, '')
+      : `rtmp://${host}:1935/live`;
+    const rtmpStreamSource = `${serverBase}/cam_${cleanKey}`;
 
     const newCamData: Partial<Camera> = {
       name: cameraName.trim(),
@@ -239,7 +244,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
       rtspUrl: protocol === 'RTSP' ? rtspUrl : '',
       rtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
       streamKey: `cam_${cleanKey}`,
-      rtmpServerUrl: rtmpServer || 'rtmp://aerocam.itlfibra.com:1935/live',
+      rtmpServerUrl: serverBase,
       fullRtmpUrl: protocol === 'RTMP' ? rtmpStreamSource : '',
       stateUf: selectedUf,
       city: selectedCity,

@@ -25,8 +25,8 @@ function getValidStreamSource(cam: any): string {
   for (const candidate of candidates) {
     let str = candidate.trim();
     if (str.startsWith('rtmp://')) {
-      if (str.includes('localhost:1935') || str.includes('127.0.0.1:1935')) {
-        str = str.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
+      if (str.includes('localhost:1935') || str.includes('127.0.0.1:1935') || str.includes('aerocam.itlfibra.com:1935')) {
+        str = str.replace(/localhost:1935|127\.0\.0\.1:1935|aerocam\.itlfibra\.com:1935/g, 'monitoramento.unityautomacoes.com.br:1935');
       }
       return str;
     }
@@ -41,7 +41,7 @@ function getValidStreamSource(cam: any): string {
     }
   }
 
-  return `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+  return `rtmp://monitoramento.unityautomacoes.com.br:1935/live/cam_${cleanKey}`;
 }
 
 function startCameraRtspStream(cam: Camera, forceRestart = false) {
@@ -51,8 +51,8 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
 
   let streamSource = getValidStreamSource(cam);
 
-  if (streamSource.includes('localhost:1935') || streamSource.includes('127.0.0.1:1935')) {
-    streamSource = streamSource.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
+  if (streamSource.includes('localhost:1935') || streamSource.includes('127.0.0.1:1935') || streamSource.includes('aerocam.itlfibra.com:1935')) {
+    streamSource = streamSource.replace(/localhost:1935|127\.0\.0\.1:1935|aerocam\.itlfibra\.com:1935/g, 'monitoramento.unityautomacoes.com.br:1935');
   }
 
   if (!streamSource) return;
@@ -634,11 +634,11 @@ async function startServer() {
     }
 
     if (!targetUrl && cleanKey) {
-      targetUrl = `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+      targetUrl = `rtmp://monitoramento.unityautomacoes.com.br:1935/live/cam_${cleanKey}`;
     }
 
-    if (targetUrl.includes('localhost:1935') || targetUrl.includes('127.0.0.1:1935')) {
-      targetUrl = targetUrl.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
+    if (targetUrl.includes('localhost:1935') || targetUrl.includes('127.0.0.1:1935') || targetUrl.includes('aerocam.itlfibra.com:1935')) {
+      targetUrl = targetUrl.replace(/localhost:1935|127\.0\.0\.1:1935|aerocam\.itlfibra\.com:1935/g, 'monitoramento.unityautomacoes.com.br:1935');
     }
 
     if (!targetUrl || (!targetUrl.startsWith('rtsp://') && !targetUrl.startsWith('rtmp://') && !targetUrl.startsWith('http'))) {
@@ -907,11 +907,11 @@ async function startServer() {
         id: key,
         name: 'Teste de Diagnóstico RTMP',
         protocol: 'RTMP',
-        rtmpUrl: req.body.rtmpUrl || `rtmp://aerocam.itlfibra.com:1935/live/${key}`,
+        rtmpUrl: req.body.rtmpUrl || `rtmp://monitoramento.unityautomacoes.com.br:1935/live/${key}`,
         streamKey: key,
       };
 
-      const targetRtmp = getValidStreamSource(matchedCam as Camera) || req.body.rtmpUrl || `rtmp://aerocam.itlfibra.com:1935/live/${key}`;
+      const targetRtmp = getValidStreamSource(matchedCam as Camera) || req.body.rtmpUrl || `rtmp://monitoramento.unityautomacoes.com.br:1935/live/${key}`;
 
       startCameraRtspStream(matchedCam as Camera, true);
 

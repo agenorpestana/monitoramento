@@ -49,6 +49,19 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const getCurrentHost = () => {
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      const h = window.location.hostname;
+      if (h && h !== 'localhost' && h !== '127.0.0.1') return h;
+    }
+    return 'monitoramento.unityautomacoes.com.br';
+  };
+
+  const currentHost = getCurrentHost();
+  const initialServer = (camera.rtmpServerUrl || `rtmp://${currentHost}:1935/live`).replace(/aerocam\.itlfibra\.com/g, currentHost);
+  const rawFull = camera.fullRtmpUrl || camera.rtmpUrl || `${initialServer.replace(/\/$/, '')}/${camera.streamKey || 'cam_01'}`;
+  const initialFull = rawFull.replace(/aerocam\.itlfibra\.com/g, currentHost);
+
   const [name, setName] = useState(camera.name || '');
   const [protocol, setProtocol] = useState<'RTSP' | 'RTMP'>(
     camera.protocol === 'RTMP' ? 'RTMP' : 'RTSP'
@@ -57,12 +70,8 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
   const [streamKey, setStreamKey] = useState(
     camera.streamKey || (camera.id ? camera.id.replace(/^cam-/, 'cam_') : 'cam_01')
   );
-  const [rtmpServerUrl, setRtmpServerUrl] = useState(
-    camera.rtmpServerUrl || 'rtmp://aerocam.itlfibra.com:1935/live'
-  );
-  const [fullRtmpUrl, setFullRtmpUrl] = useState(
-    camera.fullRtmpUrl || camera.rtmpUrl || ''
-  );
+  const [rtmpServerUrl, setRtmpServerUrl] = useState(initialServer);
+  const [fullRtmpUrl, setFullRtmpUrl] = useState(initialFull);
   const [stateUf, setStateUf] = useState(camera.stateUf || 'BA');
   const [city, setCity] = useState(camera.city || 'Itamaraju');
   const [lat, setLat] = useState(camera.lat ? camera.lat.toString() : '-17.0397');
@@ -290,7 +299,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
                   type="text"
                   value={fullRtmpUrl}
                   onChange={(e) => setFullRtmpUrl(e.target.value)}
-                  placeholder="ex: rtmp://aerocam.itlfibra.com:1935/live/cam_wpg8tz"
+                  placeholder={`ex: rtmp://${getCurrentHost()}:1935/live/cam_wpg8tz`}
                   className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 text-emerald-400 font-mono px-3 py-2 rounded-xl text-xs outline-none"
                 />
               </div>
