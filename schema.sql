@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS `cameras` (
   `two_way_audio_enabled` BOOLEAN DEFAULT TRUE,
   `lat` DECIMAL(10, 8),
   `lng` DECIMAL(11, 8),
+  `thumbnail_url` TEXT,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

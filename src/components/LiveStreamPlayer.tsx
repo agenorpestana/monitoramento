@@ -23,20 +23,29 @@ interface LiveStreamPlayerProps {
   showOverlayControls?: boolean;
 }
 
-// Collection of real high-definition CCTV surveillance video feeds for live stream playback
+const cleanDoubleUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  // Se a URL contiver duas vezes o prefixo HTTP/HTTPS, limpa
+  let cleaned = url.replace(/(https?:\/\/[^/]+)(https?:\/\/)/g, '$2');
+  // Limpa barras duplas que não sejam do formato de protocolo
+  cleaned = cleaned.replace(/([^:]\/)\/+/g, '$1');
+  return cleaned;
+};
+
+// Collection of real high-definition CCTV surveillance video feeds for live stream playback (Google stable samples)
 const SURVEILLANCE_STREAM_FEEDS = [
-  'https://assets.mixkit.co/videos/preview/mixkit-security-camera-recording-traffic-at-night-42898-large.mp4',
-  'https://assets.mixkit.co/videos/preview/mixkit-security-camera-view-of-a-street-at-night-42897-large.mp4',
-  'https://assets.mixkit.co/videos/preview/mixkit-cctv-camera-view-of-a-street-in-a-city-42896-large.mp4',
-  'https://assets.mixkit.co/videos/preview/mixkit-security-camera-view-of-a-parking-lot-42899-large.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
 ];
 
 const getInitialVideoUrl = (cam: Camera) => {
   if (cam.videoStreamUrl && (cam.videoStreamUrl.startsWith('http://') || cam.videoStreamUrl.startsWith('https://'))) {
-    return cam.videoStreamUrl;
+    return cleanDoubleUrl(cam.videoStreamUrl);
   }
   if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('http://') || cam.fullRtmpUrl.startsWith('https://'))) {
-    return cam.fullRtmpUrl;
+    return cleanDoubleUrl(cam.fullRtmpUrl);
   }
   // Deterministic feed selection based on camera ID
   const index = Math.abs((cam.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
@@ -58,9 +67,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   );
 
   const [connectionState, setConnectionState] = useState<ConnectionState>('LOADING');
-  const [videoUrl, setVideoUrl] = useState<string>(() => getInitialVideoUrl(camera));
+  const [videoUrl, setVideoUrl] = useState<string>(() => cleanDoubleUrl(getInitialVideoUrl(camera)));
   const [isEditingUrl, setIsEditingUrl] = useState(false);
-  const [tempUrlInput, setTempUrlInput] = useState(() => camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl);
+  const [tempUrlInput, setTempUrlInput] = useState(() => cleanDoubleUrl(camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl));
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -77,14 +86,98 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }, 1200);
   };
 
+  // Video playback and Hls.js initialization
   useEffect(() => {
-    if (streamMode === 'VIDEO') {
-      connectStream();
+    if (streamMode !== 'VIDEO' || !videoUrl) return;
+
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    connectStream();
+
+    const isHls = videoUrl.endsWith('.m3u8') || videoUrl.includes('/live/');
+    let hlsInstance: any = null;
+
+    if (isHls) {
+      const initHls = () => {
+        const HlsClass = (window as any).Hls;
+        if (HlsClass) {
+          if (HlsClass.isSupported()) {
+            hlsInstance = new HlsClass({
+              maxMaxBufferLength: 10,
+              liveSyncDurationCount: 3,
+            });
+            hlsInstance.loadSource(videoUrl);
+            hlsInstance.attachMedia(videoElement);
+            hlsInstance.on(HlsClass.Events.MANIFEST_PARSED, () => {
+              videoElement.play().catch(() => {});
+              setConnectionState('ONLINE');
+            });
+            hlsInstance.on(HlsClass.Events.ERROR, (event: any, data: any) => {
+              if (data.fatal) {
+                switch (data.type) {
+                  case HlsClass.ErrorTypes.NETWORK_ERROR:
+                    hlsInstance.startLoad();
+                    break;
+                  case HlsClass.ErrorTypes.MEDIA_ERROR:
+                    hlsInstance.recoverMediaError();
+                    break;
+                  default:
+                    handleVideoError();
+                    break;
+                }
+              }
+            });
+          } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+            videoElement.src = videoUrl;
+            videoElement.play().catch(() => {});
+            setConnectionState('ONLINE');
+          }
+        }
+      };
+
+      if (!(window as any).Hls) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+        script.async = true;
+        script.onload = () => {
+          initHls();
+        };
+        document.head.appendChild(script);
+        return () => {
+          if (hlsInstance) {
+            hlsInstance.destroy();
+          }
+          if (document.head.contains(script)) {
+            document.head.removeChild(script);
+          }
+        };
+      } else {
+        initHls();
+        return () => {
+          if (hlsInstance) {
+            hlsInstance.destroy();
+          }
+        };
+      }
+    } else {
+      // Standard MP4 video stream
+      videoElement.src = videoUrl;
+      videoElement.load();
+      videoElement.play().catch(() => {});
+
+      const onCanPlay = () => setConnectionState('ONLINE');
+      const onError = () => handleVideoError();
+
+      videoElement.addEventListener('canplay', onCanPlay);
+      videoElement.addEventListener('error', onError);
+
+      return () => {
+        videoElement.removeEventListener('canplay', onCanPlay);
+        videoElement.removeEventListener('error', onError);
+      };
     }
-    return () => {
-      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-    };
-  }, [camera.id, videoUrl, streamMode]);
+  }, [videoUrl, streamMode, camera.id]);
 
   // Handle Webcam Mode
   useEffect(() => {

@@ -422,10 +422,16 @@ systemctl enable mysql
 systemctl start nginx
 systemctl enable nginx
 
-# Configuração automática do módulo RTMP no Nginx para receber os fluxos de câmeras empurrados
-if [ -f /etc/nginx/nginx.conf ] && ! grep -q "rtmp {" /etc/nginx/nginx.conf; then
-    echo -e "${YELLOW}Configurando bloco RTMP em /etc/nginx/nginx.conf...${NC}"
-    cat >> /etc/nginx/nginx.conf <<EOL
+# Configuração automática do módulo RTMP no Nginx com suporte a HLS
+echo -e "${YELLOW}Criando e configurando permissões para o diretório HLS...${NC}"
+mkdir -p /tmp/hls
+chown -R www-data:www-data /tmp/hls 2>/dev/null || true
+chmod -R 777 /tmp/hls
+
+if [ -f /etc/nginx/nginx.conf ]; then
+    if ! grep -q "rtmp {" /etc/nginx/nginx.conf; then
+        echo -e "${YELLOW}Configurando bloco RTMP com HLS em /etc/nginx/nginx.conf...${NC}"
+        cat >> /etc/nginx/nginx.conf <<EOL
 
 rtmp {
     server {
@@ -436,11 +442,24 @@ rtmp {
             live on;
             record off;
             meta copy;
+
+            # HLS Streaming Configurations
+            hls on;
+            hls_path /tmp/hls;
+            hls_fragment 3s;
+            hls_playlist_length 60s;
+            hls_cleanup on;
         }
     }
 }
 EOL
-    echo -e "${GREEN}Módulo RTMP configurado com sucesso na porta 1935!${NC}"
+        echo -e "${GREEN}Módulo RTMP/HLS configurado com sucesso na porta 1935!${NC}"
+    elif ! grep -q "hls_path" /etc/nginx/nginx.conf; then
+        echo -e "${YELLOW}Atualizando bloco RTMP existente para incluir suporte HLS em /etc/nginx/nginx.conf...${NC}"
+        cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
+        sed -i 's/live on;/live on;\n            hls on;\n            hls_path \/tmp\/hls;\n            hls_fragment 3s;\n            hls_playlist_length 60s;\n            hls_cleanup on;/g' /etc/nginx/nginx.conf
+        echo -e "${GREEN}Suporte HLS adicionado ao bloco RTMP com sucesso!${NC}"
+    fi
 fi
 
 # Configuração de Firewall para a porta RTMP (1935)
@@ -571,6 +590,16 @@ server {
     root $WEB_ROOT;
     index index.html;
     client_max_body_size 200M;
+
+    location /live {
+        types {
+            application/vnd.apple.mpegurl m3u8;
+            video/mp2t ts;
+        }
+        alias /tmp/hls;
+        add_header Cache-Control no-cache;
+        add_header Access-Control-Allow-Origin *;
+    }
 
     location /api {
         proxy_pass http://localhost:$APP_PORT;

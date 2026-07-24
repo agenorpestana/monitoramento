@@ -56,6 +56,15 @@ const FALLBACK_UFS = [
   { sigla: 'AM', nome: 'Amazonas' },
 ];
 
+const cleanDoubleUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  // Se a URL contiver duas vezes o prefixo HTTP/HTTPS, limpa
+  let cleaned = url.replace(/(https?:\/\/[^/]+)(https?:\/\/)/g, '$2');
+  // Limpa barras duplas que não sejam do formato de protocolo
+  cleaned = cleaned.replace(/([^:]\/)\/+/g, '$1');
+  return cleaned;
+};
+
 export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   cameras,
   activeUser,
@@ -160,7 +169,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   const currentHost = getCurrentHost();
   const currentProtocol = getCurrentProtocol();
   const fullRtmpUrl = `${rtmpServer}/${streamKey}`;
-  const generatedHttpLink = `${currentProtocol}//${currentHost}/live/${streamKey}`;
+  const generatedHttpLink = cleanDoubleUrl(`${currentProtocol}//${currentHost}/live/${streamKey}.m3u8`);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);

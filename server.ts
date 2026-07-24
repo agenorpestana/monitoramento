@@ -17,6 +17,15 @@ import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, N
 
 const LOCAL_STORE_FILE = path.join(process.cwd(), 'itl_database_store.json');
 
+const cleanDoubleUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  // Se a URL contiver duas vezes o prefixo HTTP/HTTPS, limpa
+  let cleaned = url.replace(/(https?:\/\/[^/]+)(https?:\/\/)/g, '$2');
+  // Limpa barras duplas que não sejam do formato de protocolo
+  cleaned = cleaned.replace(/([^:]\/)\/+/g, '$1');
+  return cleaned;
+};
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -162,6 +171,11 @@ async function startServer() {
       try {
         await pool.query('ALTER TABLE `cameras` MODIFY `rtsp_url` TEXT NULL');
         await pool.query('ALTER TABLE `cameras` MODIFY `location` VARCHAR(255) NULL');
+      } catch (e) {}
+
+      // Dynamically add missing thumbnail_url column to cameras table if it does not exist
+      try {
+        await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL');
       } catch (e) {}
 
       await pool.query(`
@@ -449,10 +463,10 @@ async function startServer() {
       location: location || `${city ? city + ' - ' : ''}${stateUf || 'Localização ITL'}`,
       protocol: protocol || 'RTSP',
       rtspUrl: rtspUrl || 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0',
-      rtmpUrl: rtmpUrl || fullRtmpUrl || `rtmp://${reqHost}:1935/live/${defaultKey}`,
+      rtmpUrl: cleanDoubleUrl(rtmpUrl || fullRtmpUrl || `rtmp://${reqHost}:1935/live/${defaultKey}`),
       streamKey: defaultKey,
-      rtmpServerUrl: rtmpServerUrl || `rtmp://${reqHost}:1935/live`,
-      fullRtmpUrl: fullRtmpUrl || `${reqProto}://${reqHost}/live/${defaultKey}`,
+      rtmpServerUrl: cleanDoubleUrl(rtmpServerUrl || `rtmp://${reqHost}:1935/live`),
+      fullRtmpUrl: cleanDoubleUrl(fullRtmpUrl || `${reqProto}://${reqHost}/live/${defaultKey}.m3u8`),
       stateUf: stateUf || '',
       city: city || '',
       status: 'ONLINE',
