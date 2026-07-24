@@ -537,11 +537,15 @@ async function startServer() {
   });
 
   // Handler para reprodução de vídeo e transmissões HLS
-  app.get('/live/*', (req, res) => {
+  app.all('/live/*', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
 
     const subPath = req.params[0] || '';
     const hlsDir = '/tmp/hls';
@@ -553,16 +557,18 @@ async function startServer() {
       } else if (targetFile.endsWith('.m3u8')) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       }
+      if (req.method === 'HEAD') {
+        return res.status(200).end();
+      }
       return res.sendFile(targetFile);
     }
 
-    // Se for requisição de playlist (.m3u8) e a câmera não estiver transmitindo via RTMP no momento:
-    // Redireciona para um fluxo HLS público de alta definição para garantir reprodução no player sem erros 403/404!
-    if (subPath.endsWith('.m3u8') || !subPath.includes('.')) {
-      return res.redirect('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
-    }
-
-    return res.status(404).send('Segmento HLS não encontrado');
+    // Se a câmera não estiver transmitindo via RTMP no momento (arquivo HLS ausente):
+    // Retorna HTTP 404 sem nenhum redirecionamento para vídeo externo!
+    return res.status(404).json({
+      error: 'Câmera offline ou sem transmissão RTMP ativa no momento',
+      streamKey: subPath.replace(/\.m3u8$/, ''),
+    });
   });
 
   // Endpoints para status e sincronização do Banco de Dados MySQL

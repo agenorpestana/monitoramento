@@ -32,14 +32,6 @@ const cleanDoubleUrl = (url: string | undefined | null): string => {
   return cleaned;
 };
 
-// Collection of real high-definition CCTV surveillance video feeds for live stream playback
-const SURVEILLANCE_STREAM_FEEDS = [
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-];
-
 const getInitialVideoUrl = (cam: Camera) => {
   if (cam.videoStreamUrl && cam.videoStreamUrl.trim() !== '') {
     let url = cleanDoubleUrl(cam.videoStreamUrl);
@@ -54,9 +46,7 @@ const getInitialVideoUrl = (cam: Camera) => {
   if (cam.streamKey && cam.streamKey.trim() !== '') {
     return `/live/${cam.streamKey}.m3u8`;
   }
-  // Deterministic feed selection based on camera ID
-  const index = Math.abs((cam.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
-  return SURVEILLANCE_STREAM_FEEDS[index];
+  return `/live/${cam.id || 'stream'}.m3u8`;
 };
 
 type ConnectionState = 'LOADING' | 'ONLINE' | 'OFFLINE';
@@ -82,15 +72,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize and connect stream with loader timeout
+  // Connect stream
   const connectStream = () => {
     setConnectionState('LOADING');
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
 
-    // If camera status is explicitly OFFLINE, show OFFLINE state; otherwise set ONLINE
-    loadingTimerRef.current = setTimeout(() => {
-      setConnectionState(camera.status === 'OFFLINE' ? 'OFFLINE' : 'ONLINE');
-    }, 1200);
+    if (camera.status === 'OFFLINE') {
+      setConnectionState('OFFLINE');
+    }
+  };
+
+  const handleVideoError = () => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    setConnectionState('OFFLINE');
   };
 
   // Video playback and Hls.js initialization
@@ -104,52 +98,54 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
     const isHls = videoUrl.endsWith('.m3u8') || videoUrl.includes('/live/');
     let hlsInstance: any = null;
+    let isDestroyed = false;
 
     if (isHls) {
       videoElement.removeAttribute('src');
       videoElement.load();
+
       const initHls = () => {
         const HlsClass = (window as any).Hls;
-        if (HlsClass) {
-          if (HlsClass.isSupported()) {
-            hlsInstance = new HlsClass({
-              maxMaxBufferLength: 10,
-              liveSyncDurationCount: 3,
-            });
-            hlsInstance.loadSource(videoUrl);
-            hlsInstance.attachMedia(videoElement);
-            let networkRetryCount = 0;
-            hlsInstance.on(HlsClass.Events.MANIFEST_PARSED, () => {
-              videoElement.play().catch(() => {});
+        if (HlsClass && HlsClass.isSupported()) {
+          hlsInstance = new HlsClass({
+            maxMaxBufferLength: 10,
+            liveSyncDurationCount: 3,
+            manifestLoadingMaxRetry: 1,
+            levelLoadingMaxRetry: 1,
+            fragLoadingMaxRetry: 1,
+          });
+          hlsInstance.loadSource(videoUrl);
+          hlsInstance.attachMedia(videoElement);
+
+          hlsInstance.on(HlsClass.Events.MANIFEST_PARSED, () => {
+            if (isDestroyed) return;
+            videoElement.play().then(() => {
+              setConnectionState('ONLINE');
+            }).catch(() => {
               setConnectionState('ONLINE');
             });
-            hlsInstance.on(HlsClass.Events.ERROR, (event: any, data: any) => {
-              if (data.fatal) {
-                switch (data.type) {
-                  case HlsClass.ErrorTypes.NETWORK_ERROR:
-                    networkRetryCount++;
-                    if (networkRetryCount <= 3) {
-                      setTimeout(() => {
-                        if (hlsInstance) hlsInstance.startLoad();
-                      }, 3000);
-                    } else {
-                      handleVideoError();
-                    }
-                    break;
-                  case HlsClass.ErrorTypes.MEDIA_ERROR:
-                    hlsInstance.recoverMediaError();
-                    break;
-                  default:
-                    handleVideoError();
-                    break;
-                }
+          });
+
+          hlsInstance.on(HlsClass.Events.ERROR, (_event: any, data: any) => {
+            if (isDestroyed) return;
+            if (data.fatal) {
+              console.warn(`[HLS] Sinal de câmera indisponível/offline em ${videoUrl}`);
+              handleVideoError();
+              if (hlsInstance) {
+                try { hlsInstance.destroy(); } catch (e) {}
+                hlsInstance = null;
               }
-            });
-          } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
-            videoElement.src = videoUrl;
-            videoElement.play().catch(() => {});
+            }
+          });
+        } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+          videoElement.src = videoUrl;
+          videoElement.play().then(() => {
             setConnectionState('ONLINE');
-          }
+          }).catch(() => {
+            handleVideoError();
+          });
+        } else {
+          handleVideoError();
         }
       };
 
@@ -158,30 +154,29 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
         script.async = true;
         script.onload = () => {
-          initHls();
+          if (!isDestroyed) initHls();
+        };
+        script.onerror = () => {
+          if (!isDestroyed) handleVideoError();
         };
         document.head.appendChild(script);
         return () => {
-          if (hlsInstance) {
-            hlsInstance.destroy();
-          }
-          if (document.head.contains(script)) {
-            document.head.removeChild(script);
-          }
+          isDestroyed = true;
+          if (hlsInstance) hlsInstance.destroy();
+          if (document.head.contains(script)) document.head.removeChild(script);
         };
       } else {
         initHls();
         return () => {
-          if (hlsInstance) {
-            hlsInstance.destroy();
-          }
+          isDestroyed = true;
+          if (hlsInstance) hlsInstance.destroy();
         };
       }
     } else {
       // Standard MP4 video stream
       videoElement.src = videoUrl;
       videoElement.load();
-      videoElement.play().catch(() => {});
+      videoElement.play().catch(() => handleVideoError());
 
       const onCanPlay = () => setConnectionState('ONLINE');
       const onError = () => handleVideoError();
@@ -190,11 +185,34 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       videoElement.addEventListener('error', onError);
 
       return () => {
+        isDestroyed = true;
         videoElement.removeEventListener('canplay', onCanPlay);
         videoElement.removeEventListener('error', onError);
       };
     }
   }, [videoUrl, streamMode, camera.id]);
+
+  // Periodic stream health checker when camera is OFFLINE
+  useEffect(() => {
+    if (connectionState !== 'OFFLINE' || streamMode !== 'VIDEO' || !videoUrl) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const res = await fetch(videoUrl, { method: 'HEAD', cache: 'no-cache' });
+        if (res.ok) {
+          console.log(`[Stream Auto-Check] Sinal da câmera ${camera.name} ativado. Reconectando...`);
+          setConnectionState('LOADING');
+          if (videoRef.current) {
+            videoRef.current.load();
+          }
+        }
+      } catch (e) {
+        // Stream still offline
+      }
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [connectionState, streamMode, videoUrl, camera.name]);
 
   // Handle Webcam Mode
   useEffect(() => {
@@ -237,16 +255,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     setConnectionState('ONLINE');
   };
 
-  const handleVideoError = () => {
-    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-    // If custom URL or raw RTMP/RTSP socket URL cannot be decoded by browser HTML5 <video>, fall back to active surveillance feed
-    const fallback = SURVEILLANCE_STREAM_FEEDS[Math.abs((camera.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length];
-    if (videoUrl !== fallback) {
-      setVideoUrl(fallback);
-    }
-    setConnectionState('ONLINE');
-  };
-
   const handleRetryConnection = () => {
     if (streamMode === 'WEBCAM') {
       setStreamMode('VIDEO');
@@ -281,13 +289,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           playsInline
           onCanPlay={handleVideoCanPlay}
           onPlaying={handleVideoCanPlay}
-          onError={() => {
-            // Only trigger fallback if not using Hls.js
-            const isHls = videoUrl.endsWith('.m3u8') || videoUrl.includes('/live/');
-            if (!isHls) {
-              handleVideoError();
-            }
-          }}
+          onError={handleVideoError}
           className={`w-full h-full object-cover transition duration-500 ${
             connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
           }`}
