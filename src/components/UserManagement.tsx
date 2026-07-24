@@ -4,18 +4,18 @@ import {
   UserPlus,
   ShieldCheck,
   Lock,
-  CheckCircle2,
-  XCircle,
-  Edit,
   Trash2,
-  Key,
-  Smartphone,
-  Shield,
+  Camera as CameraIcon,
+  Check,
+  Eye,
+  Sliders,
+  X
 } from 'lucide-react';
-import { User, UserRole, CustomPermissions } from '../types';
+import { User, UserRole, CustomPermissions, Camera } from '../types';
 
 interface UserManagementProps {
   users: User[];
+  cameras: Camera[];
   activeUser: User;
   onAddUser: (userData: Partial<User>) => void;
   onUpdateUser: (id: string, userData: Partial<User>) => void;
@@ -24,19 +24,21 @@ interface UserManagementProps {
 
 export const UserManagement: React.FC<UserManagementProps> = ({
   users,
+  cameras,
   activeUser,
   onAddUser,
   onUpdateUser,
   onDeleteUser,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingCameraAccessUser, setEditingCameraAccessUser] = useState<User | null>(null);
 
   const [formState, setFormState] = useState({
     name: '',
     email: '',
     role: 'RESIDENT' as UserRole,
     phone: '',
+    allowedCameraIds: ['ALL'] as string[],
     customPermissions: {
       canViewLive: true,
       canViewRecordings: true,
@@ -61,13 +63,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
 
-    onAddUser(formState);
+    onAddUser({
+      ...formState,
+      allowedCameraIds: formState.allowedCameraIds.length === 0 ? ['ALL'] : formState.allowedCameraIds,
+    });
+
     setShowAddModal(false);
     setFormState({
       name: '',
       email: '',
       role: 'RESIDENT',
       phone: '',
+      allowedCameraIds: ['ALL'],
       customPermissions: {
         canViewLive: true,
         canViewRecordings: true,
@@ -100,6 +107,47 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     }
   };
 
+  const handleToggleFormCamera = (camId: string) => {
+    let current = [...formState.allowedCameraIds];
+
+    if (camId === 'ALL') {
+      setFormState({ ...formState, allowedCameraIds: ['ALL'] });
+      return;
+    }
+
+    // Remove 'ALL' if specific camera selected
+    current = current.filter((id) => id !== 'ALL');
+
+    if (current.includes(camId)) {
+      current = current.filter((id) => id !== camId);
+      if (current.length === 0) current = ['ALL'];
+    } else {
+      current.push(camId);
+    }
+
+    setFormState({ ...formState, allowedCameraIds: current });
+  };
+
+  const handleToggleUserCameraAccess = (user: User, camId: string) => {
+    let current = [...(user.allowedCameraIds || ['ALL'])];
+
+    if (camId === 'ALL') {
+      onUpdateUser(user.id, { allowedCameraIds: ['ALL'] });
+      return;
+    }
+
+    current = current.filter((id) => id !== 'ALL');
+
+    if (current.includes(camId)) {
+      current = current.filter((id) => id !== camId);
+      if (current.length === 0) current = ['ALL'];
+    } else {
+      current.push(camId);
+    }
+
+    onUpdateUser(user.id, { allowedCameraIds: current });
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -107,10 +155,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
             <Users className="w-5 h-5 text-emerald-400" />
-            Acesso Multiusuário com Permissões Customizadas (RBAC)
+            Acesso Multiusuário com Seleção de Câmeras Autorizadas
           </h2>
           <p className="text-xs text-slate-400">
-            Controle detalhado de quem pode visualizar câmeras ao vivo, ouvir/falar via RTMP, ver gravações e baixar relatórios
+            Defina perfis, permissões granulares e escolha exatamente quais câmeras cada usuário pode visualizar
           </p>
         </div>
 
@@ -129,7 +177,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       {showAddModal && (
         <form onSubmit={handleCreate} className="bg-slate-900 border border-emerald-500/30 p-6 rounded-2xl space-y-4 shadow-2xl">
           <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2 border-b border-slate-800 pb-2">
-            <UserPlus className="w-4 h-4" /> Cadastrar Usuário e Configurar Permissões
+            <UserPlus className="w-4 h-4" /> Cadastrar Usuário e Vincular Câmeras
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -171,6 +219,53 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 <option value="VIEWER">VISUALIZADOR</option>
               </select>
             </div>
+          </div>
+
+          {/* Camera Selection Section */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                <CameraIcon className="w-4 h-4 text-emerald-400" /> Câmeras Autorizadas para este Usuário:
+              </span>
+              <label className="flex items-center space-x-2 cursor-pointer text-xs text-emerald-400 font-semibold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">
+                <input
+                  type="checkbox"
+                  checked={formState.allowedCameraIds.includes('ALL')}
+                  onChange={() => handleToggleFormCamera('ALL')}
+                  className="accent-emerald-500 rounded"
+                />
+                <span>Acesso Total (Todas as Câmeras)</span>
+              </label>
+            </div>
+
+            {!formState.allowedCameraIds.includes('ALL') && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
+                {cameras.map((cam) => {
+                  const isChecked = formState.allowedCameraIds.includes(cam.id);
+                  return (
+                    <label
+                      key={cam.id}
+                      className={`flex items-center space-x-2 p-2.5 rounded-xl border cursor-pointer transition ${
+                        isChecked
+                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleFormCamera(cam.id)}
+                        className="accent-emerald-500 rounded"
+                      />
+                      <div className="truncate text-xs">
+                        <div className="font-bold">{cam.name}</div>
+                        <div className="text-[10px] text-slate-500">{cam.location}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Granular Permission Toggles */}
@@ -227,68 +322,132 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         </div>
 
         <div className="divide-y divide-slate-800">
-          {users.map((user) => (
-            <div key={user.id} className="p-4 hover:bg-slate-800/40 transition space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center space-x-3">
-                  <img src={user.avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500/30" />
-                  <div>
-                    <h4 className="text-xs font-bold text-white flex items-center gap-2">
-                      {user.name}
-                      <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full">
-                        {user.role}
+          {users.map((user) => {
+            const isAllCameras = !user.allowedCameraIds || user.allowedCameraIds.includes('ALL');
+            const allowedCount = isAllCameras
+              ? cameras.length
+              : (user.allowedCameraIds || []).filter((id) => cameras.some((c) => c.id === id)).length;
+
+            return (
+              <div key={user.id} className="p-4 hover:bg-slate-800/40 transition space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center space-x-3">
+                    <img src={user.avatar} className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-500/30" />
+                    <div>
+                      <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                        {user.name}
+                        <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full">
+                          {user.role}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400">{user.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 text-[10px] font-mono text-slate-400">
+                    <button
+                      onClick={() => setEditingCameraAccessUser(editingCameraAccessUser?.id === user.id ? null : user)}
+                      className="px-2.5 py-1 bg-slate-950 border border-slate-800 hover:border-emerald-500/50 text-emerald-400 rounded-lg flex items-center space-x-1.5 transition"
+                      title="Alterar Câmeras Autorizadas"
+                    >
+                      <CameraIcon className="w-3 h-3 text-emerald-400" />
+                      <span>
+                        Câmeras: {isAllCameras ? 'Todas (Acesso Total)' : `${allowedCount} de ${cameras.length}`}
                       </span>
-                    </h4>
-                    <p className="text-[11px] text-slate-400">{user.email}</p>
+                    </button>
+
+                    <span>Ativo: {user.lastActive}</span>
+
+                    {activeUser.customPermissions.canManageUsers && user.role !== 'ADMIN' && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`Excluir usuário ${user.name}?`)) onDeleteUser(user.id);
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-rose-400 rounded transition"
+                        title="Excluir Usuário"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2 text-[10px] font-mono text-slate-400">
-                  <span>Última atividade: {user.lastActive}</span>
-                  {activeUser.customPermissions.canManageUsers && user.role !== 'ADMIN' && (
-                    <button
-                      onClick={() => {
-                        if (confirm(`Excluir usuário ${user.name}?`)) onDeleteUser(user.id);
-                      }}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded transition"
-                      title="Excluir Usuário"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                {/* Individual Camera Access Editor Box */}
+                {editingCameraAccessUser?.id === user.id && (
+                  <div className="bg-slate-950 p-3.5 rounded-xl border border-emerald-500/30 space-y-2 animate-fadeIn text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <span className="font-bold text-emerald-400 flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5" /> Selecionar Câmeras Permitidas para {user.name}:
+                      </span>
+                      <button
+                        onClick={() => handleToggleUserCameraAccess(user, 'ALL')}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border transition ${
+                          isAllCameras
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                            : 'bg-slate-900 border-slate-800 text-slate-400'
+                        }`}
+                      >
+                        Acesso Total
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                      {cameras.map((cam) => {
+                        const isPermitted = isAllCameras || (user.allowedCameraIds || []).includes(cam.id);
+                        return (
+                          <label
+                            key={cam.id}
+                            className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition ${
+                              isPermitted
+                                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                                : 'bg-slate-900 border-slate-800 text-slate-500'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isPermitted}
+                              onChange={() => handleToggleUserCameraAccess(user, cam.id)}
+                              className="accent-emerald-500 rounded"
+                            />
+                            <span className="truncate">{cam.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Quick Permission Checkboxes */}
+                <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex flex-wrap gap-2 text-[11px]">
+                  {Object.entries({
+                    canViewLive: 'Ao Vivo',
+                    canViewRecordings: 'Gravações',
+                    canControlPTZ: 'PTZ',
+                    canUseTwoWayAudio: 'Áudio RTMP',
+                    canManageCameras: 'Câmeras',
+                    canDeleteRecordings: 'Excluir',
+                    canAccessAuditLogs: 'Logs',
+                    canManageUsers: 'Usuários',
+                  }).map(([key, label]) => {
+                    const hasPerm = (user.customPermissions as any)[key];
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => activeUser.customPermissions.canManageUsers && handleTogglePermission(key as any, user)}
+                        className={`px-2 py-1 rounded-lg border text-[10px] font-medium transition ${
+                          hasPerm
+                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400'
+                        }`}
+                      >
+                        {hasPerm ? '✓' : '✕'} {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Quick Permission Checkboxes */}
-              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 flex flex-wrap gap-2 text-[11px]">
-                {Object.entries({
-                  canViewLive: 'Ao Vivo',
-                  canViewRecordings: 'Gravações',
-                  canControlPTZ: 'PTZ',
-                  canUseTwoWayAudio: 'Áudio RTMP',
-                  canManageCameras: 'Câmeras',
-                  canDeleteRecordings: 'Excluir',
-                  canAccessAuditLogs: 'Logs',
-                  canManageUsers: 'Usuários',
-                }).map(([key, label]) => {
-                  const hasPerm = (user.customPermissions as any)[key];
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => activeUser.customPermissions.canManageUsers && handleTogglePermission(key as any, user)}
-                      className={`px-2 py-1 rounded-lg border text-[10px] font-medium transition ${
-                        hasPerm
-                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                          : 'bg-slate-900 border-slate-800 text-slate-500 hover:text-slate-400'
-                      }`}
-                    >
-                      {hasPerm ? '✓' : '✕'} {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

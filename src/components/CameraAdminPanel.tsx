@@ -728,6 +728,21 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
 
                     <td className="p-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {activeUser.customPermissions.canManageCameras && (
+                          <button
+                            type="button"
+                            onClick={() => onUpdateCamera(cam.id, { isDemo: !cam.isDemo })}
+                            className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition flex items-center gap-1 ${
+                              cam.isDemo
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700'
+                            }`}
+                            title="Exibir/Ocultar Câmera de Degustação na Página Inicial"
+                          >
+                            <span>★ {cam.isDemo ? 'Degustação On' : 'Degustação'}</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => handleTestConnection(cam)}

@@ -280,7 +280,11 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <>
-        <LandingPage onOpenLogin={() => setIsLoginModalOpen(true)} />
+        <LandingPage
+          onOpenLogin={() => setIsLoginModalOpen(true)}
+          cameras={cameras}
+          onSelectCamera={(cam) => setInspectingCamera(cam)}
+        />
 
         <AdminLoginModal
           isOpen={isLoginModalOpen}
@@ -403,6 +407,7 @@ export default function App() {
           {activeTab === 'user-management' && (
             <UserManagement
               users={users}
+              cameras={cameras}
               activeUser={activeUser}
               onAddUser={handleAddUser}
               onUpdateUser={handleUpdateUser}

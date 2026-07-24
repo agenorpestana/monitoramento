@@ -27,6 +27,7 @@ export interface User {
   phone?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   customPermissions: CustomPermissions;
+  allowedCameraIds?: string[]; // If empty or contains 'ALL', user has access to all cameras
   lastActive: string;
   createdAt: string;
 }
@@ -59,6 +60,7 @@ export interface Camera {
   thumbnailUrl?: string;
   videoStreamUrl?: string;
   isLiveWebcam?: boolean;
+  isDemo?: boolean; // Flagged as tasting / public demo camera for landing page
 }
 
 export interface MotionAlert {

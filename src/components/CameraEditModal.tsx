@@ -88,6 +88,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
   const [isE2EEEncrypted, setIsE2EEEncrypted] = useState(
     camera.isE2EEEncrypted ?? true
   );
+  const [isDemo, setIsDemo] = useState(camera.isDemo ?? false);
 
   const [ufs, setUfs] = useState<IbgeUF[]>(FALLBACK_UFS);
   const [cities, setCities] = useState<IbgeCity[]>([]);
@@ -155,6 +156,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
       aiDetectionEnabled,
       twoWayAudioEnabled,
       isE2EEEncrypted,
+      isDemo,
       status: 'ONLINE',
     };
 
@@ -367,7 +369,17 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
           </div>
 
           {/* Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300 pt-2 border-t border-slate-800">
+            <label className="flex items-center space-x-2 cursor-pointer bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30 font-bold text-amber-300">
+              <input
+                type="checkbox"
+                checked={isDemo}
+                onChange={(e) => setIsDemo(e.target.checked)}
+                className="rounded accent-amber-400 w-4 h-4"
+              />
+              <span>★ Câmera de Degustação (Exibir na Página Inicial)</span>
+            </label>
+
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800">
               <input
                 type="checkbox"
@@ -375,7 +387,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
                 onChange={(e) => setAiDetectionEnabled(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Detecção IA</span>
+              <span>Detecção Inteligente IA</span>
             </label>
 
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800">
@@ -385,7 +397,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
                 onChange={(e) => setTwoWayAudioEnabled(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Áudio Bidirecional</span>
+              <span>Áudio Bidirecional (RTMP)</span>
             </label>
 
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800">
@@ -395,7 +407,7 @@ export const CameraEditModal: React.FC<CameraEditModalProps> = ({
                 onChange={(e) => setIsE2EEEncrypted(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Criptografia E2EE</span>
+              <span>Criptografia E2EE (AES-256)</span>
             </label>
           </div>
 

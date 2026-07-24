@@ -20,6 +20,7 @@ export const INITIAL_USERS: User[] = [
       canManageUsers: true,
       canExportReports: true,
     },
+    allowedCameraIds: ['ALL'],
     lastActive: 'Agora mesmo',
     createdAt: '2026-01-01',
   }
@@ -50,6 +51,7 @@ export const INITIAL_CAMERAS: Camera[] = [
     twoWayAudioEnabled: true,
     lat: -17.0397,
     lng: -39.5312,
+    isDemo: true,
     thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
     createdAt: '2026-01-01',
   },
