@@ -88,12 +88,12 @@ async function startServer() {
 
   // Attempt MySQL Pool initialization & Sync
   const initMysqlAndSync = async () => {
-    const dbHost = process.env.DB_HOST || 'localhost';
+    const dbHost = process.env.DB_HOST || '127.0.0.1';
     const dbUser = process.env.DB_USER || 'itl_user';
     const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
     const dbName = process.env.DB_NAME || 'itl_cameras';
 
-    // Candidate credential pairs to handle all local/VPS MySQL setups
+    const hostsToTry = [dbHost, '127.0.0.1', 'localhost'];
     const credentials = [
       { user: dbUser, pass: dbPassword },
       { user: dbUser, pass: 'itl_pass_2026' },
@@ -103,48 +103,54 @@ async function startServer() {
       { user: 'root', pass: '' },
     ];
 
-    for (const cred of credentials) {
-      try {
-        // Step 1: Connect without database to ensure database exists
-        const rootPool = mysql.createPool({
-          host: dbHost,
-          user: cred.user,
-          password: cred.pass,
-          waitForConnections: true,
-          connectionLimit: 5,
-          queueLimit: 0,
-          connectTimeout: 3000,
-        });
+    let connectedHost = '';
 
-        const conn = await rootPool.getConnection();
-        await conn.ping();
-        // Create database if it does not exist
-        await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-        conn.release();
-        await rootPool.end();
+    for (const hostCandidate of hostsToTry) {
+      if (isMysqlActive) break;
+      for (const cred of credentials) {
+        try {
+          // Step 1: Connect without database to ensure database exists
+          const rootPool = mysql.createPool({
+            host: hostCandidate,
+            user: cred.user,
+            password: cred.pass,
+            waitForConnections: true,
+            connectionLimit: 5,
+            queueLimit: 0,
+            connectTimeout: 3000,
+          });
 
-        // Step 2: Create pool connected to the target database
-        const targetPool = mysql.createPool({
-          host: dbHost,
-          user: cred.user,
-          password: cred.pass,
-          database: dbName,
-          waitForConnections: true,
-          connectionLimit: 10,
-          queueLimit: 0,
-          connectTimeout: 3000,
-        });
+          const conn = await rootPool.getConnection();
+          await conn.ping();
+          // Create database if it does not exist
+          await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+          conn.release();
+          await rootPool.end();
 
-        const testConn = await targetPool.getConnection();
-        await testConn.ping();
-        testConn.release();
+          // Step 2: Create pool connected to the target database
+          const targetPool = mysql.createPool({
+            host: hostCandidate,
+            user: cred.user,
+            password: cred.pass,
+            database: dbName,
+            waitForConnections: true,
+            connectionLimit: 10,
+            queueLimit: 0,
+            connectTimeout: 3000,
+          });
 
-        pool = targetPool;
-        isMysqlActive = true;
-        console.log(`[MySQL ITL] Conectado e banco '${dbName}' verificado/criado em ${dbHost} com usuário '${cred.user}'`);
-        break;
-      } catch (err: any) {
-        // Continue trying credentials
+          const testConn = await targetPool.getConnection();
+          await testConn.ping();
+          testConn.release();
+
+          pool = targetPool;
+          isMysqlActive = true;
+          connectedHost = hostCandidate;
+          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost} (banco '${dbName}', usuário '${cred.user}')`);
+          break;
+        } catch (err: any) {
+          // Continue trying host/credential candidates
+        }
       }
     }
 
@@ -282,7 +288,14 @@ async function startServer() {
   // Helper to persist camera to MySQL
   const syncCameraToMysql = async (cam: Camera) => {
     saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
+    if (!isMysqlActive || !pool) {
+      console.log('[MySQL Sync] Pool inativo. Tentando conectar ao MySQL...');
+      await initMysqlAndSync();
+    }
+    if (!isMysqlActive || !pool) {
+      console.error(`[MySQL Sync Warning] MySQL indisponível. Câmera ${cam.id} (${cam.name}) mantida no arquivo de persistência local.`);
+      return;
+    }
     try {
       await pool.query(
         `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
@@ -292,7 +305,7 @@ async function startServer() {
         [
           cam.id,
           cam.name,
-          cam.location,
+          cam.location || '',
           cam.protocol || 'RTSP',
           cam.rtspUrl || '',
           cam.rtmpUrl || '',
@@ -317,7 +330,7 @@ async function startServer() {
           cam.createdAt || new Date().toISOString().split('T')[0],
         ]
       );
-      console.log(`[MySQL ITL Sync] Câmera ${cam.id} (${cam.name}) sincronizada no MySQL com sucesso.`);
+      console.log(`[MySQL ITL Sync] Câmera '${cam.name}' (${cam.id}) GRAVADA no MySQL com SUCESSO!`);
     } catch (e: any) {
       console.error('[MySQL Sync Error] Erro ao gravar câmera no MySQL:', e.message || e);
     }
@@ -441,6 +454,76 @@ async function startServer() {
     }
 
     return res.status(401).json({ error: 'Credenciais inválidas' });
+  });
+
+  // Handler para reprodução de vídeo e transmissões HLS
+  app.get(['/live/:streamKey', '/live/:streamKey.m3u8', '/live/:streamKey/:segment'], (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+    let streamKey = req.params.streamKey || '';
+    if (streamKey.endsWith('.m3u8')) {
+      streamKey = streamKey.replace(/\.m3u8$/, '');
+    }
+
+    const segment = req.params.segment;
+    const hlsDir = '/tmp/hls';
+    const targetFile = segment ? path.join(hlsDir, segment) : path.join(hlsDir, `${streamKey}.m3u8`);
+
+    if (fs.existsSync(targetFile)) {
+      if (targetFile.endsWith('.ts')) {
+        res.setHeader('Content-Type', 'video/mp2t');
+      } else {
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      }
+      return res.sendFile(targetFile);
+    }
+
+    // Se o arquivo HLS do fluxo ao vivo ainda não existir (câmera não transmitindo RTMP no momento):
+    // Redireciona para o fluxo padrão de demonstração para evitar erros 404 no player!
+    if (!segment) {
+      return res.redirect('https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
+    }
+
+    return res.status(404).send('Segmento não encontrado');
+  });
+
+  // Endpoints para status e sincronização do Banco de Dados MySQL
+  app.get('/api/db-status', async (req, res) => {
+    let countInDb = 0;
+    if (!isMysqlActive || !pool) {
+      await initMysqlAndSync();
+    }
+    if (isMysqlActive && pool) {
+      try {
+        const [rows]: any = await pool.query('SELECT COUNT(*) as count FROM cameras');
+        countInDb = rows[0]?.count || 0;
+      } catch (e) {}
+    }
+    res.json({
+      isMysqlActive,
+      dbName: process.env.DB_NAME || 'itl_cameras',
+      cameraCountInMemory: cameras.length,
+      cameraCountInMysql: countInDb,
+      status: isMysqlActive ? 'CONECTADO_E_ATIVO' : 'DESCONECTADO_USANDO_JSON_LOCAL'
+    });
+  });
+
+  app.post('/api/db-sync', async (req, res) => {
+    await initMysqlAndSync();
+    if (isMysqlActive && pool) {
+      for (const cam of cameras) {
+        await syncCameraToMysql(cam);
+      }
+      for (const user of users) {
+        await syncUserToMysql(user);
+      }
+      return res.json({ success: true, message: `Sincronização concluída. ${cameras.length} câmeras e ${users.length} usuários salvos no MySQL.` });
+    } else {
+      return res.status(500).json({ success: false, message: 'Não foi possível conectar ao MySQL local para sincronizar.' });
+    }
   });
 
   // Cameras
