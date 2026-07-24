@@ -564,6 +564,60 @@ async function startServer() {
     return res.status(401).json({ error: 'Credenciais inválidas' });
   });
 
+  // Endpoint de Stream Direto MJPEG / HTTP Stream (Zero Latência - modo aerocam)
+  app.get(['/api/stream', '/stream'], (req, res) => {
+    const key = (req.query.key || req.query.camId || req.query.streamKey || '').toString();
+    let queryRtsp = (req.query.url || req.query.rtspUrl || '').toString();
+
+    const matchedCam = cameras.find(
+      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key}`
+    );
+
+    const targetUrl = matchedCam?.rtspUrl || matchedCam?.fullRtmpUrl || matchedCam?.rtmpUrl || queryRtsp;
+
+    if (!targetUrl || (!targetUrl.startsWith('rtsp://') && !targetUrl.startsWith('rtmp://') && !targetUrl.startsWith('http'))) {
+      return res.status(404).send('URL da câmera indisponível ou não configurada');
+    }
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Content-Type', 'multipart/x-mixed-replace; boundary=ffmpegboundary');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Connection', 'close');
+
+    const width = (req.query.w || '1280').toString();
+    const fps = (req.query.fps || '15').toString();
+
+    const ffmpegArgs = [
+      '-rtsp_transport', 'tcp',
+      '-analyzeduration', '1000000',
+      '-probesize', '1000000',
+      '-i', targetUrl,
+      '-vf', `fps=${fps},scale=${width}:-1`,
+      '-q:v', '5',
+      '-f', 'mpjpeg',
+      '-boundary_tag', 'ffmpegboundary',
+      'pipe:1',
+    ];
+
+    const proc = spawn('ffmpeg', ffmpegArgs);
+
+    proc.stdout.pipe(res);
+
+    const killProc = () => {
+      try {
+        proc.stdout.unpipe(res);
+        proc.kill('SIGKILL');
+      } catch (e) {}
+    };
+
+    req.on('close', killProc);
+    req.on('end', killProc);
+    res.on('close', killProc);
+    res.on('error', killProc);
+  });
+
   // Handler para reprodução de vídeo e transmissões HLS
   app.all('/live/*', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');

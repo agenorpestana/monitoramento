@@ -57,14 +57,23 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   onSelectCamera,
   showOverlayControls = true,
 }) => {
+  const streamKey = camera.streamKey || (camera.id ? (camera.id.startsWith('cam-') ? `cam_${camera.id.replace('cam-', '')}` : camera.id) : 'stream');
+
   const [streamMode, setStreamMode] = useState<'VIDEO' | 'WEBCAM'>(
     camera.isLiveWebcam ? 'WEBCAM' : 'VIDEO'
   );
 
+  const [useMjpegStream, setUseMjpegStream] = useState<boolean>(
+    camera.protocol === 'RTSP' || !!camera.rtspUrl
+  );
+
+  const [retryCount, setRetryCount] = useState<number>(0);
   const [connectionState, setConnectionState] = useState<ConnectionState>('LOADING');
   const [videoUrl, setVideoUrl] = useState<string>(() => cleanDoubleUrl(getInitialVideoUrl(camera)));
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [tempUrlInput, setTempUrlInput] = useState(() => cleanDoubleUrl(camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl));
+
+  const mjpegUrl = `/api/stream?key=${streamKey}&url=${encodeURIComponent(camera.rtspUrl || '')}&t=${retryCount}`;
 
   // Diagnostic state for player
   const [playerDiag, setPlayerDiag] = useState<{
@@ -109,7 +118,27 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   const handleVideoError = () => {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    // If HLS fails for RTSP camera, automatically attempt MJPEG direct stream
+    if (camera.protocol === 'RTSP' && !useMjpegStream) {
+      console.log(`[Stream Player] HLS indisponível para RTSP (${camera.name}). Alternando para Stream Direto HTTP / MJPEG...`);
+      setUseMjpegStream(true);
+      setConnectionState('LOADING');
+      return;
+    }
     setConnectionState('OFFLINE');
+  };
+
+  const handleVideoCanPlay = () => {
+    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
+    setConnectionState('ONLINE');
+  };
+
+  const handleRetryConnection = () => {
+    connectStream();
+    setRetryCount((prev) => prev + 1);
+    if (videoRef.current) {
+      videoRef.current.load();
+    }
   };
 
   // Video playback and Hls.js initialization
@@ -275,23 +304,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     };
   }, [streamMode]);
 
-  const handleVideoCanPlay = () => {
-    if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-    setConnectionState('ONLINE');
-  };
-
-  const handleRetryConnection = () => {
-    if (streamMode === 'WEBCAM') {
-      setStreamMode('VIDEO');
-    } else {
-      connectStream();
-      if (videoRef.current) {
-        videoRef.current.load();
-        videoRef.current.play().catch(() => {});
-      }
-    }
-  };
-
   const handleApplyCustomUrl = (e: React.FormEvent) => {
     e.preventDefault();
     if (tempUrlInput.trim()) {
@@ -304,22 +316,35 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   return (
     <div className={`relative aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 flex items-center justify-center group ${className}`}>
-      {/* 1. REAL VIDEO STREAM PLAYER (MP4 / HLS / HTTP) */}
+      {/* 1. REAL VIDEO STREAM PLAYER (MP4 / HLS / HTTP MJPEG) */}
       {streamMode === 'VIDEO' && (
-        <video
-          ref={videoRef}
-          autoPlay
-          loop
-          muted={isMuted}
-          playsInline
-          onCanPlay={handleVideoCanPlay}
-          onPlaying={handleVideoCanPlay}
-          onError={handleVideoError}
-          className={`w-full h-full object-cover transition duration-500 ${
-            connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
-          }`}
-          style={{ transform: `scale(${zoomLevel})` }}
-        />
+        useMjpegStream ? (
+          <img
+            src={mjpegUrl}
+            alt={camera.name}
+            onLoad={() => setConnectionState('ONLINE')}
+            onError={handleVideoError}
+            className={`w-full h-full object-cover transition duration-500 ${
+              connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            }`}
+            style={{ transform: `scale(${zoomLevel})` }}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            autoPlay
+            loop
+            muted={isMuted}
+            playsInline
+            onCanPlay={handleVideoCanPlay}
+            onPlaying={handleVideoCanPlay}
+            onError={handleVideoError}
+            className={`w-full h-full object-cover transition duration-500 ${
+              connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+            }`}
+            style={{ transform: `scale(${zoomLevel})` }}
+          />
+        )
       )}
 
       {/* 2. WEBCAM REALTIME PLAYER */}
@@ -430,7 +455,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               : streamMode === 'WEBCAM'
               ? 'WEBCAM AO VIVO'
               : camera.protocol === 'RTSP'
-              ? 'RTSP HLS AO VIVO'
+              ? (useMjpegStream ? 'RTSP DIRETO AO VIVO' : 'RTSP HLS AO VIVO')
               : 'RTMP AO VIVO (60 FPS)'}
           </span>
           {camera.isE2EEEncrypted && (
@@ -450,6 +475,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <button
               onClick={() => {
                 setStreamMode('VIDEO');
+                if (camera.protocol === 'RTSP') {
+                  setUseMjpegStream((prev) => !prev);
+                }
                 connectStream();
               }}
               className={`px-2 py-0.5 text-[10px] rounded-lg font-semibold transition ${
@@ -457,9 +485,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                   ? 'bg-emerald-500 text-slate-950 font-bold'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title={camera.protocol === 'RTSP' ? "Transmitir fluxo RTSP/HLS em tempo real" : "Transmitir vídeo RTMP/HLS em tempo real"}
+              title={camera.protocol === 'RTSP' ? "Alternar entre RTSP Direto (HTTP/MJPEG) e HLS" : "Transmitir vídeo RTMP/HLS em tempo real"}
             >
-              {camera.protocol === 'RTSP' ? 'Vídeo RTSP' : 'Vídeo RTMP'}
+              {camera.protocol === 'RTSP' ? (useMjpegStream ? 'RTSP Direto' : 'RTSP HLS') : 'Vídeo RTMP'}
             </button>
             <button
               onClick={() => setStreamMode('WEBCAM')}
