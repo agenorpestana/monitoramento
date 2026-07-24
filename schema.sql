@@ -119,5 +119,11 @@ VALUES (1, 'WEEKLY_SUNDAY_0200', 'LOCAL_VPS', 30, '2026-07-20 02:00:00', '2026-0
 INSERT IGNORE INTO `notification_settings` (`id`, `push_enabled`, `sound_alerts`)
 VALUES (1, TRUE, TRUE);
 
-INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `status`)
-VALUES ('user-superadmin-01', 'Super Admin Unity', 'suporte@unityautomacoes.com.br', '$2b$10$200616hashsimulated', 'ADMIN', 'ACTIVE');
+INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `status`, `last_active`, `created_at`)
+VALUES ('user-superadmin-01', 'Super Admin Unity', 'suporte@unityautomacoes.com.br', '$2b$10$itlpasswordhash2026', 'ADMIN', 'ACTIVE', 'Agora mesmo', '2026-01-01');
+
+INSERT IGNORE INTO `cameras` (`id`, `name`, `location`, `protocol`, `rtsp_url`, `rtmp_url`, `stream_key`, `rtmp_server_url`, `full_rtmp_url`, `state_uf`, `city`, `status`, `is_e2ee_encrypted`, `encryption_key_hash`, `fps`, `resolution`, `storage_used_gb`, `cloud_recordings_active`, `motion_sensitivity`, `ai_detection_enabled`, `two_way_audio_enabled`, `lat`, `lng`, `thumbnail_url`, `created_at`)
+VALUES 
+('cam-wpg8tz', 'Prado 11 - Portaria Principal', 'Prado - BA', 'RTMP', 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0', 'rtmp://localhost:1935/live/cam_wpg8tz', 'cam_wpg8tz', 'rtmp://localhost:1935/live', '/live/cam_wpg8tz.m3u8', 'BA', 'Prado', 'ONLINE', 1, 'e2ee-hash-01', 30, '1080p Full HD', 0.50, 1, 8, 1, 1, -17.0397, -39.5312, 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800', '2026-01-01'),
+('cam-jvv51l', 'Câmera Pátio Central', 'Itamaraju - BA', 'RTMP', 'rtsp://admin:itl2026@192.168.1.101:554/live/ch0', 'rtmp://localhost:1935/live/cam_jvv51l', 'cam_jvv51l', 'rtmp://localhost:1935/live', '/live/cam_jvv51l.m3u8', 'BA', 'Itamaraju', 'ONLINE', 1, 'e2ee-hash-02', 30, '1080p Full HD', 0.80, 1, 7, 1, 1, -17.0420, -39.5350, 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800', '2026-01-01'),
+('cam-v7w3f8', 'Câmera Estacionamento Visitantes', 'Itamaraju - BA', 'RTMP', 'rtsp://admin:itl2026@192.168.1.102:554/live/ch0', 'rtmp://localhost:1935/live/cam_v7w3f8', 'cam_v7w3f8', 'rtmp://localhost:1935/live', '/live/cam_v7w3f8.m3u8', 'BA', 'Itamaraju', 'ONLINE', 1, 'e2ee-hash-03', 30, '1080p Full HD', 0.30, 1, 6, 1, 1, -17.0380, -39.5290, 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b2?w=800', '2026-01-01');

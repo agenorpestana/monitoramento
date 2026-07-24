@@ -470,37 +470,32 @@ async function startServer() {
   });
 
   // Handler para reprodução de vídeo e transmissões HLS
-  app.get(['/live/:streamKey', '/live/:streamKey.m3u8', '/live/:streamKey/:segment'], (req, res) => {
+  app.get('/live/*', (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-    let streamKey = req.params.streamKey || '';
-    if (streamKey.endsWith('.m3u8')) {
-      streamKey = streamKey.replace(/\.m3u8$/, '');
-    }
-
-    const segment = req.params.segment;
+    const subPath = req.params[0] || '';
     const hlsDir = '/tmp/hls';
-    const targetFile = segment ? path.join(hlsDir, segment) : path.join(hlsDir, `${streamKey}.m3u8`);
+    const targetFile = path.join(hlsDir, subPath);
 
-    if (fs.existsSync(targetFile)) {
+    if (fs.existsSync(targetFile) && fs.statSync(targetFile).isFile()) {
       if (targetFile.endsWith('.ts')) {
         res.setHeader('Content-Type', 'video/mp2t');
-      } else {
+      } else if (targetFile.endsWith('.m3u8')) {
         res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
       }
       return res.sendFile(targetFile);
     }
 
-    // Se o arquivo HLS do fluxo ao vivo ainda não existir (câmera não transmitindo RTMP no momento):
-    // Redireciona para o fluxo padrão de demonstração para evitar erros 404 no player!
-    if (!segment) {
+    // Se for requisição de playlist (.m3u8) e a câmera não estiver transmitindo via RTMP no momento:
+    // Redireciona para um vídeo de alta definição para evitar erros 404 no player do navegador!
+    if (subPath.endsWith('.m3u8') || !subPath.includes('.')) {
       return res.redirect('https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4');
     }
 
-    return res.status(404).send('Segmento não encontrado');
+    return res.status(404).send('Segmento HLS não encontrado');
   });
 
   // Endpoints para status e sincronização do Banco de Dados MySQL
