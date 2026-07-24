@@ -597,22 +597,14 @@ server {
     client_max_body_size 200M;
 
     location /live {
-        types {
-            application/vnd.apple.mpegurl m3u8;
-            video/mp2t ts;
-        }
-        alias /tmp/hls;
-        add_header Cache-Control no-cache;
-        add_header Access-Control-Allow-Origin *;
-        try_files $uri $uri/ @proxy_backend;
-    }
-
-    location @proxy_backend {
         proxy_pass http://localhost:$APP_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_cache_bypass \$http_upgrade;
     }
 
     location /api {

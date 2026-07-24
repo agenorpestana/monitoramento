@@ -201,10 +201,12 @@ async function startServer() {
         await pool.query('ALTER TABLE `cameras` MODIFY `created_at` VARCHAR(100) NULL');
       } catch (e) {}
 
-      // Dynamically add missing thumbnail_url column to cameras table if it does not exist
-      try {
-        await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL');
-      } catch (e) {}
+      // Dynamically add missing columns to cameras table if they do not exist
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(10) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`users\` (

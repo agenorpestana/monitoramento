@@ -113,6 +113,24 @@ CREATE TABLE IF NOT EXISTS `notification_settings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Initial default seed data
+-- Garante que colunas novas existam caso as tabelas já tenham sido criadas em versão anterior
+SET @dbname = DATABASE();
+
+SET @query = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'cameras' AND table_schema = @dbname AND column_name = 'thumbnail_url') = 0, 'ALTER TABLE cameras ADD COLUMN thumbnail_url TEXT NULL;', 'SELECT 1;');
+PREPARE stmt FROM @query; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @query = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'cameras' AND table_schema = @dbname AND column_name = 'rtmp_server_url') = 0, 'ALTER TABLE cameras ADD COLUMN rtmp_server_url TEXT NULL;', 'SELECT 1;');
+PREPARE stmt FROM @query; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @query = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'cameras' AND table_schema = @dbname AND column_name = 'full_rtmp_url') = 0, 'ALTER TABLE cameras ADD COLUMN full_rtmp_url TEXT NULL;', 'SELECT 1;');
+PREPARE stmt FROM @query; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @query = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'cameras' AND table_schema = @dbname AND column_name = 'state_uf') = 0, 'ALTER TABLE cameras ADD COLUMN state_uf VARCHAR(10) NULL;', 'SELECT 1;');
+PREPARE stmt FROM @query; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @query = IF((SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = 'cameras' AND table_schema = @dbname AND column_name = 'city') = 0, 'ALTER TABLE cameras ADD COLUMN city VARCHAR(100) NULL;', 'SELECT 1;');
+PREPARE stmt FROM @query; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 INSERT IGNORE INTO `backup_settings` (`id`, `schedule`, `destination`, `retention_days`, `last_backup_date`, `next_backup_date`) 
 VALUES (1, 'WEEKLY_SUNDAY_0200', 'LOCAL_VPS', 30, '2026-07-20 02:00:00', '2026-07-27 02:00:00');
 
