@@ -192,10 +192,13 @@ async function startServer() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // Relax column constraints if existing table had NOT NULL constraints
+      // Relax column constraints if existing table had NOT NULL or ENUM/DATETIME constraints
       try {
         await pool.query('ALTER TABLE `cameras` MODIFY `rtsp_url` TEXT NULL');
         await pool.query('ALTER TABLE `cameras` MODIFY `location` VARCHAR(255) NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `protocol` VARCHAR(50) DEFAULT "RTSP"');
+        await pool.query('ALTER TABLE `cameras` MODIFY `status` VARCHAR(50) DEFAULT "ONLINE"');
+        await pool.query('ALTER TABLE `cameras` MODIFY `created_at` VARCHAR(100) NULL');
       } catch (e) {}
 
       // Dynamically add missing thumbnail_url column to cameras table if it does not exist
@@ -208,15 +211,23 @@ async function startServer() {
           \`id\` VARCHAR(64) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
           \`email\` VARCHAR(255) UNIQUE NOT NULL,
-          \`password_hash\` VARCHAR(255),
-          \`role\` VARCHAR(30) DEFAULT 'RESIDENT',
+          \`password_hash\` VARCHAR(255) NULL,
+          \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
           \`phone\` VARCHAR(50),
-          \`status\` VARCHAR(20) DEFAULT 'ACTIVE',
+          \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
           \`custom_permissions\` JSON,
-          \`last_active\` VARCHAR(50),
-          \`created_at\` VARCHAR(50)
+          \`last_active\` VARCHAR(100) DEFAULT 'Agora',
+          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01'
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+
+      try {
+        await pool.query('ALTER TABLE `users` MODIFY `password_hash` VARCHAR(255) NULL');
+        await pool.query('ALTER TABLE `users` MODIFY `last_active` VARCHAR(100) NULL');
+        await pool.query('ALTER TABLE `users` MODIFY `created_at` VARCHAR(100) NULL');
+        await pool.query('ALTER TABLE `users` MODIFY `role` VARCHAR(50) DEFAULT "RESIDENT"');
+        await pool.query('ALTER TABLE `users` MODIFY `status` VARCHAR(50) DEFAULT "ACTIVE"');
+      } catch (e) {}
 
       // Load existing cameras from MySQL
       const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
@@ -353,23 +364,25 @@ async function startServer() {
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
-        `INSERT INTO users (id, name, email, role, phone, status, custom_permissions, last_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), status=VALUES(status), custom_permissions=VALUES(custom_permissions)`,
+        `INSERT INTO users (id, name, email, password_hash, role, phone, status, custom_permissions, last_active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), status=VALUES(status), custom_permissions=VALUES(custom_permissions), last_active=VALUES(last_active)`,
         [
           u.id,
           u.name,
           u.email,
-          u.role,
+          '$2b$10$itlpasswordhash2026',
+          u.role || 'RESIDENT',
           u.phone || '',
-          u.status,
+          u.status || 'ACTIVE',
           JSON.stringify(u.customPermissions || {}),
           u.lastActive || 'Agora',
           u.createdAt || new Date().toISOString().split('T')[0],
         ]
       );
-    } catch (e) {
-      console.error('[MySQL Sync Error] Erro ao gravar usuário:', e);
+      console.log(`[MySQL ITL Sync] Usuário '${u.name}' (${u.id}) GRAVADO no MySQL com SUCESSO!`);
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar usuário no MySQL:', e.message || e);
     }
   };
 

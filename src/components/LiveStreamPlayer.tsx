@@ -103,6 +103,8 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     let hlsInstance: any = null;
 
     if (isHls) {
+      videoElement.removeAttribute('src');
+      videoElement.load();
       const initHls = () => {
         const HlsClass = (window as any).Hls;
         if (HlsClass) {
@@ -270,14 +272,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       {streamMode === 'VIDEO' && (
         <video
           ref={videoRef}
-          src={videoUrl}
           autoPlay
           loop
           muted={isMuted}
           playsInline
           onCanPlay={handleVideoCanPlay}
           onPlaying={handleVideoCanPlay}
-          onError={handleVideoError}
+          onError={() => {
+            // Only trigger fallback if not using Hls.js
+            const isHls = videoUrl.endsWith('.m3u8') || videoUrl.includes('/live/');
+            if (!isHls) {
+              handleVideoError();
+            }
+          }}
           className={`w-full h-full object-cover transition duration-500 ${
             connectionState === 'ONLINE' ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
           }`}

@@ -502,8 +502,13 @@ if [ ! -z "$DB_PASSWORD" ]; then
     echo -e "${YELLOW}Configurando banco de dados e usuário no MySQL...${NC}"
     run_mysql_root "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;"
     run_mysql_root "CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';"
+    run_mysql_root "CREATE USER IF NOT EXISTS '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASSWORD}';"
+    run_mysql_root "CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';"
     run_mysql_root "ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '${DB_PASSWORD}';"
+    run_mysql_root "ALTER USER '${DB_USER}'@'127.0.0.1' IDENTIFIED BY '${DB_PASSWORD}';"
     run_mysql_root "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';"
+    run_mysql_root "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'127.0.0.1';"
+    run_mysql_root "GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';"
     run_mysql_root "FLUSH PRIVILEGES;"
     echo -e "${GREEN}Fase do MySQL configurada com sucesso!${NC}"
 fi

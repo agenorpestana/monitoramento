@@ -5,21 +5,21 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` VARCHAR(64) PRIMARY KEY,
   `name` VARCHAR(255) NOT NULL,
   `email` VARCHAR(255) UNIQUE NOT NULL,
-  `password_hash` VARCHAR(255) NOT NULL,
-  `role` ENUM('ADMIN', 'OPERATOR', 'GUARD', 'RESIDENT', 'VIEWER') DEFAULT 'RESIDENT',
+  `password_hash` VARCHAR(255) NULL,
+  `role` VARCHAR(50) DEFAULT 'RESIDENT',
   `avatar` VARCHAR(500),
   `phone` VARCHAR(50),
-  `status` ENUM('ACTIVE', 'INACTIVE', 'SUSPENDED') DEFAULT 'ACTIVE',
+  `status` VARCHAR(50) DEFAULT 'ACTIVE',
   `custom_permissions` JSON,
-  `last_active` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+  `last_active` VARCHAR(100) DEFAULT 'Agora',
+  `created_at` VARCHAR(100) DEFAULT '2026-01-01'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `cameras` (
   `id` VARCHAR(64) PRIMARY KEY,
   `name` VARCHAR(255) NOT NULL,
   `location` VARCHAR(255),
-  `protocol` ENUM('RTSP', 'RTMP') DEFAULT 'RTSP',
+  `protocol` VARCHAR(50) DEFAULT 'RTSP',
   `rtsp_url` TEXT,
   `rtmp_url` TEXT,
   `stream_key` VARCHAR(100),
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `cameras` (
   `full_rtmp_url` TEXT,
   `state_uf` VARCHAR(10),
   `city` VARCHAR(100),
-  `status` ENUM('ONLINE', 'OFFLINE', 'RECORDING', 'ALERT') DEFAULT 'ONLINE',
+  `status` VARCHAR(50) DEFAULT 'ONLINE',
   `is_e2ee_encrypted` BOOLEAN DEFAULT TRUE,
   `encryption_key_hash` VARCHAR(255),
   `fps` INT DEFAULT 30,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS `cameras` (
   `lat` DECIMAL(10, 8),
   `lng` DECIMAL(11, 8),
   `thumbnail_url` TEXT,
-  `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+  `created_at` VARCHAR(100) DEFAULT '2026-01-01'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `motion_alerts` (
