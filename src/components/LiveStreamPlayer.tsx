@@ -63,9 +63,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     camera.isLiveWebcam ? 'WEBCAM' : 'VIDEO'
   );
 
-  const [useMjpegStream, setUseMjpegStream] = useState<boolean>(
-    camera.protocol === 'RTSP' || !!camera.rtspUrl
-  );
+  const [useMjpegStream, setUseMjpegStream] = useState<boolean>(true);
 
   const [retryCount, setRetryCount] = useState<number>(0);
   const [connectionState, setConnectionState] = useState<ConnectionState>('LOADING');
@@ -73,7 +71,8 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [tempUrlInput, setTempUrlInput] = useState(() => cleanDoubleUrl(camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl));
 
-  const mjpegUrl = `/api/stream?key=${streamKey}&url=${encodeURIComponent(camera.rtspUrl || '')}&t=${retryCount}`;
+  const rawStreamUrl = camera.rtspUrl || camera.rtmpUrl || camera.fullRtmpUrl || videoUrl || '';
+  const mjpegUrl = `/api/cameras/${camera.id}/stream?key=${streamKey}&url=${encodeURIComponent(rawStreamUrl)}&t=${retryCount}`;
 
   // Diagnostic state for player
   const [playerDiag, setPlayerDiag] = useState<{
@@ -118,9 +117,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
 
   const handleVideoError = () => {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
-    // If HLS fails for RTSP camera, automatically attempt MJPEG direct stream
-    if (camera.protocol === 'RTSP' && !useMjpegStream) {
-      console.log(`[Stream Player] HLS indisponível para RTSP (${camera.name}). Alternando para Stream Direto HTTP / MJPEG...`);
+    // If HLS fails, automatically attempt MJPEG direct stream
+    if (!useMjpegStream) {
+      console.log(`[Stream Player] HLS indisponível para ${camera.protocol} (${camera.name}). Alternando para Stream Direto HTTP / MJPEG...`);
       setUseMjpegStream(true);
       setConnectionState('LOADING');
       return;

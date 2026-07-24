@@ -565,15 +565,40 @@ async function startServer() {
   });
 
   // Endpoint de Stream Direto MJPEG / HTTP Stream (Zero Latência - modo aerocam)
-  app.get(['/api/stream', '/stream'], (req, res) => {
-    const key = (req.query.key || req.query.camId || req.query.streamKey || '').toString();
-    let queryRtsp = (req.query.url || req.query.rtspUrl || '').toString();
+  app.get(['/api/stream', '/stream', '/api/cameras/:id/stream'], (req, res) => {
+    const key = (req.params?.id || req.query.key || req.query.camId || req.query.streamKey || '').toString();
+    let queryUrl = (req.query.url || req.query.rtspUrl || req.query.rtmpUrl || '').toString();
+
+    const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
 
     const matchedCam = cameras.find(
-      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key}`
+      (c) =>
+        (c.streamKey || c.id) === key ||
+        c.id === key ||
+        c.id === `cam-${cleanKey}` ||
+        c.streamKey === `cam_${cleanKey}` ||
+        (c.id && c.id.replace(/^cam-/, '') === cleanKey)
     );
 
-    const targetUrl = matchedCam?.rtspUrl || matchedCam?.fullRtmpUrl || matchedCam?.rtmpUrl || queryRtsp;
+    let targetUrl = '';
+
+    if (queryUrl && (queryUrl.startsWith('rtsp://') || queryUrl.startsWith('rtmp://') || queryUrl.startsWith('http://') || queryUrl.startsWith('https://'))) {
+      targetUrl = queryUrl;
+    } else if (matchedCam) {
+      if (matchedCam.protocol === 'RTSP' && matchedCam.rtspUrl && matchedCam.rtspUrl.trim().startsWith('rtsp://')) {
+        targetUrl = matchedCam.rtspUrl.trim();
+      } else if (matchedCam.rtmpUrl && (matchedCam.rtmpUrl.startsWith('rtmp://') || matchedCam.rtmpUrl.startsWith('http'))) {
+        targetUrl = matchedCam.rtmpUrl.trim();
+      } else if (matchedCam.fullRtmpUrl && (matchedCam.fullRtmpUrl.startsWith('rtmp://') || matchedCam.fullRtmpUrl.startsWith('http'))) {
+        targetUrl = matchedCam.fullRtmpUrl.trim();
+      } else if (matchedCam.rtspUrl && matchedCam.rtspUrl.trim().startsWith('rtsp://')) {
+        targetUrl = matchedCam.rtspUrl.trim();
+      }
+    }
+
+    if (!targetUrl && cleanKey) {
+      targetUrl = `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
+    }
 
     if (!targetUrl || (!targetUrl.startsWith('rtsp://') && !targetUrl.startsWith('rtmp://') && !targetUrl.startsWith('http'))) {
       return res.status(404).send('URL da câmera indisponível ou não configurada');
@@ -589,8 +614,13 @@ async function startServer() {
     const width = (req.query.w || '1280').toString();
     const fps = (req.query.fps || '15').toString();
 
-    const ffmpegArgs = [
-      '-rtsp_transport', 'tcp',
+    const ffmpegArgs: string[] = [];
+
+    if (targetUrl.startsWith('rtsp://')) {
+      ffmpegArgs.push('-rtsp_transport', 'tcp');
+    }
+
+    ffmpegArgs.push(
       '-analyzeduration', '1000000',
       '-probesize', '1000000',
       '-i', targetUrl,
@@ -598,8 +628,8 @@ async function startServer() {
       '-q:v', '5',
       '-f', 'mpjpeg',
       '-boundary_tag', 'ffmpegboundary',
-      'pipe:1',
-    ];
+      'pipe:1'
+    );
 
     const proc = spawn('ffmpeg', ffmpegArgs);
 
