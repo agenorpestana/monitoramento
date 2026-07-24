@@ -105,7 +105,26 @@ async function startServer() {
 
     for (const cred of credentials) {
       try {
-        const tempPool = mysql.createPool({
+        // Step 1: Connect without database to ensure database exists
+        const rootPool = mysql.createPool({
+          host: dbHost,
+          user: cred.user,
+          password: cred.pass,
+          waitForConnections: true,
+          connectionLimit: 5,
+          queueLimit: 0,
+          connectTimeout: 3000,
+        });
+
+        const conn = await rootPool.getConnection();
+        await conn.ping();
+        // Create database if it does not exist
+        await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+        conn.release();
+        await rootPool.end();
+
+        // Step 2: Create pool connected to the target database
+        const targetPool = mysql.createPool({
           host: dbHost,
           user: cred.user,
           password: cred.pass,
@@ -116,15 +135,15 @@ async function startServer() {
           connectTimeout: 3000,
         });
 
-        const conn = await tempPool.getConnection();
-        await conn.ping();
-        conn.release();
+        const testConn = await targetPool.getConnection();
+        await testConn.ping();
+        testConn.release();
 
-        pool = tempPool;
+        pool = targetPool;
         isMysqlActive = true;
-        console.log(`[MySQL ITL] Conectado com sucesso ao banco '${dbName}' em ${dbHost} com usuário '${cred.user}'`);
+        console.log(`[MySQL ITL] Conectado e banco '${dbName}' verificado/criado em ${dbHost} com usuário '${cred.user}'`);
         break;
-      } catch (err) {
+      } catch (err: any) {
         // Continue trying credentials
       }
     }
@@ -269,7 +288,7 @@ async function startServer() {
         `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
-         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled)`,
+         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
         [
           cam.id,
           cam.name,
@@ -298,8 +317,9 @@ async function startServer() {
           cam.createdAt || new Date().toISOString().split('T')[0],
         ]
       );
-    } catch (e) {
-      console.error('[MySQL Sync Error] Erro ao gravar câmera:', e);
+      console.log(`[MySQL ITL Sync] Câmera ${cam.id} (${cam.name}) sincronizada no MySQL com sucesso.`);
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar câmera no MySQL:', e.message || e);
     }
   };
 

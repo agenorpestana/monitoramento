@@ -42,10 +42,14 @@ const SURVEILLANCE_STREAM_FEEDS = [
 
 const getInitialVideoUrl = (cam: Camera) => {
   if (cam.videoStreamUrl && (cam.videoStreamUrl.startsWith('http://') || cam.videoStreamUrl.startsWith('https://'))) {
-    return cleanDoubleUrl(cam.videoStreamUrl);
+    let url = cleanDoubleUrl(cam.videoStreamUrl);
+    if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
+    return url;
   }
   if (cam.fullRtmpUrl && (cam.fullRtmpUrl.startsWith('http://') || cam.fullRtmpUrl.startsWith('https://'))) {
-    return cleanDoubleUrl(cam.fullRtmpUrl);
+    let url = cleanDoubleUrl(cam.fullRtmpUrl);
+    if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
+    return url;
   }
   // Deterministic feed selection based on camera ID
   const index = Math.abs((cam.id || 'cam-1').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0)) % SURVEILLANCE_STREAM_FEEDS.length;
@@ -109,6 +113,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             });
             hlsInstance.loadSource(videoUrl);
             hlsInstance.attachMedia(videoElement);
+            let networkRetryCount = 0;
             hlsInstance.on(HlsClass.Events.MANIFEST_PARSED, () => {
               videoElement.play().catch(() => {});
               setConnectionState('ONLINE');
@@ -117,7 +122,14 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               if (data.fatal) {
                 switch (data.type) {
                   case HlsClass.ErrorTypes.NETWORK_ERROR:
-                    hlsInstance.startLoad();
+                    networkRetryCount++;
+                    if (networkRetryCount <= 3) {
+                      setTimeout(() => {
+                        if (hlsInstance) hlsInstance.startLoad();
+                      }, 3000);
+                    } else {
+                      handleVideoError();
+                    }
                     break;
                   case HlsClass.ErrorTypes.MEDIA_ERROR:
                     hlsInstance.recoverMediaError();
