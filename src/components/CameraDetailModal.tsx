@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CameraEditModal } from './CameraEditModal';
 import {
   X,
   Mic,
@@ -18,6 +19,7 @@ import {
   VolumeX,
   Download,
   Activity,
+  Pencil,
 } from 'lucide-react';
 import { Camera, User } from '../types';
 import { LiveStreamPlayer } from './LiveStreamPlayer';
@@ -27,6 +29,7 @@ interface CameraDetailModalProps {
   activeUser: User;
   onClose: () => void;
   onTriggerTestAlert: (camId: string) => void;
+  onUpdateCamera?: (id: string, cameraData: Partial<Camera>) => void;
 }
 
 export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
@@ -34,6 +37,7 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
   activeUser,
   onClose,
   onTriggerTestAlert,
+  onUpdateCamera,
 }) => {
   const [isMicTransmitting, setIsMicTransmitting] = useState(false);
   const [micAudioLevel, setMicAudioLevel] = useState(0);
@@ -41,6 +45,7 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isMuted, setIsMuted] = useState(false);
   const [snapshotSuccess, setSnapshotSuccess] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     if (!isMicTransmitting) {
@@ -102,13 +107,38 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {activeUser.customPermissions.canManageCameras && onUpdateCamera && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-bold text-xs rounded-xl border border-slate-700 flex items-center gap-1.5 transition"
+                title="Editar Configurações da Câmera"
+              >
+                <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Editar Câmera</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {isEditing && onUpdateCamera && (
+          <CameraEditModal
+            camera={camera}
+            onClose={() => setIsEditing(false)}
+            onSave={(id, updatedData) => {
+              onUpdateCamera(id, updatedData);
+              setIsEditing(false);
+            }}
+          />
+        )}
 
         {/* Main Content Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 p-4 sm:p-6 gap-6 overflow-y-auto">

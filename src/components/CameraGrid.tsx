@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { CameraEditModal } from './CameraEditModal';
 import {
   Camera as CameraIcon,
   Mic,
@@ -19,6 +20,7 @@ import {
   ChevronRight,
   RefreshCw,
   Video,
+  Pencil,
 } from 'lucide-react';
 import { Camera, User } from '../types';
 import { LiveStreamPlayer } from './LiveStreamPlayer';
@@ -28,6 +30,7 @@ interface CameraGridProps {
   activeUser: User;
   onSelectCamera: (cam: Camera) => void;
   onTriggerTestAlert: (camId: string) => void;
+  onUpdateCamera?: (id: string, cameraData: Partial<Camera>) => void;
 }
 
 export const CameraGrid: React.FC<CameraGridProps> = ({
@@ -35,11 +38,13 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   activeUser,
   onSelectCamera,
   onTriggerTestAlert,
+  onUpdateCamera,
 }) => {
   const [gridColumns, setGridColumns] = useState<number>(2); // 1, 2, 3 columns
   const [activeMicCameraId, setActiveMicCameraId] = useState<string | null>(null);
   const [mutedCameraIds, setMutedCameraIds] = useState<Record<string, boolean>>({});
   const [liveTimestamps, setLiveTimestamps] = useState<Record<string, string>>({});
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
 
   // Audio stream simulator state
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -254,6 +259,17 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                     <ShieldAlert className="w-3.5 h-3.5" />
                   </button>
 
+                  {/* Edit Camera Button */}
+                  {activeUser.customPermissions.canManageCameras && onUpdateCamera && (
+                    <button
+                      onClick={() => setEditingCamera(camera)}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                      title="Editar configurações da câmera"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-emerald-400" />
+                    </button>
+                  )}
+
                   {/* Expand Modal */}
                   <button
                     onClick={() => onSelectCamera(camera)}
@@ -268,6 +284,17 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
           );
         })}
       </div>
+
+      {editingCamera && onUpdateCamera && (
+        <CameraEditModal
+          camera={editingCamera}
+          onClose={() => setEditingCamera(null)}
+          onSave={(id, updatedData) => {
+            onUpdateCamera(id, updatedData);
+            setEditingCamera(null);
+          }}
+        />
+      )}
     </div>
   );
 };

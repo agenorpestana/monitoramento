@@ -194,6 +194,28 @@ export default function App() {
     }
   };
 
+  const handleUpdateCamera = async (camId: string, camData: Partial<Camera>) => {
+    try {
+      const res = await fetch(`/api/cameras/${camId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(camData),
+      });
+      const updatedCam = await res.json();
+      if (updatedCam && updatedCam.id) {
+        setCameras((prev) => prev.map((c) => (c.id === camId ? updatedCam : c)));
+        if (inspectingCamera && inspectingCamera.id === camId) {
+          setInspectingCamera(updatedCam);
+        }
+        return;
+      }
+    } catch (e) {}
+    setCameras((prev) => prev.map((c) => (c.id === camId ? { ...c, ...camData } : c)));
+    if (inspectingCamera && inspectingCamera.id === camId) {
+      setInspectingCamera((prev) => (prev ? { ...prev, ...camData } : null));
+    }
+  };
+
   const handleDeleteCamera = async (camId: string) => {
     try {
       await fetch(`/api/cameras/${camId}`, { method: 'DELETE' });
@@ -341,6 +363,7 @@ export default function App() {
               activeUser={activeUser}
               onSelectCamera={setInspectingCamera}
               onTriggerTestAlert={triggerMotionAlert}
+              onUpdateCamera={handleUpdateCamera}
             />
           )}
 
@@ -373,7 +396,7 @@ export default function App() {
               activeUser={activeUser}
               onAddCamera={handleAddCamera}
               onDeleteCamera={handleDeleteCamera}
-              onUpdateCamera={(id, data) => setCameras((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)))}
+              onUpdateCamera={handleUpdateCamera}
             />
           )}
 
@@ -435,6 +458,7 @@ export default function App() {
           activeUser={activeUser}
           onClose={() => setInspectingCamera(null)}
           onTriggerTestAlert={triggerMotionAlert}
+          onUpdateCamera={handleUpdateCamera}
         />
       )}
 

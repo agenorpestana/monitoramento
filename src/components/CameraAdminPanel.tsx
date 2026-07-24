@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { CameraEditModal } from './CameraEditModal';
 import {
   PlusCircle,
   Video,
@@ -19,6 +20,7 @@ import {
   X,
   AlertTriangle,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { Camera, User } from '../types';
 
@@ -78,6 +80,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [protocol, setProtocol] = useState<'RTSP' | 'RTMP'>('RTSP');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
 
   // Diagnostic state
   const [testResult, setTestResult] = useState<{
@@ -729,17 +732,29 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                         </button>
 
                         {activeUser.customPermissions.canManageCameras && (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Deseja remover a câmera ${cam.name}?`)) {
-                                onDeleteCamera(cam.id);
-                              }
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-                            title="Remover Câmera"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCamera(cam)}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-[10px] rounded-lg border border-slate-700 flex items-center gap-1 transition"
+                              title="Editar Câmera"
+                            >
+                              <Pencil className="w-3 h-3 text-emerald-400" />
+                              <span>Editar</span>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (confirm(`Deseja remover a câmera ${cam.name}?`)) {
+                                  onDeleteCamera(cam.id);
+                                }
+                              }}
+                              className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                              title="Remover Câmera"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -847,6 +862,18 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* Camera Edit Modal */}
+      {editingCamera && (
+        <CameraEditModal
+          camera={editingCamera}
+          onClose={() => setEditingCamera(null)}
+          onSave={(id, updatedData) => {
+            onUpdateCamera(id, updatedData);
+            setEditingCamera(null);
+          }}
+        />
       )}
     </div>
   );
