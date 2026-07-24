@@ -14,6 +14,11 @@ import {
   Globe,
   RadioTower,
   Sliders,
+  Activity,
+  Terminal,
+  X,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Camera, User } from '../types';
 
@@ -58,9 +63,7 @@ const FALLBACK_UFS = [
 
 const cleanDoubleUrl = (url: string | undefined | null): string => {
   if (!url) return '';
-  // Se a URL contiver duas vezes o prefixo HTTP/HTTPS, limpa
   let cleaned = url.replace(/(https?:\/\/[^/]+)(https?:\/\/)/g, '$2');
-  // Limpa barras duplas que não sejam do formato de protocolo
   cleaned = cleaned.replace(/([^:]\/)\/+/g, '$1');
   return cleaned;
 };
@@ -73,8 +76,15 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   onUpdateCamera,
 }) => {
   const [showForm, setShowForm] = useState(false);
-  const [protocol, setProtocol] = useState<'RTSP' | 'RTMP'>('RTMP');
+  const [protocol, setProtocol] = useState<'RTSP' | 'RTMP'>('RTSP');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Diagnostic state
+  const [testResult, setTestResult] = useState<{
+    loading: boolean;
+    data?: any;
+    error?: string;
+  } | null>(null);
 
   const getCurrentHost = () => {
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
@@ -143,7 +153,6 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
         setLoadingCities(false);
         if (Array.isArray(data) && data.length > 0) {
           setCities(data);
-          // Default to first city if current selection isn't in new list
           const found = data.find((c) => c.nome.toLowerCase() === selectedCity.toLowerCase());
           if (!found) {
             setSelectedCity(data[0].nome);
@@ -177,6 +186,27 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleTestConnection = async (targetCam?: Partial<Camera>) => {
+    setTestResult({ loading: true });
+    try {
+      const payload = {
+        protocol: targetCam ? targetCam.protocol : protocol,
+        rtspUrl: targetCam ? targetCam.rtspUrl : rtspUrl,
+        rtmpUrl: targetCam ? targetCam.rtmpUrl : fullRtmpUrl,
+        streamKey: targetCam ? targetCam.streamKey || targetCam.id : streamKey,
+      };
+      const res = await fetch('/api/cameras/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      setTestResult({ loading: false, data });
+    } catch (e: any) {
+      setTestResult({ loading: false, error: e.message || 'Erro ao conectar ao servidor para teste' });
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeUser.customPermissions.canManageCameras) {
@@ -189,15 +219,17 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
       return;
     }
 
+    const key = streamKey || `cam_${Math.random().toString(36).substring(2, 8)}`;
+
     const newCamData: Partial<Camera> = {
       name: cameraName.trim(),
       location: `${selectedCity} - ${selectedUf}`,
       protocol,
-      rtspUrl: protocol === 'RTSP' ? rtspUrl : (rtspUrl && !rtspUrl.includes('192.168.1.100') ? rtspUrl : ''),
+      rtspUrl: protocol === 'RTSP' ? rtspUrl : '',
       rtmpUrl: fullRtmpUrl,
-      streamKey: protocol === 'RTMP' ? streamKey : undefined,
+      streamKey: key,
       rtmpServerUrl: rtmpServer,
-      fullRtmpUrl: generatedHttpLink,
+      fullRtmpUrl: cleanDoubleUrl(`${currentProtocol}//${currentHost}/live/${key}.m3u8`),
       stateUf: selectedUf,
       city: selectedCity,
       lat: parseFloat(lat) || -17.0397,
@@ -389,21 +421,57 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                   </div>
                 </div>
               </div>
+
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleTestConnection()}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-emerald-500/30 transition"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Diagnosticar / Testar Recepção RTMP</span>
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="space-y-3 bg-slate-950/80 border border-slate-800 p-4 rounded-xl">
+            <div className="space-y-4 bg-slate-950/80 border border-slate-800 p-4 rounded-xl">
               <div>
                 <label className="block text-xs font-bold text-slate-300 mb-1">
-                  URL RTSP Principal (Stream H.264 / H.265):
+                  URL RTSP Principal da Câmera (Stream H.264 / H.265):
                 </label>
                 <input
                   type="text"
-                  placeholder="rtsp://admin:pass@192.168.1.100:554/live/ch0"
+                  placeholder="rtsp://admin:senha@192.168.1.100:554/live/ch0"
                   value={rtspUrl}
                   onChange={(e) => setRtspUrl(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 text-emerald-400 font-mono text-xs px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
                   required
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Ex: rtsp://admin:senha@192.168.1.100:554/cam/realmonitor ou DDNS/IP público com porta 554 roteada.
+                </p>
+              </div>
+
+              {/* RTSP Transcoding Info Box */}
+              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3 text-xs space-y-2">
+                <p className="text-slate-300 font-semibold text-[11px] text-emerald-400">
+                  O servidor retransmitirá este RTSP via HLS para navegação web segura:
+                </p>
+                <div className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-slate-800 font-mono text-[11px]">
+                  <span className="text-slate-400">LINK GERADO NAVEGADOR:</span>
+                  <span className="text-emerald-300 underline">{generatedHttpLink}</span>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => handleTestConnection()}
+                  className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-emerald-500/30 transition"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>Diagnosticar & Testar Conexão RTSP (Porta 554)</span>
+                </button>
               </div>
             </div>
           )}
@@ -639,19 +707,31 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                     </td>
 
                     <td className="p-3.5 text-right">
-                      {activeUser.customPermissions.canManageCameras && (
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => {
-                            if (confirm(`Deseja remover a câmera ${cam.name}?`)) {
-                              onDeleteCamera(cam.id);
-                            }
-                          }}
-                          className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-                          title="Remover Câmera"
+                          type="button"
+                          onClick={() => handleTestConnection(cam)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 font-bold text-[10px] rounded-lg border border-slate-700 hover:border-emerald-500/50 flex items-center gap-1 transition"
+                          title="Diagnosticar Conexão"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Activity className="w-3 h-3" />
+                          <span>Testar</span>
                         </button>
-                      )}
+
+                        {activeUser.customPermissions.canManageCameras && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`Deseja remover a câmera ${cam.name}?`)) {
+                                onDeleteCamera(cam.id);
+                              }
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
+                            title="Remover Câmera"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -660,6 +740,104 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Diagnostic Result Modal */}
+      {testResult && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative overflow-hidden">
+            <button
+              onClick={() => setTestResult(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 p-1 rounded-lg bg-slate-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">
+                  Diagnóstico de Conexão & Teste de Sinal
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Relatório de teste em tempo real do fluxo RTSP / RTMP ITL
+                </p>
+              </div>
+            </div>
+
+            {testResult.loading ? (
+              <div className="py-8 text-center space-y-3">
+                <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
+                <p className="text-xs font-bold text-slate-300">
+                  Testando porta e pacotes de vídeo da câmera...
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Tentando estabelecer handshake ffprobe / HLS no servidor
+                </p>
+              </div>
+            ) : testResult.error ? (
+              <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-xl text-xs space-y-2">
+                <div className="flex items-center gap-2 text-rose-400 font-bold">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Erro de Comunicação com Servidor</span>
+                </div>
+                <p className="text-slate-300">{testResult.error}</p>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <div
+                  className={`p-4 rounded-xl border flex items-start gap-3 ${
+                    testResult.data?.success
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {testResult.data?.success ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h4 className="font-bold text-xs mb-1">
+                      {testResult.data?.success ? 'SINAL CONECTADO COM SUCESSO' : 'SINAL NÃO DETECTADO OU OFF-LINE'}
+                    </h4>
+                    <p className="text-slate-300 text-[11px]">{testResult.data?.message}</p>
+                  </div>
+                </div>
+
+                {testResult.data?.details && (
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-slate-400">
+                    <span className="text-slate-200 font-bold block mb-1">Detalhes do Erro:</span>
+                    <p className="text-rose-400 text-[10px] break-all">{testResult.data.details}</p>
+                  </div>
+                )}
+
+                {testResult.data?.logs && testResult.data.logs.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                      <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Logs de Execução FFmpeg (Últimas Linhas):</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] font-mono text-slate-400 max-h-36 overflow-y-auto space-y-1">
+                      {testResult.data.logs.map((log: string, idx: number) => (
+                        <div key={idx} className="truncate">{log}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-slate-800">
+                  <button
+                    onClick={() => setTestResult(null)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition"
+                  >
+                    Fechar Diagnóstico
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

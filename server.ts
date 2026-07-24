@@ -8,10 +8,11 @@ import { createServer as createViteServer } from 'vite';
 
 // Map to manage active FFmpeg processes for RTSP/RTMP conversion
 const activeFfmpegProcesses = new Map<string, ChildProcess>();
+const lastFfmpegLogs = new Map<string, string[]>();
 
 function startCameraRtspStream(cam: Camera) {
-  if (!cam || !cam.streamKey) return;
-  const key = cam.streamKey;
+  if (!cam) return;
+  const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
 
   // Stop previous process if exists
   if (activeFfmpegProcesses.has(key)) {
@@ -31,6 +32,9 @@ function startCameraRtspStream(cam: Camera) {
     }
     const hlsPath = path.join(hlsDir, `${key}.m3u8`);
 
+    const logList: string[] = [`[${new Date().toLocaleTimeString()}] Conectando ao fluxo: ${rtsp}`];
+    lastFfmpegLogs.set(key, logList);
+
     const proc = spawn('ffmpeg', [
       '-rtsp_transport', 'tcp',
       '-i', rtsp,
@@ -44,13 +48,23 @@ function startCameraRtspStream(cam: Camera) {
       hlsPath,
     ]);
 
+    proc.stderr.on('data', (data) => {
+      const line = data.toString().trim();
+      if (line) {
+        logList.push(line);
+        if (logList.length > 25) logList.shift();
+      }
+    });
+
     proc.on('exit', (code) => {
       console.log(`[FFmpeg ITL] Processo da câmera '${key}' finalizou com código ${code}`);
+      logList.push(`Processo finalizado com código ${code}`);
       activeFfmpegProcesses.delete(key);
     });
 
     proc.on('error', (err) => {
       console.log(`[FFmpeg ITL Warning] Falha na inicialização FFmpeg para '${key}': ${err.message}`);
+      logList.push(`Erro FFmpeg: ${err.message}`);
       activeFfmpegProcesses.delete(key);
     });
 
@@ -569,6 +583,113 @@ async function startServer() {
       error: 'Câmera offline ou sem transmissão RTMP ativa no momento',
       streamKey: subPath.replace(/\.m3u8$/, ''),
     });
+  });
+
+  // Endpoint para Teste / Diagnóstico de Conexão da Câmera (RTSP/RTMP)
+  app.post('/api/cameras/test-connection', async (req, res) => {
+    const { protocol, rtspUrl, streamKey } = req.body;
+    const key = streamKey || 'stream';
+    const hlsFile = path.join('/tmp/hls', `${key}.m3u8`);
+
+    let isHlsActive = false;
+    let lastModified = null;
+    if (fs.existsSync(hlsFile)) {
+      try {
+        const stat = fs.statSync(hlsFile);
+        isHlsActive = true;
+        lastModified = stat.mtime;
+      } catch (e) {}
+    }
+
+    const logs = lastFfmpegLogs.get(key) || [];
+
+    if (protocol === 'RTSP' || (rtspUrl && rtspUrl.startsWith('rtsp://'))) {
+      const targetRtsp = rtspUrl || 'rtsp://admin:itl2026@192.168.1.100:554/live/ch0';
+      
+      // Execute ffprobe with 5s timeout to verify RTSP stream responsiveness
+      const ffprobeProc = spawn('ffprobe', [
+        '-v', 'error',
+        '-rtsp_transport', 'tcp',
+        '-i', targetRtsp,
+        '-show_entries', 'format=duration,stream=codec_name',
+        '-of', 'default=noprint_wrappers=1:nokey=1'
+      ]);
+
+      let output = '';
+      let errOutput = '';
+      let finished = false;
+
+      const timer = setTimeout(() => {
+        if (!finished) {
+          finished = true;
+          try { ffprobeProc.kill('SIGKILL'); } catch (e) {}
+          return res.json({
+            success: false,
+            protocol: 'RTSP',
+            targetUrl: targetRtsp,
+            streamKey: key,
+            hlsActive: isHlsActive,
+            message: 'Timeout ao conectar na câmera RTSP (5s). Verifique se o IP da câmera e a porta 554 estão abertos e acessíveis na rede local ou roteador.',
+            logs,
+          });
+        }
+      }, 5000);
+
+      ffprobeProc.stdout.on('data', (d) => { output += d.toString(); });
+      ffprobeProc.stderr.on('data', (d) => { errOutput += d.toString(); });
+
+      ffprobeProc.on('exit', (code) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        if (code === 0) {
+          return res.json({
+            success: true,
+            protocol: 'RTSP',
+            targetUrl: targetRtsp,
+            streamKey: key,
+            hlsActive: isHlsActive,
+            message: 'Conexão RTSP estabelecida com sucesso! Câmera ativamente transmitindo vídeo.',
+            codecs: output.trim() || 'H264 / AAC',
+            logs,
+          });
+        } else {
+          return res.json({
+            success: false,
+            protocol: 'RTSP',
+            targetUrl: targetRtsp,
+            streamKey: key,
+            hlsActive: isHlsActive,
+            message: 'Falha na conexão RTSP. O IP, porta (554) ou credenciais (usuário/senha) da câmera estão inacessíveis ou incorretos.',
+            details: errOutput.trim() || `Código de saída ffprobe: ${code}`,
+            logs,
+          });
+        }
+      });
+    } else {
+      // RTMP Diagnostic
+      const reqHost = req.hostname || 'localhost';
+      if (isHlsActive) {
+        return res.json({
+          success: true,
+          protocol: 'RTMP',
+          streamKey: key,
+          hlsActive: true,
+          lastModified,
+          message: 'Sinal RTMP ativo e sendo processado pelo servidor em tempo real!',
+          logs,
+        });
+      } else {
+        return res.json({
+          success: false,
+          protocol: 'RTMP',
+          streamKey: key,
+          hlsActive: false,
+          message: `Servidor RTMP aguardando pacotes da câmera. Configure o envio RTMP na câmera/DVR para: rtmp://${reqHost}:1935/live e chave: ${key}`,
+          logs,
+        });
+      }
+    }
   });
 
   // Endpoints para status e sincronização do Banco de Dados MySQL

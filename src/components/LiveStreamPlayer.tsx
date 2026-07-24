@@ -11,6 +11,11 @@ import {
   Link2,
   Loader2,
   WifiOff,
+  Activity,
+  Terminal,
+  X,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Camera } from '../types';
 
@@ -38,15 +43,8 @@ const getInitialVideoUrl = (cam: Camera) => {
     if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
     return url;
   }
-  if (cam.fullRtmpUrl && cam.fullRtmpUrl.trim() !== '') {
-    let url = cleanDoubleUrl(cam.fullRtmpUrl);
-    if (url.includes('/live/') && !url.endsWith('.m3u8')) url += '.m3u8';
-    return url;
-  }
-  if (cam.streamKey && cam.streamKey.trim() !== '') {
-    return `/live/${cam.streamKey}.m3u8`;
-  }
-  return `/live/${cam.id || 'stream'}.m3u8`;
+  const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
+  return `/live/${key}.m3u8`;
 };
 
 type ConnectionState = 'LOADING' | 'ONLINE' | 'OFFLINE';
@@ -67,6 +65,33 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const [videoUrl, setVideoUrl] = useState<string>(() => cleanDoubleUrl(getInitialVideoUrl(camera)));
   const [isEditingUrl, setIsEditingUrl] = useState(false);
   const [tempUrlInput, setTempUrlInput] = useState(() => cleanDoubleUrl(camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || videoUrl));
+
+  // Diagnostic state for player
+  const [playerDiag, setPlayerDiag] = useState<{
+    loading: boolean;
+    data?: any;
+    error?: string;
+  } | null>(null);
+
+  const runPlayerDiag = async () => {
+    setPlayerDiag({ loading: true });
+    try {
+      const res = await fetch('/api/cameras/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          protocol: camera.protocol || (camera.rtspUrl ? 'RTSP' : 'RTMP'),
+          rtspUrl: camera.rtspUrl,
+          rtmpUrl: camera.rtmpUrl,
+          streamKey: camera.streamKey || camera.id,
+        }),
+      });
+      const data = await res.json();
+      setPlayerDiag({ loading: false, data });
+    } catch (e: any) {
+      setPlayerDiag({ loading: false, error: e.message || 'Erro ao realizar diagnóstico' });
+    }
+  };
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -348,13 +373,23 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={handleRetryConnection}
-            className="flex items-center space-x-2 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl font-bold border border-slate-700 transition shadow-lg active:scale-95"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Tentar Reconectar</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRetryConnection}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs rounded-xl font-bold border border-slate-700 transition shadow-lg active:scale-95"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Tentar Reconectar</span>
+            </button>
+
+            <button
+              onClick={runPlayerDiag}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs rounded-xl font-bold border border-emerald-500/40 transition shadow-lg active:scale-95"
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+              <span>Diagnóstico / Teste</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -486,6 +521,104 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             </button>
           </div>
         </form>
+      )}
+
+      {/* Diagnostic Player Modal */}
+      {playerDiag && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative overflow-hidden text-left">
+            <button
+              onClick={() => setPlayerDiag(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 p-1 rounded-lg bg-slate-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+              <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">
+                  Diagnóstico: {camera.name}
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Teste de porta e recepção de vídeo RTSP / RTMP em tempo real
+                </p>
+              </div>
+            </div>
+
+            {playerDiag.loading ? (
+              <div className="py-8 text-center space-y-3">
+                <RefreshCw className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
+                <p className="text-xs font-bold text-slate-300">
+                  Tentando handshake com a câmera e analisando fluxo...
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Testando porta e verificação ffprobe/HLS
+                </p>
+              </div>
+            ) : playerDiag.error ? (
+              <div className="bg-rose-500/10 border border-rose-500/30 p-4 rounded-xl text-xs space-y-2">
+                <div className="flex items-center gap-2 text-rose-400 font-bold">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>Erro no Diagnóstico</span>
+                </div>
+                <p className="text-slate-300">{playerDiag.error}</p>
+              </div>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <div
+                  className={`p-4 rounded-xl border flex items-start gap-3 ${
+                    playerDiag.data?.success
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {playerDiag.data?.success ? (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div>
+                    <h4 className="font-bold text-xs mb-1">
+                      {playerDiag.data?.success ? 'SINAL CONECTADO COM SUCESSO' : 'SINAL NÃO DETECTADO / OFF-LINE'}
+                    </h4>
+                    <p className="text-slate-300 text-[11px]">{playerDiag.data?.message}</p>
+                  </div>
+                </div>
+
+                {playerDiag.data?.details && (
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-slate-400">
+                    <span className="text-slate-200 font-bold block mb-1">Detalhes do Diagnóstico:</span>
+                    <p className="text-rose-400 text-[10px] break-all">{playerDiag.data.details}</p>
+                  </div>
+                )}
+
+                {playerDiag.data?.logs && playerDiag.data.logs.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                      <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Logs do FFmpeg:</span>
+                    </div>
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] font-mono text-slate-400 max-h-36 overflow-y-auto space-y-1">
+                      {playerDiag.data.logs.map((log: string, idx: number) => (
+                        <div key={idx} className="truncate">{log}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end pt-2 border-t border-slate-800">
+                  <button
+                    onClick={() => setPlayerDiag(null)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
