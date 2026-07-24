@@ -20,19 +20,25 @@ function getValidStreamSource(cam: any): string {
     return cam.rtspUrl.trim();
   }
 
-  if (cam.protocol === 'RTMP') {
-    if (cam.rtmpUrl && cam.rtmpUrl.trim().startsWith('rtmp://')) {
-      let url = cam.rtmpUrl.trim();
-      if (url.includes('localhost:1935') || url.includes('127.0.0.1:1935')) {
-        url = url.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
+  const candidates = [cam.rtmpUrl, cam.fullRtmpUrl, cam.rtmpServerUrl].filter(Boolean);
+
+  for (const candidate of candidates) {
+    let str = candidate.trim();
+    if (str.startsWith('rtmp://')) {
+      if (str.includes('localhost:1935') || str.includes('127.0.0.1:1935')) {
+        str = str.replace(/localhost:1935|127\.0\.0\.1:1935/g, 'aerocam.itlfibra.com:1935');
       }
-      return url;
+      return str;
     }
-    if (cam.rtmpServerUrl && cam.rtmpServerUrl.trim().startsWith('rtmp://')) {
-      const cleanServer = cam.rtmpServerUrl.trim().replace(/\/$/, '');
-      return `${cleanServer}/cam_${cleanKey}`;
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+      let rtmpConverted = str
+        .replace(/^https?:\/\//, 'rtmp://')
+        .replace(/\.m3u8$/, '');
+      if (!rtmpConverted.includes(':1935') && !rtmpConverted.includes(':80')) {
+        rtmpConverted = rtmpConverted.replace(/(rtmp:\/\/[^/:]+)(\/.*)?$/, '$1:1935$2');
+      }
+      return rtmpConverted;
     }
-    return `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
   }
 
   if (cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
@@ -80,12 +86,14 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
 
   const ffmpegArgs: string[] = [];
   if (streamSource.startsWith('rtsp://')) {
-    ffmpegArgs.push('-rtsp_transport', 'tcp');
+    ffmpegArgs.push('-rtsp_transport', 'tcp', '-rw_timeout', '10000000');
+  } else if (streamSource.startsWith('rtmp://')) {
+    ffmpegArgs.push('-rw_timeout', '10000000');
   }
 
   ffmpegArgs.push(
-    '-analyzeduration', '1000000',
-    '-probesize', '1000000',
+    '-analyzeduration', '2000000',
+    '-probesize', '2000000',
     '-i', streamSource,
     '-map', '0:v:0?',
     '-c:v', 'copy',
@@ -656,7 +664,9 @@ async function startServer() {
     const ffmpegArgs: string[] = [];
 
     if (targetUrl.startsWith('rtsp://')) {
-      ffmpegArgs.push('-rtsp_transport', 'tcp');
+      ffmpegArgs.push('-rtsp_transport', 'tcp', '-rw_timeout', '10000000');
+    } else if (targetUrl.startsWith('rtmp://')) {
+      ffmpegArgs.push('-rw_timeout', '10000000');
     }
 
     ffmpegArgs.push(
@@ -883,7 +893,6 @@ async function startServer() {
       });
     } else {
       // RTMP Diagnostic
-      const reqHost = req.hostname || 'localhost';
       const matchedCam = cameras.find((c) => (c.streamKey || c.id) === key) || {
         id: key,
         name: 'Teste de Diagnóstico RTMP',
@@ -892,26 +901,57 @@ async function startServer() {
         streamKey: key,
       };
 
-      startCameraRtspStream(matchedCam as Camera);
+      const targetRtmp = getValidStreamSource(matchedCam as Camera) || req.body.rtmpUrl || `rtmp://aerocam.itlfibra.com:1935/live/${key}`;
 
-      if (isHlsActive) {
+      startCameraRtspStream(matchedCam as Camera, true);
+
+      // Wait up to 3.5s to see if HLS is generated or FFmpeg receives frames
+      for (let i = 0; i < 14; i++) {
+        if (fs.existsSync(hlsFile)) {
+          isHlsActive = true;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+
+      const currentLogs = lastFfmpegLogs.get(key) || logs;
+      const currentLogsJoined = currentLogs.join(' ');
+
+      const isConnected =
+        isHlsActive ||
+        currentLogsJoined.includes('Stream mapping') ||
+        currentLogsJoined.includes('Press [q] to stop') ||
+        currentLogsJoined.includes('Output #0, hls') ||
+        currentLogsJoined.includes('frame=');
+
+      if (isConnected) {
         return res.json({
           success: true,
           protocol: 'RTMP',
+          targetUrl: targetRtmp,
           streamKey: key,
           hlsActive: true,
-          lastModified,
-          message: 'Sinal RTMP ativo e sendo processado pelo servidor em tempo real!',
-          logs: lastFfmpegLogs.get(key) || logs,
+          message: 'Sinal RTMP Conectado com Sucesso! A transmissão está ativa e gerando vídeo em tempo real.',
+          logs: currentLogs,
         });
       } else {
+        const isError =
+          currentLogsJoined.includes('Input/output error') ||
+          currentLogsJoined.includes('Connection refused') ||
+          currentLogsJoined.includes('Server error') ||
+          currentLogsJoined.includes('Failed to read');
+
         return res.json({
-          success: true,
+          success: false,
           protocol: 'RTMP',
+          targetUrl: targetRtmp,
           streamKey: key,
           hlsActive: false,
-          message: `Transcodificador RTMP ativado para a chave: ${key}. Conectando ao servidor RTMP de origem...`,
-          logs: lastFfmpegLogs.get(key) || logs,
+          message: `Nenhum sinal de vídeo RTMP recebido na URL: ${targetRtmp}.`,
+          details: isError
+            ? 'O servidor RTMP recusou a conexão ou não há câmera/OBS publicando sinal para esta chave no momento.'
+            : 'A porta do servidor de mídia RTMP está acessível, porém nenhum pacote de vídeo foi transmitido pela câmera até o momento.',
+          logs: currentLogs,
         });
       }
     }

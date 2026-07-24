@@ -83,6 +83,20 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
   const rawStreamUrl = camera.rtspUrl || camera.rtmpUrl || camera.fullRtmpUrl || videoUrl || '';
   const mjpegUrl = `/api/cameras/${camera.id}/stream?key=cam_${cleanKey}&url=${encodeURIComponent(rawStreamUrl)}&t=${retryCount}`;
 
+  const displayStreamUrl = React.useMemo(() => {
+    if (camera.protocol === 'RTSP') {
+      return camera.rtspUrl || rawStreamUrl;
+    }
+    let candidate = camera.rtmpUrl || camera.fullRtmpUrl || rawStreamUrl;
+    if (candidate.startsWith('http://') || candidate.startsWith('https://')) {
+      candidate = candidate.replace(/^https?:\/\//, 'rtmp://').replace(/\.m3u8$/, '');
+      if (!candidate.includes(':1935') && !candidate.includes(':80')) {
+        candidate = candidate.replace(/(rtmp:\/\/[^/:]+)(\/.*)?$/, '$1:1935$2');
+      }
+    }
+    return candidate;
+  }, [camera, rawStreamUrl]);
+
   // Fullscreen event listener
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -453,9 +467,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <span>{camera.location || `${camera.city || 'Itamaraju'} - ${camera.stateUf || 'BA'}`}</span>
           </div>
           <div className="text-[10px] font-mono text-cyan-400 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 truncate max-w-full sm:max-w-md">
-            {camera.protocol === 'RTSP'
-              ? (camera.rtspUrl || rawStreamUrl)
-              : (camera.fullRtmpUrl || camera.rtmpUrl || rawStreamUrl)}
+            {displayStreamUrl}
           </div>
         </div>
 
