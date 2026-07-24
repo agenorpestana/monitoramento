@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import {
   MapPin,
   Camera as CameraIcon,
@@ -11,11 +11,48 @@ import {
   Compass,
   Settings,
   X,
-  Maximize2
+  Maximize2,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import { Camera } from '../types';
 import { LiveStreamPlayer } from './LiveStreamPlayer';
+
+interface MapErrorBoundaryProps {
+  children: ReactNode;
+  fallback: ReactNode;
+}
+
+interface MapErrorBoundaryState {
+  hasError: boolean;
+}
+
+class MapErrorBoundary extends React.Component<MapErrorBoundaryProps, MapErrorBoundaryState> {
+  props: MapErrorBoundaryProps;
+  state: MapErrorBoundaryState;
+
+  constructor(props: MapErrorBoundaryProps) {
+    super(props);
+    this.props = props;
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): MapErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Google Maps render error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
 
 interface CameraMapProps {
   cameras: Camera[];
@@ -72,6 +109,118 @@ export const CameraMap: React.FC<CameraMapProps> = ({
     setShowKeyModal(false);
   };
 
+  const handleClearKey = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('GOOGLE_MAPS_KEY');
+    }
+    setTempKey('');
+    if (onSaveApiKey) {
+      onSaveApiKey('');
+    }
+    setShowKeyModal(false);
+    window.location.reload();
+  };
+
+  const renderInteractiveMapFallback = () => (
+    <div className="relative w-full h-full bg-slate-950 flex flex-col justify-between p-4 overflow-hidden">
+      {/* Background Grid Pattern simulating vector tiles */}
+      <div className="absolute inset-0 bg-[radial-gradient(#334155_1.5px,transparent_1.5px)] [background-size:28px_28px] opacity-40 pointer-events-none" />
+
+      {/* Simulated Map Streets & Water Body */}
+      <div className="absolute inset-0 pointer-events-none opacity-25">
+        <div className="absolute top-1/4 w-full h-12 bg-slate-700 -rotate-2" />
+        <div className="absolute top-3/4 w-full h-10 bg-slate-700 rotate-1" />
+        <div className="absolute left-1/3 h-full w-12 bg-slate-700 rotate-12" />
+        <div className="absolute left-2/3 h-full w-10 bg-slate-700 -rotate-6" />
+        <div className="absolute top-10 right-10 w-48 h-48 rounded-full bg-cyan-900/30 blur-xl" />
+      </div>
+
+      {/* Map Top Badge */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <span className="bg-slate-900/90 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
+          <Compass className="w-4 h-4 text-emerald-400" />
+          Mapa Interativo Central ITL (Bahia - Brasil)
+        </span>
+        <button
+          onClick={() => setShowKeyModal(true)}
+          className="pointer-events-auto bg-slate-900/90 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5"
+        >
+          <Key className="w-3.5 h-3.5" />
+          <span>{hasValidKey ? 'Editar / Limpar Chave Google Maps' : 'Ativar Google Maps Satélite'}</span>
+        </button>
+      </div>
+
+      {/* Pins Container */}
+      <div className="relative z-10 my-auto h-80">
+        {filteredCameras.map((cam, idx) => {
+          const topPositions = ['25%', '60%', '40%', '75%', '35%', '80%'];
+          const leftPositions = ['20%', '65%', '45%', '28%', '78%', '50%'];
+
+          const top = topPositions[idx % topPositions.length];
+          const left = leftPositions[idx % leftPositions.length];
+          const isSelected = selectedPin?.id === cam.id;
+
+          return (
+            <div
+              key={cam.id}
+              className="absolute transition-all duration-300"
+              style={{ top, left }}
+            >
+              {/* Pulse coverage halo */}
+              <div
+                className={`absolute -inset-5 rounded-full opacity-35 animate-ping pointer-events-none ${
+                  cam.status === 'ALERT'
+                    ? 'bg-rose-500'
+                    : cam.isDemo
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-500'
+                }`}
+              />
+
+              {/* Camera Map Pin */}
+              <button
+                onClick={() => setSelectedPin(cam)}
+                className={`relative p-3 rounded-full shadow-2xl transition-all transform hover:scale-125 border ${
+                  isSelected
+                    ? 'bg-emerald-500 text-slate-950 border-white ring-4 ring-emerald-500/40 z-20 scale-125'
+                    : cam.status === 'ALERT'
+                    ? 'bg-rose-600 text-white border-rose-300 animate-bounce'
+                    : cam.isDemo
+                    ? 'bg-amber-500 text-slate-950 border-amber-200'
+                    : 'bg-slate-900 text-emerald-400 border-slate-700 hover:border-emerald-400'
+                }`}
+                title={`${cam.name} (${cam.location})`}
+              >
+                <CameraIcon className="w-5 h-5" />
+                {cam.isDemo && (
+                  <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[9px] font-black px-1 rounded-full border border-slate-950">
+                    ★
+                  </span>
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer Legend */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 bg-slate-950/80 backdrop-blur-sm p-2 rounded-xl">
+        <div className="flex items-center space-x-4">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> Online
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Câmera Degustação
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> Alerta
+          </span>
+        </div>
+        <span>Clique em um marcador para inspecionar a transmissão ao vivo</span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       {/* Header Bar */}
@@ -103,7 +252,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
           >
             <option value="ALL">Todas as Câmeras ({cameras.length})</option>
             <option value="DEMO">⭐ Câmeras de Degustação</option>
-            <option value="ONLINE font-bold">Online / Ativas</option>
+            <option value="ONLINE">Online / Ativas</option>
             <option value="RECORDING">Em Gravação Nuvem</option>
             <option value="ALERT">Com Alerta de Movimento</option>
           </select>
@@ -131,7 +280,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white">Chave da API do Google Maps</h3>
-                <p className="text-xs text-slate-400">Insira sua chave para ativar o mapa de alta precisão</p>
+                <p className="text-xs text-slate-400">Insira ou altere sua chave de API</p>
               </div>
             </div>
 
@@ -145,24 +294,36 @@ export const CameraMap: React.FC<CameraMapProps> = ({
                 className="w-full bg-slate-950 border border-slate-800 text-emerald-400 font-mono px-3 py-2.5 rounded-xl outline-none focus:border-emerald-500"
               />
               <p className="text-[11px] text-slate-500 pt-1">
-                Obtenha gratuitamente no Google Cloud Console com APIs de Maps JavaScript ativadas.
+                Se a chave digitada estiver incorreta ou sem acesso, clique em &quot;Limpar Chave&quot; para restaurar a interface do aplicativo.
               </p>
             </div>
 
-            <div className="flex justify-end space-x-3 pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setShowKeyModal(false)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 text-xs rounded-xl"
+                onClick={handleClearKey}
+                className="px-3.5 py-2 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-bold text-xs rounded-xl border border-rose-500/40 flex items-center gap-1.5 transition"
+                title="Remover Chave e Restaurar Painel"
               >
-                Cancelar
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Limpar Chave</span>
               </button>
-              <button
-                type="submit"
-                className="px-5 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl hover:bg-emerald-400 shadow-lg"
-              >
-                Salvar Chave
-              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowKeyModal(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 text-xs rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl hover:bg-emerald-400 shadow-lg"
+                >
+                  Salvar
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -173,131 +334,36 @@ export const CameraMap: React.FC<CameraMapProps> = ({
         {/* Map View Box */}
         <div className="lg:col-span-2 relative bg-slate-950 border border-slate-800 rounded-2xl min-h-[480px] h-[520px] overflow-hidden shadow-2xl flex flex-col">
           {hasValidKey ? (
-            /* Official Google Maps Integration */
-            <APIProvider apiKey={envKey} version="weekly">
-              <Map
-                defaultCenter={center}
-                defaultZoom={13}
-                mapId="ITL_SECURITY_MAP"
-                internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                style={{ width: '100%', height: '100%' }}
-                colorScheme="DARK"
-              >
-                {filteredCameras.map((cam) => (
-                  <AdvancedMarker
-                    key={cam.id}
-                    position={{ lat: Number(cam.lat) || center.lat, lng: Number(cam.lng) || center.lng }}
-                    onClick={() => setSelectedPin(cam)}
-                    title={cam.name}
-                  >
-                    <Pin
-                      background={cam.status === 'ALERT' ? '#e11d48' : cam.isDemo ? '#f59e0b' : '#10b981'}
-                      borderColor="#ffffff"
-                      glyphColor="#020617"
-                    />
-                  </AdvancedMarker>
-                ))}
-              </Map>
-            </APIProvider>
-          ) : (
-            /* OpenStreetMap Tile / Interactive Canvas Fallback */
-            <div className="relative w-full h-full bg-slate-950 flex flex-col justify-between p-4 overflow-hidden">
-              {/* Background Grid Pattern simulating vector tiles */}
-              <div className="absolute inset-0 bg-[radial-gradient(#334155_1.5px,transparent_1.5px)] [background-size:28px_28px] opacity-40 pointer-events-none" />
-
-              {/* Simulated Map Streets & Water Body */}
-              <div className="absolute inset-0 pointer-events-none opacity-25">
-                <div className="absolute top-1/4 w-full h-12 bg-slate-700 -rotate-2" />
-                <div className="absolute top-3/4 w-full h-10 bg-slate-700 rotate-1" />
-                <div className="absolute left-1/3 h-full w-12 bg-slate-700 rotate-12" />
-                <div className="absolute left-2/3 h-full w-10 bg-slate-700 -rotate-6" />
-                <div className="absolute top-10 right-10 w-48 h-48 rounded-full bg-cyan-900/30 blur-xl" />
-              </div>
-
-              {/* Map Top Badge */}
-              <div className="relative z-10 flex items-center justify-between pointer-events-none">
-                <span className="bg-slate-900/90 text-emerald-400 border border-emerald-500/30 text-xs font-bold px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
-                  <Compass className="w-4 h-4 text-emerald-400" />
-                  Região Monitorada ITL (Bahia - Brasil)
-                </span>
-                <button
-                  onClick={() => setShowKeyModal(true)}
-                  className="pointer-events-auto bg-slate-900/90 hover:bg-slate-800 text-amber-400 border border-amber-500/30 text-xs px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1"
+            /* Google Maps with Error Boundary catch */
+            <MapErrorBoundary fallback={renderInteractiveMapFallback()}>
+              <APIProvider apiKey={envKey} version="weekly">
+                <Map
+                  defaultCenter={center}
+                  defaultZoom={13}
+                  mapId="ITL_SECURITY_MAP"
+                  internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+                  style={{ width: '100%', height: '100%' }}
+                  colorScheme="DARK"
                 >
-                  <Key className="w-3.5 h-3.5" />
-                  <span>Ativar Mapa de Satélite Google</span>
-                </button>
-              </div>
-
-              {/* Pins Container */}
-              <div className="relative z-10 my-auto h-80">
-                {filteredCameras.map((cam, idx) => {
-                  const topPositions = ['25%', '60%', '40%', '75%', '35%', '80%'];
-                  const leftPositions = ['20%', '65%', '45%', '28%', '78%', '50%'];
-
-                  const top = topPositions[idx % topPositions.length];
-                  const left = leftPositions[idx % leftPositions.length];
-                  const isSelected = selectedPin?.id === cam.id;
-
-                  return (
-                    <div
+                  {filteredCameras.map((cam) => (
+                    <AdvancedMarker
                       key={cam.id}
-                      className="absolute transition-all duration-300"
-                      style={{ top, left }}
+                      position={{ lat: Number(cam.lat) || center.lat, lng: Number(cam.lng) || center.lng }}
+                      onClick={() => setSelectedPin(cam)}
+                      title={cam.name}
                     >
-                      {/* Pulse coverage halo */}
-                      <div
-                        className={`absolute -inset-5 rounded-full opacity-35 animate-ping pointer-events-none ${
-                          cam.status === 'ALERT'
-                            ? 'bg-rose-500'
-                            : cam.isDemo
-                            ? 'bg-amber-400'
-                            : 'bg-emerald-500'
-                        }`}
+                      <Pin
+                        background={cam.status === 'ALERT' ? '#e11d48' : cam.isDemo ? '#f59e0b' : '#10b981'}
+                        borderColor="#ffffff"
+                        glyphColor="#020617"
                       />
-
-                      {/* Camera Map Pin */}
-                      <button
-                        onClick={() => setSelectedPin(cam)}
-                        className={`relative p-3 rounded-full shadow-2xl transition-all transform hover:scale-125 border ${
-                          isSelected
-                            ? 'bg-emerald-500 text-slate-950 border-white ring-4 ring-emerald-500/40 z-20 scale-125'
-                            : cam.status === 'ALERT'
-                            ? 'bg-rose-600 text-white border-rose-300 animate-bounce'
-                            : cam.isDemo
-                            ? 'bg-amber-500 text-slate-950 border-amber-200'
-                            : 'bg-slate-900 text-emerald-400 border-slate-700 hover:border-emerald-400'
-                        }`}
-                        title={`${cam.name} (${cam.location})`}
-                      >
-                        <CameraIcon className="w-5 h-5" />
-                        {cam.isDemo && (
-                          <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[9px] font-black px-1 rounded-full border border-slate-950">
-                            ★
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Footer Legend */}
-              <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 bg-slate-950/80 backdrop-blur-sm p-2 rounded-xl">
-                <div className="flex items-center space-x-4">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> Online
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Câmera Degustação
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" /> Alerta
-                  </span>
-                </div>
-                <span>Clique em um marcador para inspecionar o vídeo ao vivo</span>
-              </div>
-            </div>
+                    </AdvancedMarker>
+                  ))}
+                </Map>
+              </APIProvider>
+            </MapErrorBoundary>
+          ) : (
+            renderInteractiveMapFallback()
           )}
         </div>
 
@@ -326,7 +392,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
 
               {/* Live Player / Video Preview */}
               <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video shadow-lg">
-                <LiveStreamPlayer camera={selectedPin} autoPlay muted />
+                <LiveStreamPlayer camera={selectedPin} />
               </div>
 
               {/* Details & Specs */}

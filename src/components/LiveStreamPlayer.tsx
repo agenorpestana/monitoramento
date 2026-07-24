@@ -202,6 +202,17 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       videoElement.removeAttribute('src');
       videoElement.load();
 
+      // Quick fallback timer: If HLS manifest isn't parsed in 1.5s, switch to MJPEG for instant picture!
+      const fastFallbackTimer = setTimeout(() => {
+        setUseMjpegStream((current) => {
+          if (!current) {
+            console.log(`[Stream Player] HLS demorando para responder (${camera.name}). Alternando para fluxo direto instantâneo MJPEG...`);
+            return true;
+          }
+          return current;
+        });
+      }, 1500);
+
       const initHls = () => {
         if ((window as any).Hls && (window as any).Hls.isSupported()) {
           const HlsClass = (window as any).Hls;
@@ -209,22 +220,30 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             enableWorker: true,
             lowLatencyMode: true,
             backBufferLength: 10,
+            manifestLoadingTimeOut: 2000,
+            levelLoadingTimeOut: 2000,
           });
           hlsInstance.loadSource(videoUrl);
           hlsInstance.attachMedia(videoElement);
           hlsInstance.on(HlsClass.Events.MANIFEST_PARSED, () => {
+            clearTimeout(fastFallbackTimer);
             setConnectionState('ONLINE');
             videoElement.play().catch(() => {});
           });
           hlsInstance.on(HlsClass.Events.ERROR, (_: any, data: any) => {
             if (data.fatal) {
+              clearTimeout(fastFallbackTimer);
               handleVideoError();
             }
           });
         } else if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
           videoElement.src = videoUrl;
-          videoElement.play().catch(() => {});
+          videoElement.play().then(() => {
+            clearTimeout(fastFallbackTimer);
+            setConnectionState('ONLINE');
+          }).catch(() => {});
         } else {
+          clearTimeout(fastFallbackTimer);
           setUseMjpegStream(true);
         }
       };
@@ -235,8 +254,19 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
         script.onload = initHls;
+        script.onerror = () => {
+          clearTimeout(fastFallbackTimer);
+          setUseMjpegStream(true);
+        };
         document.head.appendChild(script);
       }
+
+      return () => {
+        clearTimeout(fastFallbackTimer);
+        if (hlsInstance) {
+          try { hlsInstance.destroy(); } catch (e) {}
+        }
+      };
     } else {
       videoElement.src = videoUrl;
       videoElement.play().catch(() => {});
