@@ -579,9 +579,19 @@ async function startServer() {
     const hlsDir = '/tmp/hls';
     const targetFile = path.join(hlsDir, subPath);
 
-    // Se o arquivo ainda não existe (ex: primeiro segmento sendo gerado em ~1s), aguarda até 2.5s
+    const cleanKey = subPath.replace(/\.m3u8$/, '').replace(/_\d+\.ts$/, '').replace(/\.ts$/, '');
+    const matchedCam = cameras.find(
+      (c) => (c.streamKey || c.id) === cleanKey || c.id === cleanKey || c.id === `cam-${cleanKey}`
+    );
+
+    // If file doesn't exist and camera is RTSP, ensure FFmpeg process is started on demand
+    if (!fs.existsSync(targetFile) && matchedCam && matchedCam.protocol === 'RTSP' && matchedCam.rtspUrl) {
+      startCameraRtspStream(matchedCam);
+    }
+
+    // Se o arquivo ainda não existe (primeiro segmento sendo gerado em ~1-2s), aguarda até 3.5s
     if (!fs.existsSync(targetFile)) {
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 14; i++) {
         await new Promise((resolve) => setTimeout(resolve, 250));
         if (fs.existsSync(targetFile)) break;
       }
@@ -602,7 +612,7 @@ async function startServer() {
     // Se a câmera não estiver transmitindo no momento (arquivo HLS ausente):
     return res.status(404).json({
       error: 'Câmera offline ou sem transmissão ativa no momento',
-      streamKey: subPath.replace(/\.m3u8$/, ''),
+      streamKey: cleanKey,
     });
   });
 
