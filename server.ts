@@ -16,7 +16,7 @@ function getValidStreamSource(cam: any): string {
   const key = cam.streamKey || (cam.id ? (cam.id.startsWith('cam-') ? `cam_${cam.id.replace('cam-', '')}` : cam.id) : 'stream');
   const cleanKey = key.replace(/^cam-/, '').replace(/^cam_/, '');
 
-  if (cam.protocol === 'RTSP' && cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
+  if (cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
     return cam.rtspUrl.trim();
   }
 
@@ -39,10 +39,6 @@ function getValidStreamSource(cam: any): string {
       }
       return rtmpConverted;
     }
-  }
-
-  if (cam.rtspUrl && cam.rtspUrl.trim().startsWith('rtsp://')) {
-    return cam.rtspUrl.trim();
   }
 
   return `rtmp://aerocam.itlfibra.com:1935/live/cam_${cleanKey}`;
@@ -86,9 +82,9 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
 
   const ffmpegArgs: string[] = [];
   if (streamSource.startsWith('rtsp://')) {
-    ffmpegArgs.push('-rtsp_transport', 'tcp', '-rw_timeout', '10000000');
+    ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '5000000');
   } else if (streamSource.startsWith('rtmp://')) {
-    ffmpegArgs.push('-rw_timeout', '10000000');
+    ffmpegArgs.push('-rw_timeout', '5000000');
   }
 
   ffmpegArgs.push(
@@ -664,9 +660,9 @@ async function startServer() {
     const ffmpegArgs: string[] = [];
 
     if (targetUrl.startsWith('rtsp://')) {
-      ffmpegArgs.push('-rtsp_transport', 'tcp', '-rw_timeout', '10000000');
+      ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '5000000');
     } else if (targetUrl.startsWith('rtmp://')) {
-      ffmpegArgs.push('-rw_timeout', '10000000');
+      ffmpegArgs.push('-rw_timeout', '5000000');
     }
 
     ffmpegArgs.push(
@@ -682,9 +678,27 @@ async function startServer() {
 
     const proc = spawn('ffmpeg', ffmpegArgs);
 
+    let hasReceivedData = false;
+    const timeoutTimer = setTimeout(() => {
+      if (!hasReceivedData) {
+        killProc();
+        if (!res.headersSent) {
+          res.status(504).send('Timeout ao conectar à câmera');
+        } else {
+          try { res.end(); } catch (e) {}
+        }
+      }
+    }, 6000);
+
+    proc.stdout.on('data', () => {
+      hasReceivedData = true;
+      clearTimeout(timeoutTimer);
+    });
+
     proc.stdout.pipe(res);
 
     const killProc = () => {
+      clearTimeout(timeoutTimer);
       try {
         proc.stdout.unpipe(res);
         proc.kill('SIGKILL');
