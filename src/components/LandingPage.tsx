@@ -39,11 +39,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'resident' | 'neighborhood' | 'business'>('neighborhood');
 
-  // Filter tasting / demo cameras marked by admin, or fallback to first cameras
+  // Filter ONLY tasting / demo cameras explicitly marked by admin
   const demoCameras = React.useMemo(() => {
     if (!cameras || !cameras.length) return [];
-    const flagged = cameras.filter((c) => c.isDemo || c.isLiveWebcam);
-    return flagged.length ? flagged : cameras.slice(0, 3);
+    return cameras.filter((c) => Boolean(c.isDemo || c.isLiveWebcam));
   }, [cameras]);
 
   const [selectedDemoIndex, setSelectedDemoIndex] = useState<number>(0);
@@ -187,17 +186,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {/* Video Player Box */}
                 <div className="relative rounded-2xl overflow-hidden aspect-video bg-black shadow-inner border border-slate-800">
                   {activeDemoCam ? (
-                    <LiveStreamPlayer camera={activeDemoCam} showOverlayControls={true} />
+                    <>
+                      <LiveStreamPlayer key={activeDemoCam.id} camera={activeDemoCam} showOverlayControls={true} />
+                      <div className="absolute top-3 left-3 bg-slate-950/90 backdrop-blur-sm border border-amber-400/50 text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1.5 shadow-xl z-20 pointer-events-none">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                        <span>DEGUSTAÇÃO AO VIVO: {activeDemoCam.name}</span>
+                      </div>
+                    </>
                   ) : (
-                    <div className="flex items-center justify-center h-full text-slate-500 text-xs">
-                      Câmera de degustação em manutenção
+                    <div className="flex flex-col items-center justify-center h-full p-6 text-center space-y-2 bg-slate-950">
+                      <Star className="w-8 h-8 text-amber-400/50" />
+                      <p className="text-xs font-bold text-slate-300">Nenhuma câmera marcada como Degustação</p>
+                      <p className="text-[11px] text-slate-500 max-w-xs">
+                        Para disponibilizar o sinal aberto na página inicial, acesse o painel e marque a opção "Degustação" na câmera desejada.
+                      </p>
                     </div>
                   )}
-
-                  <div className="absolute top-3 left-3 bg-slate-950/90 backdrop-blur-sm border border-amber-400/50 text-amber-300 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center space-x-1.5 shadow-xl z-20">
-                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                    <span>TRANSMISSÃO DEGUSTAÇÃO</span>
-                  </div>
                 </div>
 
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">

@@ -134,6 +134,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
   const [aiDetectionEnabled, setAiDetectionEnabled] = useState(true);
   const [twoWayAudioEnabled, setTwoWayAudioEnabled] = useState(true);
   const [isE2EEEncrypted, setIsE2EEEncrypted] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
 
   // Load IBGE UFs on mount
   useEffect(() => {
@@ -254,6 +255,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
       aiDetectionEnabled,
       twoWayAudioEnabled,
       isE2EEEncrypted,
+      isDemo,
       status: 'ONLINE',
     };
 
@@ -574,7 +576,17 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
           </div>
 
           {/* AI and Security Options */}
-          <div className="border-t border-slate-800 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-300">
+          <div className="border-t border-slate-800 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-300">
+            <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-amber-500/30 hover:border-amber-500/50 text-amber-300">
+              <input
+                type="checkbox"
+                checked={isDemo}
+                onChange={(e) => setIsDemo(e.target.checked)}
+                className="rounded accent-amber-400 w-4 h-4"
+              />
+              <span>★ Câmera de Degustação</span>
+            </label>
+
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700">
               <input
                 type="checkbox"
@@ -582,7 +594,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                 onChange={(e) => setAiDetectionEnabled(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Detecção de Movimento IA</span>
+              <span>Detecção Movimento IA</span>
             </label>
 
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700">
@@ -592,7 +604,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                 onChange={(e) => setTwoWayAudioEnabled(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Áudio Bidirecional Simultâneo</span>
+              <span>Áudio Bidirecional</span>
             </label>
 
             <label className="flex items-center space-x-2 cursor-pointer bg-slate-950 p-2.5 rounded-xl border border-slate-800 hover:border-slate-700">
@@ -602,7 +614,7 @@ export const CameraAdminPanel: React.FC<CameraAdminPanelProps> = ({
                 onChange={(e) => setIsE2EEEncrypted(e.target.checked)}
                 className="rounded accent-emerald-500 w-4 h-4"
               />
-              <span>Criptografia Ponta a Ponta</span>
+              <span>Criptografia E2EE</span>
             </label>
           </div>
 

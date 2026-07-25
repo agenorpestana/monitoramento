@@ -392,7 +392,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
 
               {/* Live Player / Video Preview */}
               <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video shadow-lg">
-                <LiveStreamPlayer camera={selectedPin} />
+                <LiveStreamPlayer key={selectedPin.id} camera={selectedPin} />
               </div>
 
               {/* Details & Specs */}
