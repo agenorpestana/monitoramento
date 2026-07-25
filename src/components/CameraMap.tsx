@@ -72,6 +72,15 @@ export const CameraMap: React.FC<CameraMapProps> = ({
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState(googleMapsApiKey);
 
+  // Sync selectedPin when cameras prop changes or is filtered
+  useEffect(() => {
+    if (!selectedPin && cameras.length > 0) {
+      setSelectedPin(cameras[0]);
+    } else if (selectedPin && !cameras.some((c) => c.id === selectedPin.id)) {
+      setSelectedPin(cameras[0] || null);
+    }
+  }, [cameras]);
+
   // Try to find API key from process.env or prop or localStorage
   const envKey =
     process.env.GOOGLE_MAPS_PLATFORM_KEY ||

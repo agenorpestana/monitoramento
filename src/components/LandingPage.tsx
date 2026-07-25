@@ -239,7 +239,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <CameraMap
-            cameras={cameras}
+            cameras={demoCameras}
             onSelectCamera={(cam) => {
               if (onSelectCamera) onSelectCamera(cam);
               onOpenLogin();
