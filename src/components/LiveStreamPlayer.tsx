@@ -347,7 +347,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               alt={camera.name}
               onLoad={() => setConnectionState('ONLINE')}
               onError={handleVideoError}
-              className={`w-full h-full object-cover transition duration-300 ${
+              className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
                 connectionState === 'ONLINE' ? 'opacity-100' : 'opacity-80'
               }`}
               style={{ transform: `scale(${zoomLevel})` }}
@@ -360,7 +360,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               muted={isMuted}
               onCanPlay={handleVideoCanPlay}
               onError={handleVideoError}
-              className={`w-full h-full object-cover transition duration-300 ${
+              className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
                 connectionState === 'ONLINE' ? 'opacity-100' : 'opacity-0'
               }`}
               style={{ transform: `scale(${zoomLevel})` }}
@@ -374,7 +374,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             autoPlay
             playsInline
             muted={isMuted}
-            className={`w-full h-full object-cover transition duration-300 ${
+            className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
               connectionState === 'ONLINE' ? 'opacity-100' : 'opacity-0'
             }`}
             style={{ transform: `scale(${zoomLevel})` }}

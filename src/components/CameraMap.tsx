@@ -1,4 +1,5 @@
-import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode, useRef } from 'react';
+import L from 'leaflet';
 import {
   MapPin,
   Camera as CameraIcon,
@@ -14,11 +15,112 @@ import {
   Maximize2,
   Trash2,
   RefreshCw,
-  Lock
+  Lock,
+  Globe,
+  Map as MapIcon
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import { Camera } from '../types';
 import { LiveStreamPlayer } from './LiveStreamPlayer';
+
+interface FreeOSMMapProps {
+  cameras: Camera[];
+  selectedPin: Camera | null;
+  onSelectPin: (cam: Camera) => void;
+  center: { lat: number; lng: number };
+}
+
+const FreeOpenStreetMapComponent: React.FC<FreeOSMMapProps> = ({
+  cameras,
+  selectedPin,
+  onSelectPin,
+  center,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    if (!mapInstance.current) {
+      const map = L.map(containerRef.current, {
+        center: [center.lat, center.lng],
+        zoom: 13,
+        zoomControl: true,
+      });
+
+      // CartoDB Dark Tiles matching Central ITL dark theme
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      }).addTo(map);
+
+      layerGroupRef.current = L.layerGroup().addTo(map);
+      mapInstance.current = map;
+    } else {
+      mapInstance.current.setView([center.lat, center.lng]);
+    }
+  }, [center.lat, center.lng]);
+
+  useEffect(() => {
+    if (!mapInstance.current || !layerGroupRef.current) return;
+    layerGroupRef.current.clearLayers();
+
+    cameras.forEach((cam) => {
+      const lat = Number(cam.lat);
+      const lng = Number(cam.lng);
+      if (isNaN(lat) || isNaN(lng) || lat === 0) return;
+
+      const isSelected = selectedPin?.id === cam.id;
+      const isDemo = Boolean(cam.isDemo || cam.isLiveWebcam);
+      const color = isDemo ? '#f59e0b' : cam.status === 'ALERT' ? '#f43f5e' : '#10b981';
+
+      const iconHtml = `
+        <div style="
+          background-color: ${color};
+          width: ${isSelected ? '36px' : '28px'};
+          height: ${isSelected ? '36px' : '28px'};
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: ${isSelected ? '3px solid #ffffff' : '2px solid #020617'};
+          box-shadow: 0 0 ${isSelected ? '16px' : '6px'} ${color};
+          cursor: pointer;
+          transition: transform 0.2s ease;
+        ">
+          <svg width="${isSelected ? '18' : '14'}" height="${isSelected ? '18' : '14'}" viewBox="0 0 24 24" fill="none" stroke="#020617" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 4h-5L7 7H4a2 2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+            <circle cx="12" cy="13" r="3"/>
+          </svg>
+        </div>
+      `;
+
+      const customIcon = L.divIcon({
+        html: iconHtml,
+        className: 'leaflet-custom-marker',
+        iconSize: [isSelected ? 36 : 28, isSelected ? 36 : 28],
+        iconAnchor: [isSelected ? 18 : 14, isSelected ? 18 : 14],
+      });
+
+      const marker = L.marker([lat, lng], { icon: customIcon }).addTo(layerGroupRef.current!);
+      marker.on('click', () => onSelectPin(cam));
+    });
+  }, [cameras, selectedPin, onSelectPin]);
+
+  return (
+    <div className="w-full h-full relative z-0">
+      <div ref={containerRef} className="w-full h-full min-h-[480px] rounded-2xl overflow-hidden" />
+      <div className="absolute bottom-3 left-3 z-[400] bg-slate-950/90 text-slate-300 text-[10px] px-2.5 py-1 rounded-xl border border-slate-800 backdrop-blur-md flex items-center space-x-1.5 shadow-lg">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+        <span className="font-extrabold text-white">Mapa Grátis OpenStreetMap</span>
+        <span className="text-slate-500">• Central ITL</span>
+      </div>
+    </div>
+  );
+};
 
 interface MapErrorBoundaryProps {
   children: ReactNode;
@@ -72,6 +174,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState(googleMapsApiKey);
+  const [mapProvider, setMapProvider] = useState<'OSM' | 'GOOGLE'>('OSM');
 
   // Sync selectedPin when cameras prop changes or is filtered
   useEffect(() => {
@@ -247,15 +350,46 @@ export const CameraMap: React.FC<CameraMapProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setShowKeyModal(true)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl border border-slate-700 flex items-center space-x-1.5 transition"
-            title="Configurar Chave da API Google Maps"
-          >
-            <Key className={`w-3.5 h-3.5 ${hasValidKey ? 'text-emerald-400' : 'text-amber-400'}`} />
-            <span>{hasValidKey ? 'Google Maps Ativo' : 'Configurar Google Maps API'}</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Map Provider Switcher Toggle */}
+          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setMapProvider('OSM')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center space-x-1.5 ${
+                mapProvider === 'OSM'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>OpenStreetMap (Grátis)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMapProvider('GOOGLE')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex items-center space-x-1.5 ${
+                mapProvider === 'GOOGLE'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Google Maps</span>
+            </button>
+          </div>
+
+          {mapProvider === 'GOOGLE' && (
+            <button
+              onClick={() => setShowKeyModal(true)}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl border border-slate-700 flex items-center space-x-1.5 transition"
+              title="Configurar Chave da API Google Maps"
+            >
+              <Key className={`w-3.5 h-3.5 ${hasValidKey ? 'text-emerald-400' : 'text-amber-400'}`} />
+              <span>{hasValidKey ? 'Google Key Ativa' : 'Configurar Key'}</span>
+            </button>
+          )}
 
           <select
             value={filterStatus}
@@ -344,10 +478,24 @@ export const CameraMap: React.FC<CameraMapProps> = ({
       {/* Main Map + Inspector Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map View Box */}
-        <div className="lg:col-span-2 relative bg-slate-950 border border-slate-800 rounded-2xl min-h-[480px] h-[520px] overflow-hidden shadow-2xl flex flex-col">
-          {hasValidKey ? (
+        <div className="lg:col-span-2 relative bg-slate-950 border border-slate-800 rounded-2xl min-h-[480px] h-[520px] overflow-hidden shadow-2xl flex flex-col z-0">
+          {mapProvider === 'OSM' || !hasValidKey ? (
+            <FreeOpenStreetMapComponent
+              cameras={filteredCameras}
+              selectedPin={selectedPin}
+              onSelectPin={setSelectedPin}
+              center={center}
+            />
+          ) : (
             /* Google Maps with Error Boundary catch */
-            <MapErrorBoundary fallback={renderInteractiveMapFallback()}>
+            <MapErrorBoundary fallback={
+              <FreeOpenStreetMapComponent
+                cameras={filteredCameras}
+                selectedPin={selectedPin}
+                onSelectPin={setSelectedPin}
+                center={center}
+              />
+            }>
               <APIProvider apiKey={envKey} version="weekly">
                 <Map
                   defaultCenter={center}
@@ -374,8 +522,6 @@ export const CameraMap: React.FC<CameraMapProps> = ({
                 </Map>
               </APIProvider>
             </MapErrorBoundary>
-          ) : (
-            renderInteractiveMapFallback()
           )}
         </div>
 
