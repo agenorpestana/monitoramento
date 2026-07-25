@@ -13,7 +13,8 @@ import {
   X,
   Maximize2,
   Trash2,
-  RefreshCw
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
 import { Camera } from '../types';
@@ -75,9 +76,11 @@ export const CameraMap: React.FC<CameraMapProps> = ({
   // Sync selectedPin when cameras prop changes or is filtered
   useEffect(() => {
     if (!selectedPin && cameras.length > 0) {
-      setSelectedPin(cameras[0]);
+      const defaultDemo = cameras.find((c) => c.isDemo || c.isLiveWebcam) || cameras[0];
+      setSelectedPin(defaultDemo);
     } else if (selectedPin && !cameras.some((c) => c.id === selectedPin.id)) {
-      setSelectedPin(cameras[0] || null);
+      const defaultDemo = cameras.find((c) => c.isDemo || c.isLiveWebcam) || cameras[0] || null;
+      setSelectedPin(defaultDemo);
     }
   }, [cameras]);
 
@@ -401,7 +404,28 @@ export const CameraMap: React.FC<CameraMapProps> = ({
 
               {/* Live Player / Video Preview */}
               <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video shadow-lg">
-                <LiveStreamPlayer key={selectedPin.id} camera={selectedPin} />
+                {selectedPin.isDemo || selectedPin.isLiveWebcam ? (
+                  <LiveStreamPlayer key={selectedPin.id} camera={selectedPin} />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-5 text-center space-y-3 bg-slate-950 text-slate-300">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-lg">
+                      <Lock className="w-6 h-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-bold text-white">Transmissão Restrita a Moradores</h4>
+                      <p className="text-[11px] text-slate-400 max-w-xs leading-relaxed">
+                        Esta câmera faz parte do circuito fechado de segurança. Apenas câmeras com o selo de <strong className="text-amber-300">Degustação</strong> possuem transmissão aberta ao público.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onSelectCamera(selectedPin)}
+                      className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-[11px] rounded-xl transition shadow-lg shadow-emerald-500/20 flex items-center space-x-2"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Acessar Painel para Visualizar</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Details & Specs */}
