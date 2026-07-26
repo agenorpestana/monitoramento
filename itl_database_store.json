@@ -2,7 +2,7 @@
   "cameras": [
     {
       "id": "cam-wpg8tz",
-      "name": "Prado 11 - Portaria Principal",
+      "name": "Prado 11 - Portaria Principal.",
       "location": "Prado - BA",
       "protocol": "RTMP",
       "rtspUrl": "",
