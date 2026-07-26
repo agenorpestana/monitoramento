@@ -418,16 +418,42 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
         </div>
       </div>
 
-      {/* Real Stream Recording Control Panel */}
+      {/* 24/7 Continuous Automatic Recording Status Banner */}
+      <div className="bg-emerald-950/40 border border-emerald-500/30 p-3.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <div>
+            <h4 className="text-xs font-bold text-emerald-300 flex items-center gap-2 flex-wrap">
+              <span>Gravação Automática Contínua 24/7 em Produção</span>
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full font-mono border border-emerald-500/30">
+                {userAccessibleCameras.length} Câmeras Reais Gravando
+              </span>
+            </h4>
+            <p className="text-[11px] text-slate-400">
+              Todas as câmeras registradas no sistema gravam automaticamente em tempo real sem necessidade de acionamento manual.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950 border border-emerald-800/60 px-2.5 py-1 rounded-lg shrink-0">
+            HD Real RTMP/RTSP
+          </span>
+        </div>
+      </div>
+
+      {/* Real Stream Manual Clip Recorder Control Panel */}
       <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
-              Gravação de Transmissão Real Ao Vivo (RTMP / RTSP / HLS)
+              Clipe Manual sob Demanda (RTMP / RTSP / HLS)
             </h3>
             <p className="text-xs text-slate-400">
-              Grave o sinal real da câmera ativa para criar arquivos MP4 armazenados no cofre.
+              Inicie um clipe manual imediato em tempo real para qualquer uma das câmeras ativas.
             </p>
           </div>
 
