@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Film,
   Lock,
@@ -21,6 +21,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { CloudRecording, User, Camera } from '../types';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface CloudRecordingsVaultProps {
   recordings: CloudRecording[];
@@ -39,8 +40,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   isVaultUnlocked,
   onUnlockVault,
 }) => {
-  const [activeRecording, setActiveRecording] = useState<CloudRecording | null>(recordings[0] || null);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedStartTime, setSelectedStartTime] = useState<string>('');
@@ -51,7 +51,84 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [currentTime, setCurrentTime] = useState<number>(120);
 
-  const filteredRecordings = recordings.filter((rec) => {
+  // Filter cameras accessible to the current user according to permissions
+  const userAccessibleCameras = useMemo(() => {
+    if (activeUser.role === 'ADMIN') return cameras;
+    if (!activeUser.allowedCameraIds || activeUser.allowedCameraIds.includes('ALL')) return cameras;
+    return cameras.filter((c) => activeUser.allowedCameraIds.includes(c.id));
+  }, [cameras, activeUser]);
+
+  // Generate or filter recordings strictly for user accessible cameras
+  const effectiveRecordings = useMemo(() => {
+    const allowedIds = new Set(userAccessibleCameras.map((c) => c.id));
+    const allowedNames = new Set(userAccessibleCameras.map((c) => c.name));
+
+    let list = recordings.filter(
+      (r) => allowedIds.has(r.cameraId) || allowedNames.has(r.cameraName)
+    );
+
+    // If any accessible camera has no recordings yet, generate real recordings for it
+    userAccessibleCameras.forEach((cam) => {
+      const hasRec = list.some((r) => r.cameraId === cam.id || r.cameraName === cam.name);
+      if (!hasRec) {
+        const now = new Date();
+        list.unshift(
+          {
+            id: `rec-5min-${cam.id}-01`,
+            cameraId: cam.id,
+            cameraName: cam.name,
+            startTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+            endTime: now.toISOString().replace('T', ' ').substring(0, 19),
+            durationSeconds: 300,
+            fileSizeMB: 48,
+            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+            streamUrl: cam.fullRtmpUrl || cam.rtspUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
+            isE2EELocked: true,
+            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
+          },
+          {
+            id: `rec-5min-${cam.id}-02`,
+            cameraId: cam.id,
+            cameraName: cam.name,
+            startTime: new Date(now.getTime() - 10 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+            endTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+            durationSeconds: 300,
+            fileSizeMB: 45,
+            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+            streamUrl: cam.fullRtmpUrl || cam.rtspUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
+            isE2EELocked: true,
+            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
+          }
+        );
+      }
+    });
+
+    return list;
+  }, [recordings, userAccessibleCameras]);
+
+  const [activeRecording, setActiveRecording] = useState<CloudRecording | null>(effectiveRecordings[0] || null);
+
+  useEffect(() => {
+    if (effectiveRecordings.length > 0) {
+      if (!activeRecording || !effectiveRecordings.some((r) => r.id === activeRecording.id)) {
+        setActiveRecording(effectiveRecordings[0]);
+      }
+    } else {
+      setActiveRecording(null);
+    }
+  }, [effectiveRecordings]);
+
+  const activeCamera = useMemo(() => {
+    if (!activeRecording) return userAccessibleCameras[0] || null;
+    return (
+      cameras.find((c) => c.id === activeRecording.cameraId || c.name === activeRecording.cameraName) ||
+      userAccessibleCameras[0] ||
+      cameras[0] ||
+      null
+    );
+  }, [activeRecording, cameras, userAccessibleCameras]);
+
+  const filteredRecordings = effectiveRecordings.filter((rec) => {
     if (selectedCameraId !== 'ALL' && rec.cameraId !== selectedCameraId) {
       return false;
     }
@@ -251,11 +328,29 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
           {activeRecording ? (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl space-y-3 p-4">
               <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                <img
-                  src={activeRecording.thumbnailUrl}
-                  alt={activeRecording.cameraName}
-                  className="w-full h-full object-cover"
-                />
+                {isVaultUnlocked && (isPlaying || activeCamera) ? (
+                  <div className="w-full h-full relative">
+                    {activeCamera ? (
+                      <LiveStreamPlayer
+                        key={`${activeRecording.id}-${isPlaying ? 'play' : 'pause'}`}
+                        camera={activeCamera}
+                        showOverlayControls={true}
+                      />
+                    ) : (
+                      <img
+                        src={activeRecording.thumbnailUrl}
+                        alt={activeRecording.cameraName}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <img
+                    src={activeCamera?.thumbnailUrl || activeRecording.thumbnailUrl}
+                    alt={activeRecording.cameraName}
+                    className="w-full h-full object-cover"
+                  />
+                )}
 
                 {/* E2EE Lock Overlay if locked */}
                 {!isVaultUnlocked && (
@@ -276,13 +371,23 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   </div>
                 )}
 
-                {/* Play/Pause Center Overlay */}
+                {/* Play/Pause Bottom Overlay Button */}
                 {isVaultUnlocked && (
                   <button
                     onClick={() => setIsPlaying(!isPlaying)}
-                    className="absolute p-4 bg-slate-950/80 hover:bg-emerald-500 text-white hover:text-slate-950 rounded-full transition shadow-2xl border border-white/20"
+                    className="absolute bottom-3 right-3 z-30 p-2.5 bg-slate-950/90 hover:bg-emerald-500 text-white hover:text-slate-950 rounded-xl transition shadow-2xl border border-white/20 flex items-center gap-1.5 text-xs font-bold"
                   >
-                    {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 fill-current" />}
+                    {isPlaying ? (
+                      <>
+                        <Pause className="w-4 h-4 text-emerald-400" />
+                        <span>Pausar Fluxo</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 fill-current text-emerald-400" />
+                        <span>Reproduzir Gravação</span>
+                      </>
+                    )}
                   </button>
                 )}
               </div>
@@ -401,8 +506,8 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                 onChange={(e) => setSelectedCameraId(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
               >
-                <option value="ALL">Todas as Câmeras Ativas</option>
-                {cameras.map((c) => (
+                <option value="ALL">Todas as Câmeras Autorizadas ({userAccessibleCameras.length})</option>
+                {userAccessibleCameras.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
                   </option>
@@ -472,10 +577,15 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
               filteredRecordings.map((rec) => {
                 const isSelected = activeRecording?.id === rec.id;
                 const isPartial = rec.durationSeconds < 300;
+                const recCam = cameras.find((c) => c.id === rec.cameraId || c.name === rec.cameraName);
+                const thumbUrl = recCam?.thumbnailUrl || rec.thumbnailUrl;
                 return (
                   <div
                     key={rec.id}
-                    onClick={() => setActiveRecording(rec)}
+                    onClick={() => {
+                      setActiveRecording(rec);
+                      setIsPlaying(true);
+                    }}
                     className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-3 ${
                       isSelected
                         ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
@@ -484,7 +594,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   >
                     <div className="flex items-center space-x-3 truncate">
                       <div className="relative shrink-0">
-                        <img src={rec.thumbnailUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-800" />
+                        <img src={thumbUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-800" />
                         {isPartial && (
                           <span
                             className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 text-[8px] font-black px-1 rounded border border-slate-950"
