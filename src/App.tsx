@@ -284,6 +284,18 @@ export default function App() {
     setRecordings((prev) => prev.filter((r) => r.id !== recId));
   };
 
+  const handleDeleteRecordingsBatch = async (recIds: string[]) => {
+    if (!recIds || recIds.length === 0) return;
+    try {
+      await fetch('/api/recordings/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: recIds }),
+      });
+    } catch (e) {}
+    setRecordings((prev) => prev.filter((r) => !recIds.includes(r.id)));
+  };
+
   const handleAddUser = async (userData: Partial<User>) => {
     try {
       const res = await fetch('/api/users', {
@@ -444,6 +456,7 @@ export default function App() {
               cameras={cameras}
               activeUser={activeUser}
               onDeleteRecording={handleDeleteRecording}
+              onDeleteRecordingsBatch={handleDeleteRecordingsBatch}
               isVaultUnlocked={e2eeSettings.isVaultUnlocked}
               onUnlockVault={() => setIsE2EEModalOpen(true)}
             />

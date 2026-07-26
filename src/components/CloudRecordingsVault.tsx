@@ -27,6 +27,7 @@ interface CloudRecordingsVaultProps {
   cameras?: Camera[];
   activeUser: User;
   onDeleteRecording: (id: string) => void;
+  onDeleteRecordingsBatch?: (ids: string[]) => void;
   isVaultUnlocked: boolean;
   onUnlockVault: () => void;
 }
@@ -41,6 +42,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   cameras = [],
   activeUser,
   onDeleteRecording,
+  onDeleteRecordingsBatch,
   isVaultUnlocked,
   onUnlockVault,
 }) => {
@@ -54,6 +56,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [showStorageModal, setShowStorageModal] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [currentTime, setCurrentTime] = useState<number>(0);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -211,6 +214,52 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
       alert(`Limpeza FIFO executada! ${toDelete.length} gravação(ões) mais antiga(s) foi(ram) excluída(s) para manter o limite de ${storageLimitGB} GB.`);
     } else {
       alert(`O uso de armazenamento (${totalStorageGB.toFixed(2)} GB) está dentro do limite de ${storageLimitGB} GB. Nenhuma ação necessária.`);
+    }
+  };
+
+  const isAllFilteredSelected = useMemo(() => {
+    if (filteredRecordings.length === 0) return false;
+    return filteredRecordings.every((r) => selectedIds.includes(r.id));
+  }, [filteredRecordings, selectedIds]);
+
+  const toggleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      const filteredSet = new Set(filteredRecordings.map((r) => r.id));
+      setSelectedIds((prev) => prev.filter((id) => !filteredSet.has(id)));
+    } else {
+      const filteredIds = filteredRecordings.map((r) => r.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    if (confirm(`Deseja excluir permanentemente as ${selectedIds.length} gravações selecionadas?`)) {
+      if (onDeleteRecordingsBatch) {
+        onDeleteRecordingsBatch(selectedIds);
+      } else {
+        selectedIds.forEach((id) => onDeleteRecording(id));
+      }
+      setSelectedIds([]);
+    }
+  };
+
+  const handleDeleteAllFiltered = () => {
+    if (filteredRecordings.length === 0) return;
+    const allIds = filteredRecordings.map((r) => r.id);
+    if (confirm(`ATENÇÃO: Deseja excluir permanentemente TODAS as ${allIds.length} gravações listadas?`)) {
+      if (onDeleteRecordingsBatch) {
+        onDeleteRecordingsBatch(allIds);
+      } else {
+        allIds.forEach((id) => onDeleteRecording(id));
+      }
+      setSelectedIds([]);
     }
   };
 
@@ -651,15 +700,64 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
             </div>
           </div>
 
+          {/* Batch Actions & Selection Bar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="flex items-center space-x-2 text-xs font-bold text-slate-200 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllFilteredSelected}
+                  onChange={toggleSelectAllFiltered}
+                  className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+                />
+                <span>Marcar Todas ({filteredRecordings.length})</span>
+              </label>
+
+              {selectedIds.length > 0 && (
+                <span className="text-[11px] font-mono text-emerald-400">
+                  {selectedIds.length} selecionada(s)
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={handleDeleteSelected}
+                disabled={selectedIds.length === 0}
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition ${
+                  selectedIds.length > 0
+                    ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-lg'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Selecionadas ({selectedIds.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteAllFiltered}
+                disabled={filteredRecordings.length === 0}
+                className="py-1.5 px-2.5 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center space-x-1 transition shrink-0"
+                title="Excluir todas as gravações atualmente visíveis nos filtros"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Excluir Todas</span>
+              </button>
+            </div>
+          </div>
+
           {/* Recordings List */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 space-y-2 max-h-[480px] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 space-y-2 max-h-[440px] overflow-y-auto">
             {filteredRecordings.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-500">
                 Nenhuma fatia de 5 min encontrada com os filtros selecionados.
               </div>
             ) : (
               filteredRecordings.map((rec) => {
-                const isSelected = activeRecording?.id === rec.id;
+                const isActive = activeRecording?.id === rec.id;
+                const isChecked = selectedIds.includes(rec.id);
                 const recCam = cameras.find((c) => c.id === rec.cameraId || c.name === rec.cameraName);
                 const thumbUrl = recCam?.thumbnailUrl || rec.thumbnailUrl;
 
@@ -672,18 +770,31 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                       setIsPlaying(true);
                     }}
                     className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-3 ${
-                      isSelected
+                      isActive
                         ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
+                        : isChecked
+                        ? 'bg-slate-800/80 border-slate-700 text-slate-200'
                         : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
                     }`}
                   >
-                    <div className="flex items-center space-x-3 truncate">
+                    <div className="flex items-center space-x-2.5 truncate">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelectOne(rec.id);
+                        }}
+                        className="w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"
+                      />
+
                       <div className="relative shrink-0">
-                        <img src={thumbUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-800" />
+                        <img src={thumbUrl} className="w-11 h-11 rounded-lg object-cover border border-slate-800" />
                         <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-slate-950 text-[8px] font-black px-1 rounded border border-slate-950">
                           5m
                         </span>
                       </div>
+
                       <div className="truncate">
                         <h5 className="font-bold text-xs truncate text-white">{rec.cameraName}</h5>
                         <p className="text-[10px] font-mono text-slate-400">{rec.startTime}</p>

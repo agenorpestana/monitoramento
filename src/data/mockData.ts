@@ -111,68 +111,32 @@ export const INITIAL_CAMERAS: Camera[] = [
   },
 ];
 
-const getRecentTimeString = (minutesAgo: number): string => {
-  const d = new Date(Date.now() - minutesAgo * 60 * 1000);
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-};
-
 export const INITIAL_ALERTS: MotionAlert[] = [];
 
-export const INITIAL_RECORDINGS: CloudRecording[] = [
-  {
-    id: 'rec-5min-01',
-    cameraId: 'cam-wpg8tz',
-    cameraName: 'Prado 11 - Portaria Principal',
-    startTime: getRecentTimeString(10),
-    endTime: getRecentTimeString(5),
-    durationSeconds: 300,
-    fileSizeMB: 48,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    isE2EELocked: true,
-    tags: ['Fatia 5 Min', 'Portaria Principal', 'Gravação Nuvem E2EE'],
-  },
-  {
-    id: 'rec-5min-02',
-    cameraId: 'cam-wpg8tz',
-    cameraName: 'Prado 11 - Portaria Principal',
-    startTime: getRecentTimeString(15),
-    endTime: getRecentTimeString(10),
-    durationSeconds: 300,
-    fileSizeMB: 50,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    isE2EELocked: true,
-    tags: ['Fatia 5 Min', 'Portaria Principal', 'Gravação Nuvem E2EE'],
-  },
-  {
-    id: 'rec-5min-03',
-    cameraId: 'cam-jvv51l',
-    cameraName: 'Câmera Pátio Central',
-    startTime: getRecentTimeString(10),
-    endTime: getRecentTimeString(5),
-    durationSeconds: 300,
-    fileSizeMB: 52,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    isE2EELocked: true,
-    tags: ['Fatia 5 Min', 'Pátio Central', 'Gravação Nuvem E2EE'],
-  },
-  {
-    id: 'rec-5min-04',
-    cameraId: 'cam-v7w3f8',
-    cameraName: 'Câmera Estacionamento Visitantes',
-    startTime: getRecentTimeString(15),
-    endTime: getRecentTimeString(10),
-    durationSeconds: 300,
-    fileSizeMB: 46,
-    thumbnailUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b2?w=800',
-    streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-    isE2EELocked: true,
-    tags: ['Fatia 5 Min', 'Estacionamento', 'Gravação Nuvem E2EE'],
-  },
-];
+export const INITIAL_RECORDINGS: CloudRecording[] = INITIAL_CAMERAS.flatMap((cam, camIndex) => {
+  const now = new Date();
+  return [1, 2, 3].map((i) => {
+    const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000 - camIndex * 2 * 60 * 1000);
+    const startD = new Date(now.getTime() - i * 5 * 60 * 1000 - camIndex * 2 * 60 * 1000);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const startTime = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())} ${pad(startD.getHours())}:${pad(startD.getMinutes())}:${pad(startD.getSeconds())}`;
+    const endTime = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())} ${pad(endD.getHours())}:${pad(endD.getMinutes())}:${pad(endD.getSeconds())}`;
+
+    return {
+      id: `rec-5min-${cam.id}-${i}`,
+      cameraId: cam.id,
+      cameraName: cam.name,
+      startTime,
+      endTime,
+      durationSeconds: 300,
+      fileSizeMB: Math.floor(Math.random() * 12) + 42,
+      thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+      streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      isE2EELocked: true,
+      tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
+    };
+  });
+});
 
 export const INITIAL_LOGS: ActivityLog[] = [
   {

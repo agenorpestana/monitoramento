@@ -1257,6 +1257,17 @@ async function startServer() {
     res.json({ success: true });
   });
 
+  app.post('/api/recordings/batch-delete', (req, res) => {
+    const { ids } = req.body;
+    if (Array.isArray(ids) && ids.length > 0) {
+      const idSet = new Set(ids);
+      recordings = recordings.filter((r) => !idSet.has(r.id));
+      saveToLocalFile();
+      addLog('ITL Admin', `${ids.length} gravações em nuvem excluídas em lote`, 'RECORDING');
+    }
+    res.json({ success: true });
+  });
+
   // Users & Permissions
   app.get('/api/users', (req, res) => {
     res.json(users);
