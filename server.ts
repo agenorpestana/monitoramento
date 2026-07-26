@@ -166,6 +166,13 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Setup directory for real recorded video streams
+  const recordingsDir = path.join(process.cwd(), 'public', 'recordings');
+  if (!fs.existsSync(recordingsDir)) {
+    try { fs.mkdirSync(recordingsDir, { recursive: true }); } catch (e) {}
+  }
+  app.use('/recordings', express.static(recordingsDir));
+
   // Database Connection Pool Setup
   let pool: mysql.Pool | null = null;
   let isMysqlActive = false;
@@ -180,52 +187,23 @@ async function startServer() {
   let notificationConfig: NotificationConfig = { ...INITIAL_NOTIFICATION_CONFIG };
   const deletedRecordingIds = new Set<string>();
 
+  // Real Active Recording Sessions Tracker
+  interface ActiveRecordingSession {
+    sessionId: string;
+    cameraId: string;
+    cameraName: string;
+    streamUrl: string;
+    startTime: Date;
+    startTimeStr: string;
+    outputPath: string;
+    relativeUrl: string;
+    process: ReturnType<typeof spawn>;
+  }
+  const activeRecordings = new Map<string, ActiveRecordingSession>();
+
   const pad2 = (n: number) => n.toString().padStart(2, '0');
   const formatDateTime = (d: Date) =>
     `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-
-  const recordActiveCameraStreams = () => {
-    const now = new Date();
-    let updated = false;
-
-    cameras.forEach((cam) => {
-      if (cam.cloudRecordingsActive === false) return;
-
-      const camRecs = recordings.filter((r) => r.cameraId === cam.id || r.cameraName === cam.name);
-
-      if (camRecs.length < 8) {
-        for (let i = 1; i <= 8; i++) {
-          const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000);
-          const startD = new Date(now.getTime() - i * 5 * 60 * 1000);
-          const recId = `rec-cloud-${cam.id}-${startD.getTime()}`;
-
-          if (!deletedRecordingIds.has(recId) && !recordings.some((r) => r.id === recId)) {
-            const stream = cam.fullRtmpUrl || (cam.streamKey ? `/live/${cam.streamKey}.m3u8` : `http://monitoramento.unityautomacoes.com.br:1935/live/${cam.id}/playlist.m3u8`);
-            const newSlice: CloudRecording = {
-              id: recId,
-              cameraId: cam.id,
-              cameraName: cam.name,
-              startTime: formatDateTime(startD),
-              endTime: formatDateTime(endD),
-              durationSeconds: 300,
-              fileSizeMB: 40 + Math.floor((cam.id.charCodeAt(0) || 0) % 15),
-              thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-              streamUrl: stream,
-              isE2EELocked: cam.isE2EEEncrypted ?? true,
-              tags: ['Fatia 5 Min', 'Gravação Nuvem HD', cam.location || 'Central ITL'],
-            };
-            recordings.unshift(newSlice);
-            updated = true;
-          }
-        }
-      }
-    });
-
-    if (updated) {
-      recordings.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
-      saveToLocalFile();
-    }
-  };
 
   // Helper function to save snapshot to local file store
   const saveToLocalFile = () => {
@@ -254,7 +232,15 @@ async function startServer() {
         if (parsed.cameras && Array.isArray(parsed.cameras)) cameras = parsed.cameras;
         if (parsed.alerts && Array.isArray(parsed.alerts)) alerts = parsed.alerts;
         if (parsed.recordings && Array.isArray(parsed.recordings)) {
-          recordings = parsed.recordings.filter((r: any) => !r.id || !r.id.startsWith('rec-5min-'));
+          // Strictly exclude legacy mock auto-generated items
+          recordings = parsed.recordings.filter(
+            (r: any) =>
+              r.id &&
+              !r.id.startsWith('rec-5min-') &&
+              !r.id.startsWith('rec-cloud-') &&
+              !r.id.startsWith('rec-partial-') &&
+              !deletedRecordingIds.has(r.id)
+          );
         }
         if (parsed.users && Array.isArray(parsed.users)) users = parsed.users;
         if (parsed.logs && Array.isArray(parsed.logs)) logs = parsed.logs;
@@ -586,12 +572,6 @@ async function startServer() {
 
   // Start FFmpeg streams for RTSP cameras
   cameras.forEach((c) => startCameraRtspStream(c));
-
-  // Initialize and run continuous cloud recorder loop
-  recordActiveCameraStreams();
-  setInterval(() => {
-    recordActiveCameraStreams();
-  }, 30000);
 
   // Helper log function
   const addLog = (userName: string, action: string, category: ActivityLog['category'], details?: string) => {
@@ -1199,14 +1179,161 @@ async function startServer() {
     res.json({ success: true, alert });
   });
 
-  // Recordings
+  // Recordings Endpoints (Real Stream Capture Engine for RTMP, RTSP & HLS)
   app.get('/api/recordings', (req, res) => {
     res.json(recordings);
+  });
+
+  app.get('/api/recordings/active', (req, res) => {
+    const list = Array.from(activeRecordings.values()).map((s) => ({
+      sessionId: s.sessionId,
+      cameraId: s.cameraId,
+      cameraName: s.cameraName,
+      startTime: s.startTimeStr,
+      elapsedSeconds: Math.round((Date.now() - s.startTime.getTime()) / 1000),
+    }));
+    res.json(list);
+  });
+
+  app.post('/api/recordings/start', (req, res) => {
+    const { cameraId, durationSeconds } = req.body;
+    const cam = cameras.find((c) => c.id === cameraId || c.streamKey === cameraId);
+    if (!cam) return res.status(404).json({ error: 'Câmera não encontrada' });
+
+    if (activeRecordings.has(cam.id)) {
+      return res.status(400).json({ error: 'Já existe uma gravação real ativa para esta câmera' });
+    }
+
+    const streamUrl = getValidStreamSource(cam);
+    if (!streamUrl) {
+      return res.status(400).json({ error: 'Sinal de transmissão ao vivo indisponível para esta câmera' });
+    }
+
+    const now = new Date();
+    const timestamp = Date.now();
+    const cleanCamId = cam.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `rec_${cleanCamId}_${timestamp}.mp4`;
+    const outputPath = path.join(recordingsDir, fileName);
+    const relativeUrl = `/recordings/${fileName}`;
+
+    const ffmpegArgs: string[] = [];
+    if (streamUrl.startsWith('rtsp://')) {
+      ffmpegArgs.push('-rtsp_transport', 'tcp');
+    }
+
+    ffmpegArgs.push(
+      '-y',
+      '-analyzeduration', '2000000',
+      '-probesize', '2000000',
+      '-i', streamUrl,
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-movflags', '+faststart'
+    );
+
+    const durLimit = durationSeconds ? Math.min(3600, Math.max(10, parseInt(durationSeconds))) : 300;
+    ffmpegArgs.push('-t', durLimit.toString());
+    ffmpegArgs.push(outputPath);
+
+    console.log(`[FFmpeg Real Recorder] Iniciando gravação ao vivo da câmera '${cam.name}' em ${outputPath}...`);
+    const proc = spawn('ffmpeg', ffmpegArgs);
+
+    const sessionId = `session-${cam.id}-${timestamp}`;
+    const session: ActiveRecordingSession = {
+      sessionId,
+      cameraId: cam.id,
+      cameraName: cam.name,
+      streamUrl,
+      startTime: now,
+      startTimeStr: formatDateTime(now),
+      outputPath,
+      relativeUrl,
+      process: proc,
+    };
+
+    const finalizeRecording = () => {
+      if (!activeRecordings.has(cam.id)) return;
+      activeRecordings.delete(cam.id);
+
+      const endTime = new Date();
+      const durationSec = Math.max(1, Math.round((endTime.getTime() - now.getTime()) / 1000));
+      let fileSizeMB = 12.5;
+      try {
+        if (fs.existsSync(outputPath)) {
+          const stats = fs.statSync(outputPath);
+          fileSizeMB = Math.max(0.1, +(stats.size / (1024 * 1024)).toFixed(1));
+        }
+      } catch (e) {}
+
+      const newRec: CloudRecording = {
+        id: `rec-real-${cam.id}-${timestamp}`,
+        cameraId: cam.id,
+        cameraName: cam.name,
+        startTime: formatDateTime(now),
+        endTime: formatDateTime(endTime),
+        durationSeconds: durationSec,
+        fileSizeMB,
+        thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+        streamUrl: relativeUrl,
+        isE2EELocked: cam.isE2EEEncrypted ?? true,
+        tags: ['Gravação Real Ao Vivo', 'RTMP/RTSP/HLS', cam.location || 'Central ITL'],
+      };
+
+      recordings.unshift(newRec);
+      saveToLocalFile();
+      addLog('ITL System', `Gravação real concluída para câmera ${cam.name} (${durationSec}s)`, 'RECORDING');
+    };
+
+    proc.on('close', (code) => {
+      console.log(`[FFmpeg Real Recorder] Concluída gravação real com código ${code}`);
+      finalizeRecording();
+    });
+
+    proc.on('error', (err) => {
+      console.error(`[FFmpeg Real Recorder] Erro FFmpeg:`, err);
+      finalizeRecording();
+    });
+
+    activeRecordings.set(cam.id, session);
+
+    addLog('ITL Admin', `Iniciada gravação real ao vivo da câmera ${cam.name}`, 'RECORDING');
+    res.json({
+      success: true,
+      message: `Gravação real ao vivo iniciada para ${cam.name}`,
+      sessionId,
+      cameraId: cam.id,
+      startTime: session.startTimeStr,
+    });
+  });
+
+  app.post('/api/recordings/stop', (req, res) => {
+    const { cameraId } = req.body;
+    if (!cameraId) return res.status(400).json({ error: 'cameraId é obrigatório' });
+
+    const session = activeRecordings.get(cameraId);
+    if (!session) {
+      return res.status(404).json({ error: 'Nenhuma gravação ativa encontrada para esta câmera' });
+    }
+
+    try {
+      session.process.kill('SIGINT');
+    } catch (e) {
+      try { session.process.kill('SIGKILL'); } catch (err) {}
+    }
+
+    res.json({ success: true, message: `Gravação ao vivo interrompida e finalizada para ${session.cameraName}` });
   });
 
   app.delete('/api/recordings/:id', (req, res) => {
     const { id } = req.params;
     deletedRecordingIds.add(id);
+    const target = recordings.find((r) => r.id === id);
+    if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
+      const fullFilePath = path.join(process.cwd(), 'public', target.streamUrl);
+      if (fs.existsSync(fullFilePath)) {
+        try { fs.unlinkSync(fullFilePath); } catch (e) {}
+      }
+    }
     recordings = recordings.filter((r) => r.id !== id);
     saveToLocalFile();
     addLog('ITL Admin', `Gravação em nuvem excluída: ${id}`, 'RECORDING');
@@ -1217,7 +1344,16 @@ async function startServer() {
     const { ids } = req.body;
     if (Array.isArray(ids) && ids.length > 0) {
       const idSet = new Set(ids);
-      ids.forEach((id: string) => deletedRecordingIds.add(id));
+      ids.forEach((id: string) => {
+        deletedRecordingIds.add(id);
+        const target = recordings.find((r) => r.id === id);
+        if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
+          const fullFilePath = path.join(process.cwd(), 'public', target.streamUrl);
+          if (fs.existsSync(fullFilePath)) {
+            try { fs.unlinkSync(fullFilePath); } catch (e) {}
+          }
+        }
+      });
       recordings = recordings.filter((r) => !idSet.has(r.id));
       saveToLocalFile();
       addLog('ITL Admin', `${ids.length} gravações em nuvem excluídas em lote`, 'RECORDING');

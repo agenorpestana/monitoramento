@@ -18,7 +18,10 @@ import {
   X,
   AlertTriangle,
   RotateCcw,
-  Shield
+  Shield,
+  Radio,
+  Square,
+  Video
 } from 'lucide-react';
 import { CloudRecording, User, Camera } from '../types';
 
@@ -58,6 +61,15 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
+  // Live Stream Recording Engine States
+  const [targetRecordingCamId, setTargetRecordingCamId] = useState<string>('');
+  const [selectedDuration, setSelectedDuration] = useState<number>(300);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [activeSessionCamName, setActiveSessionCamName] = useState<string>('');
+  const [recordingElapsedSec, setRecordingElapsedSec] = useState<number>(0);
+  const [recordingStatusMsg, setRecordingStatusMsg] = useState<string>('');
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Filter cameras accessible to the current user according to permissions
@@ -66,6 +78,82 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
     if (!activeUser.allowedCameraIds || activeUser.allowedCameraIds.includes('ALL')) return cameras;
     return cameras.filter((c) => activeUser.allowedCameraIds.includes(c.id));
   }, [cameras, activeUser]);
+
+  // Set default target camera for real recording
+  useEffect(() => {
+    if (userAccessibleCameras.length > 0 && !targetRecordingCamId) {
+      setTargetRecordingCamId(userAccessibleCameras[0].id);
+    }
+  }, [userAccessibleCameras, targetRecordingCamId]);
+
+  // Poll active recording status from backend
+  const checkActiveRecordings = async () => {
+    try {
+      const res = await fetch('/api/recordings/active');
+      const activeList = await res.json();
+      if (Array.isArray(activeList) && activeList.length > 0) {
+        const current = activeList[0];
+        setIsRecording(true);
+        setActiveSessionCamName(current.cameraName);
+        setRecordingElapsedSec(current.elapsedSeconds || 0);
+      } else {
+        setIsRecording(false);
+        setActiveSessionCamName('');
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    checkActiveRecordings();
+    const interval = setInterval(checkActiveRecordings, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStartRealRecording = async () => {
+    if (!targetRecordingCamId) return;
+    setRecordingError(null);
+    setRecordingStatusMsg('Conectando ao fluxo RTMP/RTSP da câmera...');
+    try {
+      const res = await fetch('/api/recordings/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cameraId: targetRecordingCamId,
+          durationSeconds: selectedDuration,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsRecording(true);
+        setRecordingStatusMsg(`Gravação iniciada em tempo real para a câmera selecionada.`);
+        checkActiveRecordings();
+      } else {
+        setRecordingError(data.error || 'Erro ao iniciar gravação.');
+        setRecordingStatusMsg('');
+      }
+    } catch (e: any) {
+      setRecordingError('Servidor de gravação inacessível.');
+      setRecordingStatusMsg('');
+    }
+  };
+
+  const handleStopRealRecording = async () => {
+    setRecordingStatusMsg('Finalizando gravação e salvando arquivo MP4 no cofre...');
+    try {
+      const res = await fetch('/api/recordings/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cameraId: targetRecordingCamId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsRecording(false);
+        setRecordingStatusMsg('Gravação finalizada e salva com sucesso!');
+        setTimeout(() => setRecordingStatusMsg(''), 4000);
+        checkActiveRecordings();
+      }
+    } catch (e) {}
+  };
 
   // Filter recordings strictly for user accessible cameras
   const effectiveRecordings = useMemo(() => {
@@ -330,7 +418,82 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
         </div>
       </div>
 
-      {/* Storage & FIFO Limit Modal */}
+      {/* Real Stream Recording Control Panel */}
+      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
+              Gravação de Transmissão Real Ao Vivo (RTMP / RTSP / HLS)
+            </h3>
+            <p className="text-xs text-slate-400">
+              Grave o sinal real da câmera ativa para criar arquivos MP4 armazenados no cofre.
+            </p>
+          </div>
+
+          {isRecording ? (
+            <div className="flex items-center gap-3 bg-rose-950/60 border border-rose-500/50 px-3 py-1.5 rounded-xl">
+              <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping" />
+              <div className="text-xs font-mono">
+                <span className="text-rose-400 font-bold uppercase">Gravando Real: </span>
+                <span className="text-white font-semibold">{activeSessionCamName || 'Câmera Selecionada'}</span>
+                <span className="text-slate-400 ml-2">({Math.floor(recordingElapsedSec / 60).toString().padStart(2, '0')}:{(recordingElapsedSec % 60).toString().padStart(2, '0')}s)</span>
+              </div>
+              <button
+                onClick={handleStopRealRecording}
+                className="ml-auto px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition shadow-lg"
+              >
+                <Square className="w-3 h-3 fill-current" />
+                <span>Parar e Salvar</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={targetRecordingCamId}
+                onChange={(e) => setTargetRecordingCamId(e.target.value)}
+                className="bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs outline-none focus:border-emerald-500"
+              >
+                {userAccessibleCameras.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    🎥 {c.name} ({c.protocol || 'RTMP'})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedDuration}
+                onChange={(e) => setSelectedDuration(parseInt(e.target.value))}
+                className="bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs outline-none focus:border-emerald-500"
+              >
+                <option value={60}>1 minuto</option>
+                <option value={300}>5 minutos</option>
+                <option value={600}>10 minutos</option>
+                <option value={1800}>30 minutos</option>
+              </select>
+
+              <button
+                onClick={handleStartRealRecording}
+                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 transition"
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Iniciar Gravação Real</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {recordingStatusMsg && (
+          <p className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" /> {recordingStatusMsg}
+          </p>
+        )}
+        {recordingError && (
+          <p className="text-xs text-rose-400 font-mono flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" /> {recordingError}
+          </p>
+        )}
+      </div>
       {showStorageModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
@@ -562,12 +725,22 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
               </div>
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
-              <CameraIcon className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-500" />
-              <p className="font-medium text-slate-300">Nenhuma gravação em nuvem encontrada</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Ajuste os filtros de busca ou verifique se as câmeras estão ativas e autorizadas.
-              </p>
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400 space-y-3">
+              <Video className="w-12 h-12 mx-auto text-emerald-500/50" />
+              <div>
+                <p className="font-bold text-slate-200 text-sm">Nenhum bloco de gravação no cofre</p>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                  Os dados fictícios foram permanentemente desativados. Para gravar um clipe real, utilize o painel superior "Gravação de Transmissão Real Ao Vivo" para selecionar uma câmera e gravar o fluxo RTMP/RTSP em tempo real.
+                </p>
+              </div>
+              <button
+                onClick={handleStartRealRecording}
+                disabled={isRecording}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg inline-flex items-center gap-2 transition"
+              >
+                <Radio className="w-4 h-4 animate-pulse" />
+                <span>Iniciar Gravação Real Agora</span>
+              </button>
             </div>
           )}
         </div>
