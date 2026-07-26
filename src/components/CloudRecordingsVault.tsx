@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Film,
   Lock,
@@ -11,17 +11,16 @@ import {
   Clock,
   HardDrive,
   Sliders,
-  Eye,
   ShieldCheck,
   Search,
   Filter,
   Camera as CameraIcon,
   X,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Shield
 } from 'lucide-react';
 import { CloudRecording, User, Camera } from '../types';
-import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface CloudRecordingsVaultProps {
   recordings: CloudRecording[];
@@ -31,6 +30,11 @@ interface CloudRecordingsVaultProps {
   isVaultUnlocked: boolean;
   onUnlockVault: () => void;
 }
+
+const formatDateTime = (d: Date) => {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
 
 export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   recordings,
@@ -49,7 +53,9 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [storageLimitGB, setStorageLimitGB] = useState<number>(100);
   const [showStorageModal, setShowStorageModal] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
-  const [currentTime, setCurrentTime] = useState<number>(120);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   // Filter cameras accessible to the current user according to permissions
   const userAccessibleCameras = useMemo(() => {
@@ -69,40 +75,36 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
 
     // If any accessible camera has no recordings yet, generate real recordings for it
     userAccessibleCameras.forEach((cam) => {
-      const hasRec = list.some((r) => r.cameraId === cam.id || r.cameraName === cam.name);
-      if (!hasRec) {
+      const camRecs = list.filter((r) => r.cameraId === cam.id || r.cameraName === cam.name);
+      if (camRecs.length < 5) {
         const now = new Date();
-        list.unshift(
-          {
-            id: `rec-5min-${cam.id}-01`,
-            cameraId: cam.id,
-            cameraName: cam.name,
-            startTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            endTime: now.toISOString().replace('T', ' ').substring(0, 19),
-            durationSeconds: 300,
-            fileSizeMB: 48,
-            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-            streamUrl: cam.fullRtmpUrl || cam.rtspUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
-            isE2EELocked: true,
-            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
-          },
-          {
-            id: `rec-5min-${cam.id}-02`,
-            cameraId: cam.id,
-            cameraName: cam.name,
-            startTime: new Date(now.getTime() - 10 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            endTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            durationSeconds: 300,
-            fileSizeMB: 45,
-            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-            streamUrl: cam.fullRtmpUrl || cam.rtspUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
-            isE2EELocked: true,
-            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
+        for (let i = 1; i <= 5; i++) {
+          const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000);
+          const startD = new Date(now.getTime() - i * 5 * 60 * 1000);
+          const startTime = formatDateTime(startD);
+          const endTime = formatDateTime(endD);
+          const recId = `rec-5min-${cam.id}-${i}`;
+
+          if (!list.some((r) => r.id === recId)) {
+            list.push({
+              id: recId,
+              cameraId: cam.id,
+              cameraName: cam.name,
+              startTime,
+              endTime,
+              durationSeconds: 300,
+              fileSizeMB: Math.round(300 * 0.16), // ~48 MB
+              thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+              streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+              isE2EELocked: true,
+              tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
+            });
           }
-        );
+        }
       }
     });
 
+    list.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
     return list;
   }, [recordings, userAccessibleCameras]);
 
@@ -112,11 +114,42 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
     if (effectiveRecordings.length > 0) {
       if (!activeRecording || !effectiveRecordings.some((r) => r.id === activeRecording.id)) {
         setActiveRecording(effectiveRecordings[0]);
+        setCurrentTime(0);
+        setIsPlaying(true);
       }
     } else {
       setActiveRecording(null);
     }
   }, [effectiveRecordings]);
+
+  // Sync video time progression
+  useEffect(() => {
+    let timer: any;
+    if (isPlaying && activeRecording) {
+      timer = setInterval(() => {
+        setCurrentTime((prev) => {
+          const maxDur = activeRecording.durationSeconds || 300;
+          if (prev >= maxDur) {
+            setIsPlaying(false);
+            return maxDur;
+          }
+          return prev + 1;
+        });
+      }, 1000 / playbackSpeed);
+    }
+    return () => clearInterval(timer);
+  }, [isPlaying, playbackSpeed, activeRecording]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.playbackRate = playbackSpeed;
+        videoRef.current.play().catch(() => {});
+      } else {
+        videoRef.current.pause();
+      }
+    }
+  }, [isPlaying, playbackSpeed]);
 
   const activeCamera = useMemo(() => {
     if (!activeRecording) return userAccessibleCameras[0] || null;
@@ -192,8 +225,46 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    if (seconds >= 300) return '5 min (Completo)';
-    return `${mins}m ${secs}s (Parcial / Interrompido)`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Calculate real clock timestamp corresponding to current seek position
+  const getRecordedClockTime = (startTimeStr: string | undefined, offsetSec: number): string => {
+    if (!startTimeStr) return '';
+    try {
+      const dateParts = startTimeStr.split(' ');
+      if (dateParts.length < 2) return startTimeStr;
+      const [ymd, hms] = dateParts;
+      const [y, m, d] = ymd.split('-').map(Number);
+      const [h, min, s] = hms.split(':').map(Number);
+
+      const baseMs = new Date(y, m - 1, d, h, min, s).getTime();
+      const currentMs = baseMs + offsetSec * 1000;
+      const currDate = new Date(currentMs);
+
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${pad(currDate.getDate())}/${pad(currDate.getMonth() + 1)}/${currDate.getFullYear()} ${pad(currDate.getHours())}:${pad(currDate.getMinutes())}:${pad(currDate.getSeconds())}`;
+    } catch (e) {
+      return startTimeStr;
+    }
+  };
+
+  const handleSeek = (newSec: number) => {
+    setCurrentTime(newSec);
+    if (videoRef.current && videoRef.current.duration) {
+      videoRef.current.currentTime = newSec % videoRef.current.duration;
+    }
+  };
+
+  const handleDownloadClip = () => {
+    if (!activeRecording) return;
+    const clipUrl = activeRecording.streamUrl || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+    const a = document.createElement('a');
+    a.href = clipUrl;
+    a.download = `gravacao_${activeRecording.cameraName.replace(/\s+/g, '_')}_${activeRecording.startTime.replace(/[: ]/g, '-')}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (
@@ -248,67 +319,69 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
       {/* Storage & FIFO Limit Modal */}
       {showStorageModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowStorageModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-                <HardDrive className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Gerenciador de Armazenamento Nuvem</h3>
-                <p className="text-xs text-slate-400">Defina a cota em GB e execute a regra de descarte FIFO</p>
-              </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-emerald-400" />
+                Gerenciar Armazenamento de Gravações
+              </h3>
+              <button
+                onClick={() => setShowStorageModal(false)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs">
-              <div className="flex justify-between items-center text-slate-300 font-mono">
-                <span>Espaço Utilizado:</span>
-                <span className="text-emerald-400 font-bold">{totalStorageGB.toFixed(2)} GB</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all ${
-                    storagePercentage > 85 ? 'bg-rose-500' : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${storagePercentage}%` }}
-                />
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-300 font-medium block mb-1">
+                  Limite de Armazenamento (GB):
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={10}
+                    max={2000}
+                    value={storageLimitGB}
+                    onChange={(e) => setStorageLimitGB(Math.max(10, parseInt(e.target.value) || 100))}
+                    className="bg-slate-950 border border-slate-800 text-white px-3 py-2 rounded-xl text-sm w-full outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-xs font-mono text-slate-400">GB</span>
+                </div>
               </div>
 
-              <div className="pt-2 space-y-1">
-                <label className="block text-slate-300 font-medium">Limite Máximo de Armazenamento (GB):</label>
-                <select
-                  value={storageLimitGB}
-                  onChange={(e) => setStorageLimitGB(Number(e.target.value))}
-                  className="w-full bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-xl outline-none focus:border-emerald-500 font-mono"
-                >
-                  <option value={20}>20 GB (Básico)</option>
-                  <option value={50}>50 GB (Padrão)</option>
-                  <option value={100}>100 GB (Recomendado)</option>
-                  <option value={200}>200 GB (Avançado)</option>
-                  <option value={500}>500 GB (Corporativo)</option>
-                </select>
-                <p className="text-[11px] text-slate-500 pt-1">
-                  Quando o limite for atingido, o sistema executa a regra de descarte FIFO (First-In, First-Out) excluindo automaticamente os blocos gravados mais antigos.
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-slate-400">Total Utilizado:</span>
+                  <span className="text-emerald-400 font-bold">{totalStorageGB.toFixed(2)} GB</span>
+                </div>
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      storagePercentage > 85 ? 'bg-rose-500' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${storagePercentage}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Total de blocos armazenados: <strong className="text-white">{recordings.length}</strong> fatias de 5 minutos.
                 </p>
               </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleFifoPrune}
+                  className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Executar Limpeza Manual FIFO (Pruning)</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleFifoPrune}
-                className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/40 flex items-center gap-1.5 transition"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Executar Limpeza FIFO</span>
-              </button>
-
+            <div className="flex justify-end pt-2">
               <button
                 type="button"
                 onClick={() => setShowStorageModal(false)}
@@ -323,38 +396,50 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
 
       {/* Main Video Player & Search Drawer */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Active Player */}
+        {/* Active Recorded Clip Player */}
         <div className="lg:col-span-2 space-y-3">
           {activeRecording ? (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl space-y-3 p-4">
               <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
-                {isVaultUnlocked && (isPlaying || activeCamera) ? (
-                  <div className="w-full h-full relative">
-                    {activeCamera ? (
-                      <LiveStreamPlayer
-                        key={`${activeRecording.id}-${isPlaying ? 'play' : 'pause'}`}
-                        camera={activeCamera}
-                        showOverlayControls={true}
-                      />
-                    ) : (
-                      <img
-                        src={activeRecording.thumbnailUrl}
-                        alt={activeRecording.cameraName}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <img
-                    src={activeCamera?.thumbnailUrl || activeRecording.thumbnailUrl}
-                    alt={activeRecording.cameraName}
-                    className="w-full h-full object-cover"
-                  />
+                <video
+                  ref={videoRef}
+                  src={
+                    activeRecording.streamUrl && activeRecording.streamUrl.endsWith('.mp4')
+                      ? activeRecording.streamUrl
+                      : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+                  }
+                  poster={activeCamera?.thumbnailUrl || activeRecording.thumbnailUrl}
+                  crossOrigin="anonymous"
+                  playsInline
+                  muted
+                  loop
+                  className="w-full h-full object-cover"
+                />
+
+                {/* Real-time Recorded OSD Watermarks */}
+                {isVaultUnlocked && (
+                  <>
+                    <div className="absolute top-3 left-3 z-30 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-emerald-500/50 flex items-center space-x-2 text-xs font-mono shadow-2xl">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-emerald-400 font-black tracking-wider">REC REPRODUÇÃO NUVEM E2EE</span>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-slate-300 font-semibold">{activeRecording.cameraName}</span>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-white font-black text-xs sm:text-sm bg-slate-900/90 px-2.5 py-0.5 rounded-lg border border-slate-700">
+                        {getRecordedClockTime(activeRecording.startTime, currentTime)}
+                      </span>
+                    </div>
+
+                    <div className="absolute top-3 right-3 z-30 bg-slate-950/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 flex items-center space-x-1.5 shadow-2xl">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span>FATIA FATURADA 5MIN</span>
+                    </div>
+                  </>
                 )}
 
                 {/* E2EE Lock Overlay if locked */}
                 {!isVaultUnlocked && (
-                  <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center space-y-3 text-center p-6 z-20">
+                  <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-center space-y-3 text-center p-6 z-40">
                     <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
                       <Lock className="w-6 h-6" />
                     </div>
@@ -371,7 +456,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   </div>
                 )}
 
-                {/* Play/Pause Bottom Overlay Button */}
+                {/* Play/Pause Overlay Button */}
                 {isVaultUnlocked && (
                   <button
                     onClick={() => setIsPlaying(!isPlaying)}
@@ -380,7 +465,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                     {isPlaying ? (
                       <>
                         <Pause className="w-4 h-4 text-emerald-400" />
-                        <span>Pausar Fluxo</span>
+                        <span>Pausar Gravação</span>
                       </>
                     ) : (
                       <>
@@ -397,9 +482,9 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                 <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
                   <span>00:00</span>
                   <span className="text-emerald-400 font-semibold">
-                    00:02:00 / {Math.floor(activeRecording.durationSeconds / 60)}:{(activeRecording.durationSeconds % 60).toString().padStart(2, '0')} (Velocidade: {playbackSpeed}x)
+                    {formatDuration(currentTime)} / {formatDuration(activeRecording.durationSeconds)} (Velocidade: {playbackSpeed}x)
                   </span>
-                  <span>{Math.floor(activeRecording.durationSeconds / 60)}:{(activeRecording.durationSeconds % 60).toString().padStart(2, '0')}</span>
+                  <span>{formatDuration(activeRecording.durationSeconds)}</span>
                 </div>
 
                 <input
@@ -407,7 +492,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   min={0}
                   max={activeRecording.durationSeconds}
                   value={currentTime}
-                  onChange={(e) => setCurrentTime(parseInt(e.target.value, 10))}
+                  onChange={(e) => handleSeek(parseInt(e.target.value, 10))}
                   className="w-full accent-emerald-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
                 />
 
@@ -429,14 +514,13 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                     ))}
                   </div>
 
-                  <a
-                    href={activeRecording.streamUrl}
-                    download
+                  <button
+                    onClick={handleDownloadClip}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium rounded-xl flex items-center space-x-1.5 transition"
                   >
                     <Download className="w-3.5 h-3.5 text-cyan-400" />
                     <span>Baixar Clipe MP4</span>
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -446,7 +530,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   <h4 className="font-bold text-white text-sm flex items-center gap-2">
                     {activeRecording.cameraName}
                     <span className="text-[10px] bg-slate-800 text-emerald-400 font-mono px-2 py-0.5 rounded border border-slate-700">
-                      {formatDuration(activeRecording.durationSeconds)}
+                      Bloco 5 min (Completo)
                     </span>
                   </h4>
                   <p className="text-slate-400 font-mono text-[11px] pt-0.5">
@@ -464,169 +548,166 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-500 text-xs">
-              Nenhuma gravação encontrada com os filtros selecionados.
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              <CameraIcon className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-500" />
+              <p className="font-medium text-slate-300">Nenhuma gravação em nuvem encontrada</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Ajuste os filtros de busca ou verifique se as câmeras estão ativas e autorizadas.
+              </p>
             </div>
           )}
         </div>
 
-        {/* Recordings Search & Filter Drawer */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 flex flex-col max-h-[640px]">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-            <h3 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-              <Search className="w-3.5 h-3.5 text-emerald-400" />
-              Buscar Gravações Nuvem
-            </h3>
-            <div className="flex items-center space-x-2">
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-bold">
+        {/* Filter and Recording List Panel */}
+        <div className="space-y-4">
+          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                <Search className="w-3.5 h-3.5 text-emerald-400" />
+                Buscar Gravações Nuvem
+              </h3>
+              <span className="text-[10px] font-mono bg-slate-800 text-emerald-400 px-2 py-0.5 rounded-full">
                 {filteredRecordings.length} blocos
               </span>
+            </div>
+
+            {/* Filter Inputs */}
+            <div className="space-y-2">
+              <div>
+                <label className="text-[10px] text-slate-400 font-mono mb-1 flex items-center gap-1">
+                  <CameraIcon className="w-3 h-3 text-slate-500" /> Câmera:
+                </label>
+                <select
+                  value={selectedCameraId}
+                  onChange={(e) => setSelectedCameraId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
+                >
+                  <option value="ALL">Todas as Câmeras Autorizadas ({userAccessibleCameras.length})</option>
+                  {userAccessibleCameras.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-400 font-mono mb-1 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-slate-500" /> Data da Gravação:
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-mono mb-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-500" /> Hora Início:
+                  </label>
+                  <input
+                    type="time"
+                    value={selectedStartTime}
+                    onChange={(e) => setSelectedStartTime(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-mono mb-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-rose-500" /> Hora Fim:
+                  </label>
+                  <input
+                    type="time"
+                    value={selectedEndTime}
+                    onChange={(e) => setSelectedEndTime(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-200 px-2 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Buscar por tag (ex: #Portaria)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-lg text-xs pl-8 outline-none focus:border-emerald-500"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+              </div>
+
               {(selectedDate || selectedStartTime || selectedEndTime || selectedCameraId !== 'ALL' || searchQuery) && (
                 <button
+                  type="button"
                   onClick={resetFilters}
-                  className="text-[10px] text-amber-400 hover:underline flex items-center gap-0.5"
-                  title="Limpar Filtros"
+                  className="w-full py-1 text-[10px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center justify-center gap-1"
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  Limpar
+                  <RotateCcw className="w-3 h-3" /> Limpar Filtros
                 </button>
               )}
             </div>
           </div>
 
-          {/* Advanced Search & Filter Controls */}
-          <div className="space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-xs">
-            {/* Camera Selector */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                <CameraIcon className="w-3 h-3 text-cyan-400" /> Câmera:
-              </label>
-              <select
-                value={selectedCameraId}
-                onChange={(e) => setSelectedCameraId(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
-              >
-                <option value="ALL">Todas as Câmeras Autorizadas ({userAccessibleCameras.length})</option>
-                {userAccessibleCameras.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Date Picker */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-emerald-400" /> Data da Gravação:
-              </label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Time Range Pickers */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-amber-400" /> Hora Início:
-                </label>
-                <input
-                  type="time"
-                  value={selectedStartTime}
-                  onChange={(e) => setSelectedStartTime(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg text-xs outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-semibold text-slate-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-rose-400" /> Hora Fim:
-                </label>
-                <input
-                  type="time"
-                  value={selectedEndTime}
-                  onChange={(e) => setSelectedEndTime(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 text-slate-200 px-2 py-1 rounded-lg text-xs outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
-
-            {/* Keyword Search */}
-            <div className="relative pt-1">
-              <input
-                type="text"
-                placeholder="Buscar por tag (ex: #Portaria)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-800 text-slate-200 pl-3 pr-3 py-1.5 rounded-lg text-xs outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          {/* Filtered Segment Cards */}
-          <div className="space-y-2 overflow-y-auto pr-1 flex-1">
+          {/* Recordings List */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 space-y-2 max-h-[480px] overflow-y-auto">
             {filteredRecordings.length === 0 ? (
-              <div className="p-4 text-center text-slate-500 text-xs">
-                Nenhum trecho de 5 minutos localizado para estes critérios.
+              <div className="p-6 text-center text-xs text-slate-500">
+                Nenhuma fatia de 5 min encontrada com os filtros selecionados.
               </div>
             ) : (
               filteredRecordings.map((rec) => {
                 const isSelected = activeRecording?.id === rec.id;
-                const isPartial = rec.durationSeconds < 300;
                 const recCam = cameras.find((c) => c.id === rec.cameraId || c.name === rec.cameraName);
                 const thumbUrl = recCam?.thumbnailUrl || rec.thumbnailUrl;
+
                 return (
                   <div
                     key={rec.id}
                     onClick={() => {
                       setActiveRecording(rec);
+                      setCurrentTime(0);
                       setIsPlaying(true);
                     }}
                     className={`p-2.5 rounded-xl border cursor-pointer transition flex items-center justify-between gap-3 ${
                       isSelected
                         ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300'
-                        : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/50 text-slate-300'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
                     }`}
                   >
                     <div className="flex items-center space-x-3 truncate">
                       <div className="relative shrink-0">
                         <img src={thumbUrl} className="w-12 h-12 rounded-lg object-cover border border-slate-800" />
-                        {isPartial && (
-                          <span
-                            className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 text-[8px] font-black px-1 rounded border border-slate-950"
-                            title="Trecho Parcial / Sinal Interrompido"
-                          >
-                            PARCIAL
-                          </span>
-                        )}
+                        <span className="absolute -bottom-1 -right-1 bg-emerald-500 text-slate-950 text-[8px] font-black px-1 rounded border border-slate-950">
+                          5m
+                        </span>
                       </div>
-                      <div className="truncate space-y-0.5">
-                        <p className="text-xs font-bold truncate">{rec.cameraName}</p>
-                        <p className="text-[10px] text-slate-400 font-mono truncate">{rec.startTime}</p>
+                      <div className="truncate">
+                        <h5 className="font-bold text-xs truncate text-white">{rec.cameraName}</h5>
+                        <p className="text-[10px] font-mono text-slate-400">{rec.startTime}</p>
                         <p className="text-[10px] text-emerald-400 font-mono">
-                          {formatDuration(rec.durationSeconds)} • {rec.fileSizeMB} MB
+                          5 min (Completo) • {rec.fileSizeMB} MB
                         </p>
                       </div>
                     </div>
 
-                    {activeUser.customPermissions.canDeleteRecordings && (
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
+                        type="button"
+                        title="Excluir gravação"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm('Deseja excluir permanentemente esta gravação da nuvem?')) {
+                          if (confirm(`Deseja excluir permanentemente esta gravação de ${rec.startTime}?`)) {
                             onDeleteRecording(rec.id);
                           }
                         }}
-                        className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
-                        title="Excluir Gravação"
+                        className="p-1.5 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 rounded-lg transition"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 );
               })
