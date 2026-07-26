@@ -117,52 +117,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoggedIn, cameras]);
 
-  // Auto-generate 5-minute recording slices for any camera missing recordings
-  useEffect(() => {
-    if (cameras.length === 0) return;
 
-    setRecordings((prev) => {
-      let updated = [...prev];
-      let hasNew = false;
-
-      cameras.forEach((cam) => {
-        const hasRec = updated.some((r) => r.cameraId === cam.id);
-        if (!hasRec) {
-          const now = new Date();
-          const rec1: CloudRecording = {
-            id: `rec-5min-${cam.id}-01`,
-            cameraId: cam.id,
-            cameraName: cam.name,
-            startTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            endTime: now.toISOString().replace('T', ' ').substring(0, 19),
-            durationSeconds: 300,
-            fileSizeMB: Math.floor(Math.random() * 15) + 40,
-            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-            streamUrl: cam.fullRtmpUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
-            isE2EELocked: true,
-            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
-          };
-          const rec2: CloudRecording = {
-            id: `rec-5min-${cam.id}-02`,
-            cameraId: cam.id,
-            cameraName: cam.name,
-            startTime: new Date(now.getTime() - 10 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            endTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-            durationSeconds: 300,
-            fileSizeMB: Math.floor(Math.random() * 15) + 40,
-            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-            streamUrl: cam.fullRtmpUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
-            isE2EELocked: true,
-            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
-          };
-          updated.unshift(rec1, rec2);
-          hasNew = true;
-        }
-      });
-
-      return hasNew ? updated : prev;
-    });
-  }, [cameras]);
 
   // Handlers
   const triggerMotionAlert = async (camId: string, eventType?: AlertType, severity?: AlertSeverity) => {

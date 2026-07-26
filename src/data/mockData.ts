@@ -113,30 +113,7 @@ export const INITIAL_CAMERAS: Camera[] = [
 
 export const INITIAL_ALERTS: MotionAlert[] = [];
 
-export const INITIAL_RECORDINGS: CloudRecording[] = INITIAL_CAMERAS.flatMap((cam, camIndex) => {
-  const now = new Date();
-  return [1, 2, 3].map((i) => {
-    const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000 - camIndex * 2 * 60 * 1000);
-    const startD = new Date(now.getTime() - i * 5 * 60 * 1000 - camIndex * 2 * 60 * 1000);
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const startTime = `${startD.getFullYear()}-${pad(startD.getMonth() + 1)}-${pad(startD.getDate())} ${pad(startD.getHours())}:${pad(startD.getMinutes())}:${pad(startD.getSeconds())}`;
-    const endTime = `${endD.getFullYear()}-${pad(endD.getMonth() + 1)}-${pad(endD.getDate())} ${pad(endD.getHours())}:${pad(endD.getMinutes())}:${pad(endD.getSeconds())}`;
-
-    return {
-      id: `rec-5min-${cam.id}-${i}`,
-      cameraId: cam.id,
-      cameraName: cam.name,
-      startTime,
-      endTime,
-      durationSeconds: 300,
-      fileSizeMB: Math.floor(Math.random() * 12) + 42,
-      thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-      streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      isE2EELocked: true,
-      tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
-    };
-  });
-});
+export const INITIAL_RECORDINGS: CloudRecording[] = [];
 
 export const INITIAL_LOGS: ActivityLog[] = [
   {

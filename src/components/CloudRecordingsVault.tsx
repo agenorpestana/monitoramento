@@ -67,7 +67,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
     return cameras.filter((c) => activeUser.allowedCameraIds.includes(c.id));
   }, [cameras, activeUser]);
 
-  // Generate or filter recordings strictly for user accessible cameras
+  // Filter recordings strictly for user accessible cameras
   const effectiveRecordings = useMemo(() => {
     const allowedIds = new Set(userAccessibleCameras.map((c) => c.id));
     const allowedNames = new Set(userAccessibleCameras.map((c) => c.name));
@@ -75,37 +75,6 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
     let list = recordings.filter(
       (r) => allowedIds.has(r.cameraId) || allowedNames.has(r.cameraName)
     );
-
-    // If any accessible camera has no recordings yet, generate real recordings for it
-    userAccessibleCameras.forEach((cam) => {
-      const camRecs = list.filter((r) => r.cameraId === cam.id || r.cameraName === cam.name);
-      if (camRecs.length < 5) {
-        const now = new Date();
-        for (let i = 1; i <= 5; i++) {
-          const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000);
-          const startD = new Date(now.getTime() - i * 5 * 60 * 1000);
-          const startTime = formatDateTime(startD);
-          const endTime = formatDateTime(endD);
-          const recId = `rec-5min-${cam.id}-${i}`;
-
-          if (!list.some((r) => r.id === recId)) {
-            list.push({
-              id: recId,
-              cameraId: cam.id,
-              cameraName: cam.name,
-              startTime,
-              endTime,
-              durationSeconds: 300,
-              fileSizeMB: Math.round(300 * 0.16), // ~48 MB
-              thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
-              streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-              isE2EELocked: true,
-              tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', cam.location || 'Local'],
-            });
-          }
-        }
-      }
-    });
 
     list.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
     return list;
@@ -240,27 +209,23 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
 
   const handleDeleteSelected = () => {
     if (selectedIds.length === 0) return;
-    if (confirm(`Deseja excluir permanentemente as ${selectedIds.length} gravações selecionadas?`)) {
-      if (onDeleteRecordingsBatch) {
-        onDeleteRecordingsBatch(selectedIds);
-      } else {
-        selectedIds.forEach((id) => onDeleteRecording(id));
-      }
-      setSelectedIds([]);
+    if (onDeleteRecordingsBatch) {
+      onDeleteRecordingsBatch(selectedIds);
+    } else {
+      selectedIds.forEach((id) => onDeleteRecording(id));
     }
+    setSelectedIds([]);
   };
 
   const handleDeleteAllFiltered = () => {
     if (filteredRecordings.length === 0) return;
     const allIds = filteredRecordings.map((r) => r.id);
-    if (confirm(`ATENÇÃO: Deseja excluir permanentemente TODAS as ${allIds.length} gravações listadas?`)) {
-      if (onDeleteRecordingsBatch) {
-        onDeleteRecordingsBatch(allIds);
-      } else {
-        allIds.forEach((id) => onDeleteRecording(id));
-      }
-      setSelectedIds([]);
+    if (onDeleteRecordingsBatch) {
+      onDeleteRecordingsBatch(allIds);
+    } else {
+      allIds.forEach((id) => onDeleteRecording(id));
     }
+    setSelectedIds([]);
   };
 
   const resetFilters = () => {
@@ -810,9 +775,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                         title="Excluir gravação"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`Deseja excluir permanentemente esta gravação de ${rec.startTime}?`)) {
-                            onDeleteRecording(rec.id);
-                          }
+                          onDeleteRecording(rec.id);
                         }}
                         className="p-1.5 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 rounded-lg transition"
                       >
