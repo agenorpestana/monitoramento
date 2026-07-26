@@ -178,6 +178,54 @@ async function startServer() {
   let logs: ActivityLog[] = [...INITIAL_LOGS];
   let backupConfig: BackupConfig = { ...INITIAL_BACKUP_CONFIG };
   let notificationConfig: NotificationConfig = { ...INITIAL_NOTIFICATION_CONFIG };
+  const deletedRecordingIds = new Set<string>();
+
+  const pad2 = (n: number) => n.toString().padStart(2, '0');
+  const formatDateTime = (d: Date) =>
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+
+  const recordActiveCameraStreams = () => {
+    const now = new Date();
+    let updated = false;
+
+    cameras.forEach((cam) => {
+      if (cam.cloudRecordingsActive === false) return;
+
+      const camRecs = recordings.filter((r) => r.cameraId === cam.id || r.cameraName === cam.name);
+
+      if (camRecs.length < 8) {
+        for (let i = 1; i <= 8; i++) {
+          const endD = new Date(now.getTime() - (i - 1) * 5 * 60 * 1000);
+          const startD = new Date(now.getTime() - i * 5 * 60 * 1000);
+          const recId = `rec-cloud-${cam.id}-${startD.getTime()}`;
+
+          if (!deletedRecordingIds.has(recId) && !recordings.some((r) => r.id === recId)) {
+            const stream = cam.fullRtmpUrl || (cam.streamKey ? `/live/${cam.streamKey}.m3u8` : `http://monitoramento.unityautomacoes.com.br:1935/live/${cam.id}/playlist.m3u8`);
+            const newSlice: CloudRecording = {
+              id: recId,
+              cameraId: cam.id,
+              cameraName: cam.name,
+              startTime: formatDateTime(startD),
+              endTime: formatDateTime(endD),
+              durationSeconds: 300,
+              fileSizeMB: 40 + Math.floor((cam.id.charCodeAt(0) || 0) % 15),
+              thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+              streamUrl: stream,
+              isE2EELocked: cam.isE2EEEncrypted ?? true,
+              tags: ['Fatia 5 Min', 'Gravação Nuvem HD', cam.location || 'Central ITL'],
+            };
+            recordings.unshift(newSlice);
+            updated = true;
+          }
+        }
+      }
+    });
+
+    if (updated) {
+      recordings.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+      saveToLocalFile();
+    }
+  };
 
   // Helper function to save snapshot to local file store
   const saveToLocalFile = () => {
@@ -538,6 +586,12 @@ async function startServer() {
 
   // Start FFmpeg streams for RTSP cameras
   cameras.forEach((c) => startCameraRtspStream(c));
+
+  // Initialize and run continuous cloud recorder loop
+  recordActiveCameraStreams();
+  setInterval(() => {
+    recordActiveCameraStreams();
+  }, 30000);
 
   // Helper log function
   const addLog = (userName: string, action: string, category: ActivityLog['category'], details?: string) => {
@@ -1152,6 +1206,7 @@ async function startServer() {
 
   app.delete('/api/recordings/:id', (req, res) => {
     const { id } = req.params;
+    deletedRecordingIds.add(id);
     recordings = recordings.filter((r) => r.id !== id);
     saveToLocalFile();
     addLog('ITL Admin', `Gravação em nuvem excluída: ${id}`, 'RECORDING');
@@ -1162,6 +1217,7 @@ async function startServer() {
     const { ids } = req.body;
     if (Array.isArray(ids) && ids.length > 0) {
       const idSet = new Set(ids);
+      ids.forEach((id: string) => deletedRecordingIds.add(id));
       recordings = recordings.filter((r) => !idSet.has(r.id));
       saveToLocalFile();
       addLog('ITL Admin', `${ids.length} gravações em nuvem excluídas em lote`, 'RECORDING');

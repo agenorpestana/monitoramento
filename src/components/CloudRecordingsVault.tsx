@@ -743,15 +743,21 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                     }`}
                   >
                     <div className="flex items-center space-x-2.5 truncate">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
+                      <div
+                        onClick={(e) => {
                           e.stopPropagation();
                           toggleSelectOne(rec.id);
                         }}
-                        className="w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"
-                      />
+                        className="p-1 cursor-pointer shrink-0"
+                        title="Marcar para seleção em lote"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="w-4 h-4 accent-emerald-500 rounded cursor-pointer pointer-events-none"
+                        />
+                      </div>
 
                       <div className="relative shrink-0">
                         <img src={thumbUrl} className="w-11 h-11 rounded-lg object-cover border border-slate-800" />

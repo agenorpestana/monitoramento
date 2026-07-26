@@ -96,6 +96,19 @@ export default function App() {
     fetchBackendData();
   }, []);
 
+  // Periodic recordings sync
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/recordings');
+        const data = await res.json();
+        if (Array.isArray(data)) setRecordings(data);
+      } catch (e) {}
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
+
   // Periodic motion alert checker when logged in
   useEffect(() => {
     if (!isLoggedIn || cameras.length === 0) return;
