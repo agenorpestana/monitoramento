@@ -49,18 +49,24 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   // Audio stream simulator state
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
+  const accessibleCameras = React.useMemo(() => {
+    if (activeUser.role === 'ADMIN') return cameras;
+    if (!activeUser.allowedCameraIds || activeUser.allowedCameraIds.includes('ALL')) return cameras;
+    return cameras.filter((c) => activeUser.allowedCameraIds.includes(c.id));
+  }, [cameras, activeUser]);
+
   // Update timestamps every second
   useEffect(() => {
     const interval = setInterval(() => {
       const nowStr = new Date().toLocaleString('pt-BR');
       const updated: Record<string, string> = {};
-      cameras.forEach((c) => {
+      accessibleCameras.forEach((c) => {
         updated[c.id] = nowStr;
       });
       setLiveTimestamps(updated);
     }, 1000);
     return () => clearInterval(interval);
-  }, [cameras]);
+  }, [accessibleCameras]);
 
   // Audio level simulator when 2-way audio mic is active
   useEffect(() => {
@@ -100,7 +106,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
             Matriz de Monitoramento Central ITL
           </h2>
           <p className="text-xs text-slate-400">
-            {cameras.length} Câmeras conectadas via RTSP | Transmissão de áudio bidirecional RTMP
+            {accessibleCameras.length} Câmera(s) autorizada(s) para seu perfil ({cameras.length} cadastradas no sistema)
           </p>
         </div>
 
@@ -137,16 +143,25 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
       </div>
 
       {/* Camera Stream Grid */}
-      <div
-        className={`grid gap-4 ${
-          gridColumns === 1
-            ? 'grid-cols-1'
-            : gridColumns === 2
-            ? 'grid-cols-1 md:grid-cols-2'
-            : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
-        }`}
-      >
-        {cameras.map((camera) => {
+      {accessibleCameras.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-3">
+          <CameraIcon className="w-10 h-10 text-slate-600 mx-auto" />
+          <h3 className="text-sm font-bold text-slate-300">Nenhuma Câmera Autorizada</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Sua conta de usuário não possui permissão de acesso para nenhuma câmera cadastrada no momento. Entre em contato com o Administrador no painel de Gerenciamento de Usuários.
+          </p>
+        </div>
+      ) : (
+        <div
+          className={`grid gap-4 ${
+            gridColumns === 1
+              ? 'grid-cols-1'
+              : gridColumns === 2
+              ? 'grid-cols-1 md:grid-cols-2'
+              : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+          }`}
+        >
+          {accessibleCameras.map((camera) => {
           const isMicActive = activeMicCameraId === camera.id;
           const isMuted = !!mutedCameraIds[camera.id];
 
@@ -272,6 +287,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
           );
         })}
       </div>
+      )}
 
       {editingCamera && onUpdateCamera && (
         <CameraEditModal

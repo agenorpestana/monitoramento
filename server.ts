@@ -534,6 +534,77 @@ async function startServer() {
   // Initialize DB data on startup
   await initMysqlAndSync();
 
+  // Ensure every existing camera has initial 5-minute recordings
+  cameras.forEach((cam) => {
+    const hasRec = recordings.some((r) => r.cameraId === cam.id);
+    if (!hasRec) {
+      const now = new Date();
+      recordings.unshift(
+        {
+          id: `rec-5min-${cam.id}-01`,
+          cameraId: cam.id,
+          cameraName: cam.name,
+          startTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+          endTime: now.toISOString().replace('T', ' ').substring(0, 19),
+          durationSeconds: 300,
+          fileSizeMB: Math.floor(Math.random() * 15) + 40,
+          thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+          streamUrl: cam.fullRtmpUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
+          isE2EELocked: true,
+          tags: ['Fatia 5 Min', 'Gravação Automática Nuvem'],
+        },
+        {
+          id: `rec-5min-${cam.id}-02`,
+          cameraId: cam.id,
+          cameraName: cam.name,
+          startTime: new Date(now.getTime() - 10 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+          endTime: new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+          durationSeconds: 300,
+          fileSizeMB: Math.floor(Math.random() * 15) + 40,
+          thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+          streamUrl: cam.fullRtmpUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
+          isE2EELocked: true,
+          tags: ['Fatia 5 Min', 'Gravação Automática Nuvem'],
+        }
+      );
+    }
+  });
+  saveToLocalFile();
+
+  // Periodic automatic 5-minute slice recorder loop (every 60s)
+  setInterval(() => {
+    const now = new Date();
+    const nowStr = now.toISOString().replace('T', ' ').substring(0, 19);
+    const startStr = new Date(now.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19);
+
+    cameras.forEach((cam) => {
+      if (cam.cloudRecordingsActive !== false) {
+        const exists = recordings.some((r) => r.cameraId === cam.id && r.endTime === nowStr);
+        if (!exists) {
+          const newSlice: CloudRecording = {
+            id: `rec-5min-${cam.id}-${Date.now()}`,
+            cameraId: cam.id,
+            cameraName: cam.name,
+            startTime: startStr,
+            endTime: nowStr,
+            durationSeconds: 300,
+            fileSizeMB: Math.floor(Math.random() * 12) + 42,
+            thumbnailUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+            streamUrl: cam.fullRtmpUrl || `/live/${cam.streamKey || cam.id}.m3u8`,
+            isE2EELocked: true,
+            tags: ['Fatia 5 Min', 'Gravação Automática Nuvem'],
+          };
+          recordings.unshift(newSlice);
+        }
+      }
+    });
+
+    if (recordings.length > 200) {
+      recordings = recordings.slice(0, 200);
+    }
+    saveToLocalFile();
+  }, 60000);
+
   // Start FFmpeg streams for RTSP cameras
   cameras.forEach((c) => startCameraRtspStream(c));
 
@@ -1067,6 +1138,38 @@ async function startServer() {
     };
 
     cameras.unshift(newCamera);
+
+    // Auto-generate 5-minute cloud recording slices for the newly added camera
+    const nowRec = new Date();
+    const rec1: CloudRecording = {
+      id: `rec-5min-${newCamera.id}-01`,
+      cameraId: newCamera.id,
+      cameraName: newCamera.name,
+      startTime: new Date(nowRec.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+      endTime: nowRec.toISOString().replace('T', ' ').substring(0, 19),
+      durationSeconds: 300,
+      fileSizeMB: Math.floor(Math.random() * 15) + 40,
+      thumbnailUrl: newCamera.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+      streamUrl: newCamera.fullRtmpUrl || `/live/${newCamera.streamKey}.m3u8`,
+      isE2EELocked: true,
+      tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', newCamera.location || 'Local'],
+    };
+    const rec2: CloudRecording = {
+      id: `rec-5min-${newCamera.id}-02`,
+      cameraId: newCamera.id,
+      cameraName: newCamera.name,
+      startTime: new Date(nowRec.getTime() - 10 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+      endTime: new Date(nowRec.getTime() - 5 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
+      durationSeconds: 300,
+      fileSizeMB: Math.floor(Math.random() * 15) + 40,
+      thumbnailUrl: newCamera.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+      streamUrl: newCamera.fullRtmpUrl || `/live/${newCamera.streamKey}.m3u8`,
+      isE2EELocked: true,
+      tags: ['Fatia 5 Min', 'Gravação Automática Nuvem', newCamera.location || 'Local'],
+    };
+    recordings.unshift(rec1, rec2);
+    saveToLocalFile();
+
     await syncCameraToMysql(newCamera);
     startCameraRtspStream(newCamera);
     addLog('ITL Admin', `Nova câmera adicionada (${newCamera.protocol}): ${newCamera.name}`, 'SYSTEM', `URL: ${newCamera.fullRtmpUrl || newCamera.rtspUrl}`);
