@@ -400,6 +400,11 @@ async function startServer() {
         await pool.query('ALTER TABLE `users` MODIFY `status` VARCHAR(50) DEFAULT "ACTIVE"');
       } catch (e) {}
 
+      // Purge legacy mock cameras if present in MySQL
+      try {
+        await pool.query("DELETE FROM cameras WHERE id IN ('cam-wpg8tz', 'cam-jvv51l', 'cam-v7w3f8')");
+      } catch (e) {}
+
       // Load existing cameras from MySQL
       const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
       if (camRows && camRows.length > 0) {
@@ -1117,6 +1122,7 @@ async function startServer() {
     if (index === -1) return res.status(404).json({ error: 'Câmera não encontrada' });
 
     cameras[index] = { ...cameras[index], ...req.body };
+    saveToLocalFile();
     await syncCameraToMysql(cameras[index]);
     startCameraRtspStream(cameras[index]);
     addLog('ITL Admin', `Câmera atualizada: ${cameras[index].name}`, 'SYSTEM');
@@ -1130,6 +1136,7 @@ async function startServer() {
       stopCameraRtspStream(cam.streamKey);
     }
     cameras = cameras.filter((c) => c.id !== id);
+    saveToLocalFile();
     await deleteCameraFromMysql(id);
     if (cam) addLog('ITL Admin', `Câmera removida: ${cam.name}`, 'SYSTEM');
     res.json({ success: true, message: 'Câmera removida com sucesso' });
