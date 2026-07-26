@@ -372,7 +372,7 @@ export default function App() {
           )}
 
           {activeTab === 'camera-map' && (
-            <CameraMap cameras={cameras} onSelectCamera={setInspectingCamera} />
+            <CameraMap cameras={cameras} onSelectCamera={setInspectingCamera} isLoggedIn={isLoggedIn} currentUser={activeUser} />
           )}
 
           {activeTab === 'motion-alerts' && (
@@ -387,6 +387,7 @@ export default function App() {
           {activeTab === 'cloud-recordings' && (
             <CloudRecordingsVault
               recordings={recordings}
+              cameras={cameras}
               activeUser={activeUser}
               onDeleteRecording={handleDeleteRecording}
               isVaultUnlocked={e2eeSettings.isVaultUnlocked}

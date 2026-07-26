@@ -15,18 +15,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onLoginSuccess,
   activeUser,
 }) => {
-  const [email, setEmail] = useState('suporte@unityautomacoes.com.br');
-  const [password, setPassword] = useState('200616');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   if (!isOpen) return null;
-
-  const handleSuperAdminFastLogin = () => {
-    setEmail('suporte@unityautomacoes.com.br');
-    setPassword('200616');
-    executeLogin('suporte@unityautomacoes.com.br', '200616');
-  };
 
   const executeLogin = async (loginEmail: string, loginPass: string) => {
     setErrorMsg('');
@@ -109,32 +103,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           </div>
           <h3 className="text-lg font-bold text-slate-100">Autenticação do Painel Administrativo ITL</h3>
           <p className="text-xs text-slate-400">
-            Acesse as configurações avançadas de câmeras RTSP/RTMP, controle de usuários e gravações em nuvem.
+            Informe seu e-mail e senha para acessar as câmeras autorizadas, mapa e configurações.
           </p>
-        </div>
-
-        {/* Fast Super Admin Button */}
-        <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="font-bold text-amber-400 flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5" /> Super Admin Credentials
-            </span>
-            <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-2 py-0.5 rounded">
-              Acesso Total
-            </span>
-          </div>
-          <div className="text-[11px] font-mono text-slate-300">
-            <p>Login: <span className="text-emerald-400 font-bold">suporte@unityautomacoes.com.br</span></p>
-            <p>Senha: <span className="text-emerald-400 font-bold">200616</span></p>
-          </div>
-          <button
-            type="button"
-            onClick={handleSuperAdminFastLogin}
-            className="w-full py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg transition flex items-center justify-center space-x-1.5"
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Entrar Direto como Super Admin</span>
-          </button>
         </div>
 
         {/* Login Form */}

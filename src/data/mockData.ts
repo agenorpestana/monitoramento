@@ -113,7 +113,73 @@ export const INITIAL_CAMERAS: Camera[] = [
 
 export const INITIAL_ALERTS: MotionAlert[] = [];
 
-export const INITIAL_RECORDINGS: CloudRecording[] = [];
+export const INITIAL_RECORDINGS: CloudRecording[] = [
+  {
+    id: 'rec-5min-01',
+    cameraId: 'cam-wpg8tz',
+    cameraName: 'Prado 11 - Portaria Principal',
+    startTime: '2026-07-26 10:00:00',
+    endTime: '2026-07-26 10:05:00',
+    durationSeconds: 300,
+    fileSizeMB: 45,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+    streamUrl: '/live/cam_wpg8tz.m3u8',
+    isE2EELocked: true,
+    tags: ['Fatia 5 Min', 'Portaria', 'Gravação Nuvem'],
+  },
+  {
+    id: 'rec-5min-02',
+    cameraId: 'cam-wpg8tz',
+    cameraName: 'Prado 11 - Portaria Principal',
+    startTime: '2026-07-26 10:05:00',
+    endTime: '2026-07-26 10:10:00',
+    durationSeconds: 300,
+    fileSizeMB: 48,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+    streamUrl: '/live/cam_wpg8tz.m3u8',
+    isE2EELocked: true,
+    tags: ['Fatia 5 Min', 'Movimento Veicular'],
+  },
+  {
+    id: 'rec-partial-03',
+    cameraId: 'cam-wpg8tz',
+    cameraName: 'Prado 11 - Portaria Principal',
+    startTime: '2026-07-26 10:10:00',
+    endTime: '2026-07-26 10:12:15',
+    durationSeconds: 135,
+    fileSizeMB: 22,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800',
+    streamUrl: '/live/cam_wpg8tz.m3u8',
+    isE2EELocked: true,
+    tags: ['Trecho Parcial', 'Sinal Interrompido (2m15s)'],
+  },
+  {
+    id: 'rec-5min-04',
+    cameraId: 'cam-jvv51l',
+    cameraName: 'Câmera Pátio Central',
+    startTime: '2026-07-26 09:30:00',
+    endTime: '2026-07-26 09:35:00',
+    durationSeconds: 300,
+    fileSizeMB: 50,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800',
+    streamUrl: '/live/cam_jvv51l.m3u8',
+    isE2EELocked: true,
+    tags: ['Fatia 5 Min', 'Pátio Central'],
+  },
+  {
+    id: 'rec-5min-05',
+    cameraId: 'cam-v7w3f8',
+    cameraName: 'Câmera Estacionamento Visitantes',
+    startTime: '2026-07-25 18:00:00',
+    endTime: '2026-07-25 18:05:00',
+    durationSeconds: 300,
+    fileSizeMB: 42,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb186a5b2?w=800',
+    streamUrl: '/live/cam_v7w3f8.m3u8',
+    isE2EELocked: true,
+    tags: ['Fatia 5 Min', 'Estacionamento'],
+  },
+];
 
 export const INITIAL_LOGS: ActivityLog[] = [
   {

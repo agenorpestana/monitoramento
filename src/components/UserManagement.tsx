@@ -9,7 +9,8 @@ import {
   Check,
   Eye,
   Sliders,
-  X
+  X,
+  Edit2
 } from 'lucide-react';
 import { User, UserRole, CustomPermissions, Camera } from '../types';
 
@@ -31,6 +32,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   onDeleteUser,
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingCameraAccessUser, setEditingCameraAccessUser] = useState<User | null>(null);
 
   const [formState, setFormState] = useState({
@@ -89,6 +91,26 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     });
   };
 
+  const handleUpdateEditUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    if (!editingUser.name || !editingUser.email) {
+      alert('Nome e Email são obrigatórios');
+      return;
+    }
+
+    onUpdateUser(editingUser.id, {
+      name: editingUser.name,
+      email: editingUser.email,
+      role: editingUser.role,
+      phone: editingUser.phone,
+      allowedCameraIds: (editingUser.allowedCameraIds || []).length === 0 ? ['ALL'] : editingUser.allowedCameraIds,
+      customPermissions: editingUser.customPermissions,
+    });
+
+    setEditingUser(null);
+  };
+
   const handleTogglePermission = (key: keyof CustomPermissions, targetUser?: User) => {
     if (targetUser) {
       const updatedPermissions = {
@@ -111,41 +133,78 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     let current = [...formState.allowedCameraIds];
 
     if (camId === 'ALL') {
-      setFormState({ ...formState, allowedCameraIds: ['ALL'] });
+      if (current.includes('ALL')) {
+        // Uncheck ALL -> switch to all camera IDs or first camera so user can unselect
+        setFormState({ ...formState, allowedCameraIds: cameras.map((c) => c.id) });
+      } else {
+        setFormState({ ...formState, allowedCameraIds: ['ALL'] });
+      }
       return;
     }
 
-    // Remove 'ALL' if specific camera selected
-    current = current.filter((id) => id !== 'ALL');
-
-    if (current.includes(camId)) {
+    if (current.includes('ALL')) {
+      // Convert ALL to list of all cameras except the toggled one
+      current = cameras.map((c) => c.id).filter((id) => id !== camId);
+    } else if (current.includes(camId)) {
       current = current.filter((id) => id !== camId);
-      if (current.length === 0) current = ['ALL'];
     } else {
       current.push(camId);
     }
 
-    setFormState({ ...formState, allowedCameraIds: current });
+    setFormState({ ...formState, allowedCameraIds: current.length === 0 ? ['ALL'] : current });
   };
 
   const handleToggleUserCameraAccess = (user: User, camId: string) => {
     let current = [...(user.allowedCameraIds || ['ALL'])];
+    const isAll = current.includes('ALL');
 
     if (camId === 'ALL') {
-      onUpdateUser(user.id, { allowedCameraIds: ['ALL'] });
+      if (isAll) {
+        // Uncheck ALL -> switch to list of all cameras so user can select/deselect individually
+        const updated = cameras.map((c) => c.id);
+        onUpdateUser(user.id, { allowedCameraIds: updated });
+      } else {
+        onUpdateUser(user.id, { allowedCameraIds: ['ALL'] });
+      }
       return;
     }
 
-    current = current.filter((id) => id !== 'ALL');
-
-    if (current.includes(camId)) {
+    if (isAll) {
+      current = cameras.map((c) => c.id).filter((id) => id !== camId);
+    } else if (current.includes(camId)) {
       current = current.filter((id) => id !== camId);
-      if (current.length === 0) current = ['ALL'];
     } else {
       current.push(camId);
     }
 
-    onUpdateUser(user.id, { allowedCameraIds: current });
+    onUpdateUser(user.id, { allowedCameraIds: current.length === 0 ? ['ALL'] : current });
+  };
+
+  const handleToggleEditModalCamera = (camId: string) => {
+    if (!editingUser) return;
+    let current = [...(editingUser.allowedCameraIds || ['ALL'])];
+    const isAll = current.includes('ALL');
+
+    if (camId === 'ALL') {
+      if (isAll) {
+        current = cameras.map((c) => c.id);
+      } else {
+        current = ['ALL'];
+      }
+    } else {
+      if (isAll) {
+        current = cameras.map((c) => c.id).filter((id) => id !== camId);
+      } else if (current.includes(camId)) {
+        current = current.filter((id) => id !== camId);
+      } else {
+        current.push(camId);
+      }
+    }
+
+    setEditingUser({
+      ...editingUser,
+      allowedCameraIds: current.length === 0 ? ['ALL'] : current,
+    });
   };
 
   return (
@@ -358,6 +417,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
                     <span>Ativo: {user.lastActive}</span>
 
+                    {activeUser.customPermissions.canManageUsers && (
+                      <button
+                        onClick={() => setEditingUser(user)}
+                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 rounded-lg flex items-center space-x-1 transition"
+                        title="Editar Dados do Usuário"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Editar</span>
+                      </button>
+                    )}
+
                     {activeUser.customPermissions.canManageUsers && user.role !== 'ADMIN' && (
                       <button
                         onClick={() => {
@@ -450,6 +520,191 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           })}
         </div>
       </div>
+
+      {/* Edit User Modal Overlay */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-emerald-500/40 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 my-8">
+            <button
+              onClick={() => setEditingUser(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 border-b border-slate-800 pb-3">
+              <div className="p-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400">
+                <Edit2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Editar Usuário: {editingUser.name}</h3>
+                <p className="text-xs text-slate-400">Atualize os dados, função e câmeras autorizadas para este usuário.</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateEditUserSubmit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nome Completo:</label>
+                  <input
+                    type="text"
+                    value={editingUser.name}
+                    onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">E-mail de Acesso:</label>
+                  <input
+                    type="email"
+                    value={editingUser.email}
+                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Função (Role):</label>
+                  <select
+                    value={editingUser.role}
+                    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as UserRole })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                  >
+                    <option value="RESIDENT">Morador / Cliente (Padrão)</option>
+                    <option value="OPERATOR">Operador de Monitoramento</option>
+                    <option value="GUARD">Guarda de Segurança / Vigilante</option>
+                    <option value="ADMIN">Administrador Geral</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Telefone / WhatsApp:</label>
+                  <input
+                    type="text"
+                    value={editingUser.phone || ''}
+                    onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                    placeholder="+55 73 99999-9999"
+                  />
+                </div>
+              </div>
+
+              {/* Camera Selection */}
+              <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                    <CameraIcon className="w-4 h-4 text-emerald-400" /> Câmeras Permitidas:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEditModalCamera('ALL')}
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded border transition ${
+                      !editingUser.allowedCameraIds || editingUser.allowedCameraIds.includes('ALL')
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {!editingUser.allowedCameraIds || editingUser.allowedCameraIds.includes('ALL')
+                      ? '✓ Acesso Total Ativado'
+                      : 'Ativar Acesso Total'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 pt-1">
+                  {cameras.map((cam) => {
+                    const isAll = !editingUser.allowedCameraIds || editingUser.allowedCameraIds.includes('ALL');
+                    const isChecked = isAll || editingUser.allowedCameraIds?.includes(cam.id);
+
+                    return (
+                      <label
+                        key={cam.id}
+                        className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-500'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleEditModalCamera(cam.id)}
+                          className="accent-emerald-500 rounded"
+                        />
+                        <span className="truncate">{cam.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom Permissions */}
+              <div className="space-y-2">
+                <label className="block text-slate-300 font-medium">Permissões Especiais de Controle:</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {Object.entries({
+                    canViewLive: 'Ver Câmeras Ao Vivo',
+                    canViewRecordings: 'Acessar Gravações em Nuvem',
+                    canControlPTZ: 'Controle de Câmeras PTZ',
+                    canUseTwoWayAudio: 'Áudio Bidirecional',
+                    canManageCameras: 'Cadastrar / Alterar Câmeras',
+                    canDeleteRecordings: 'Excluir Gravações',
+                    canAccessAuditLogs: 'Visualizar Logs de Auditoria',
+                    canManageUsers: 'Gerenciar Usuários',
+                    canExportReports: 'Exportar Relatórios PDF',
+                  }).map(([key, label]) => {
+                    const checked = (editingUser.customPermissions as any)?.[key] || false;
+                    return (
+                      <label
+                        key={key}
+                        className={`flex items-center space-x-2 p-2 rounded-lg border cursor-pointer transition ${
+                          checked
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                            : 'bg-slate-950 border-slate-800 text-slate-500'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() =>
+                            setEditingUser({
+                              ...editingUser,
+                              customPermissions: {
+                                ...editingUser.customPermissions,
+                                [key]: !checked,
+                              },
+                            })
+                          }
+                          className="accent-emerald-500 rounded"
+                        />
+                        <span className="text-[10px] leading-tight">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl shadow-lg hover:bg-emerald-400"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

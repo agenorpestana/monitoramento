@@ -20,7 +20,7 @@ import {
   Map as MapIcon
 } from 'lucide-react';
 import { APIProvider, Map, AdvancedMarker, Pin, InfoWindow } from '@vis.gl/react-google-maps';
-import { Camera } from '../types';
+import { Camera, User } from '../types';
 import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface FreeOSMMapProps {
@@ -162,6 +162,8 @@ interface CameraMapProps {
   onSelectCamera: (cam: Camera) => void;
   googleMapsApiKey?: string;
   onSaveApiKey?: (key: string) => void;
+  isLoggedIn?: boolean;
+  currentUser?: User;
 }
 
 export const CameraMap: React.FC<CameraMapProps> = ({
@@ -169,12 +171,29 @@ export const CameraMap: React.FC<CameraMapProps> = ({
   onSelectCamera,
   googleMapsApiKey = '',
   onSaveApiKey,
+  isLoggedIn = false,
+  currentUser,
 }) => {
   const [selectedPin, setSelectedPin] = useState<Camera | null>(cameras[0] || null);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [tempKey, setTempKey] = useState(googleMapsApiKey);
   const [mapProvider, setMapProvider] = useState<'OSM' | 'GOOGLE'>('OSM');
+
+  const canPlayStream = React.useMemo(() => {
+    if (!selectedPin) return false;
+    if (selectedPin.isDemo || selectedPin.isLiveWebcam) return true;
+    if (isLoggedIn && currentUser) {
+      if (currentUser.role === 'ADMIN') return true;
+      if (currentUser.customPermissions?.canViewLive) {
+        const allowed = currentUser.allowedCameraIds;
+        if (!allowed || allowed.includes('ALL') || allowed.includes(selectedPin.id)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [selectedPin, isLoggedIn, currentUser]);
 
   // Sync selectedPin when cameras prop changes or is filtered
   useEffect(() => {
@@ -550,7 +569,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
 
               {/* Live Player / Video Preview */}
               <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-black aspect-video shadow-lg">
-                {selectedPin.isDemo || selectedPin.isLiveWebcam ? (
+                {canPlayStream ? (
                   <LiveStreamPlayer key={selectedPin.id} camera={selectedPin} />
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full p-5 text-center space-y-3 bg-slate-950 text-slate-300">
