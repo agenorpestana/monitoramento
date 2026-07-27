@@ -40,54 +40,12 @@ import {
 } from './data/mockData';
 
 export default function App() {
-  // Authentication State with LocalStorage Persistence
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('itl_logged_in');
-      return stored === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Authentication State
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [activeUser, setActiveUser] = useState<User>(INITIAL_USERS[0]);
 
-  const [activeUser, setActiveUser] = useState<User>(() => {
-    try {
-      const stored = localStorage.getItem('itl_active_user');
-      if (stored) return JSON.parse(stored);
-    } catch {}
-    return INITIAL_USERS[0];
-  });
-
-  // Active Navigation Tab with LocalStorage Persistence
-  const [activeTab, setActiveTab] = useState<string>(() => {
-    try {
-      const stored = localStorage.getItem('itl_active_tab');
-      if (stored) return stored;
-    } catch {}
-    return 'live-grid';
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('itl_logged_in', isLoggedIn ? 'true' : 'false');
-    } catch {}
-  }, [isLoggedIn]);
-
-  useEffect(() => {
-    try {
-      if (activeUser) {
-        localStorage.setItem('itl_active_user', JSON.stringify(activeUser));
-      }
-    } catch {}
-  }, [activeUser]);
-
-  useEffect(() => {
-    try {
-      if (activeTab) {
-        localStorage.setItem('itl_active_tab', activeTab);
-      }
-    } catch {}
-  }, [activeTab]);
+  // Active Navigation Tab
+  const [activeTab, setActiveTab] = useState<string>('live-grid');
 
   // Application Data States
   const [cameras, setCameras] = useState<Camera[]>(INITIAL_CAMERAS);
@@ -388,13 +346,7 @@ export default function App() {
         onOpenAlerts={() => setActiveTab('motion-alerts')}
         onOpenE2EEModal={() => setIsE2EEModalOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
-        onLogout={() => {
-          setIsLoggedIn(false);
-          try {
-            localStorage.removeItem('itl_logged_in');
-            localStorage.removeItem('itl_active_user');
-          } catch (e) {}
-        }}
+        onLogout={() => setIsLoggedIn(false)}
         isVaultUnlocked={e2eeSettings.isVaultUnlocked}
       />
 

@@ -580,7 +580,7 @@ async function startServer() {
 
   // Continuous 24/7 Automatic Recording Engine for All Active Cameras
   const activeAutoRecordingProcesses = new Map<string, ChildProcess>();
-  const autoRecordingDurationSec = 300; // 5-minute rolling slices for real cloud storage
+  const autoRecordingDurationSec = 180; // 3-minute rolling slices for real cloud storage
 
   function startAutoRecordingForCamera(cam: Camera) {
     if (!cam || !cam.id) return;
@@ -670,7 +670,7 @@ async function startServer() {
         };
 
         recordings.unshift(newRec);
-        if (recordings.length > 5000) recordings = recordings.slice(0, 5000);
+        if (recordings.length > 300) recordings = recordings.slice(0, 300);
         saveToLocalFile();
         console.log(`[Auto Recorder 24/7] Bloco real gravado com sucesso para '${cam.name}': ${fileName} (${fileSizeMB}MB)`);
       }
