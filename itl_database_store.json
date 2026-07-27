@@ -143,6 +143,142 @@
   "alerts": [],
   "recordings": [
     {
+      "id": "rec-disk-cam-3600-1785177234469-462",
+      "cameraId": "cam-3600",
+      "cameraName": "Obras 2",
+      "startTime": "2218-10-24 23:50:53",
+      "endTime": "2218-10-24 23:52:08",
+      "durationSeconds": 75,
+      "fileSizeMB": 2.5,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-3600_1785177225339.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Itamaraju - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-4275-1785177234605-620",
+      "cameraId": "cam-4275",
+      "cameraName": "Obras",
+      "startTime": "2218-10-24 23:50:53",
+      "endTime": "2218-10-24 23:52:08",
+      "durationSeconds": 75,
+      "fileSizeMB": 2.5,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-4275_1785177225362.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Itamaraju - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-5460-1785177234766-710",
+      "cameraId": "cam-5460",
+      "cameraName": "Pop Cumuru",
+      "startTime": "2218-10-24 23:50:53",
+      "endTime": "2218-10-24 23:52:17",
+      "durationSeconds": 84,
+      "fileSizeMB": 2.8,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-5460_1785177225332.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Prado - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-5653-1785177234956-980",
+      "cameraId": "cam-5653",
+      "cameraName": "Patio 11",
+      "startTime": "2218-10-24 23:50:53",
+      "endTime": "2218-10-24 23:52:17",
+      "durationSeconds": 84,
+      "fileSizeMB": 2.8,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-5653_1785177225377.mp4",
+      "isE2EELocked": false,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Prado - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-3600-1785177220734-891",
+      "cameraId": "cam-3600",
+      "cameraName": "Obras 2",
+      "startTime": "2218-10-24 23:48:36",
+      "endTime": "2218-10-24 23:49:51",
+      "durationSeconds": 75,
+      "fileSizeMB": 2.5,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-3600_1785177211604.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Itamaraju - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-4275-1785177220920-104",
+      "cameraId": "cam-4275",
+      "cameraName": "Obras",
+      "startTime": "2218-10-24 23:48:36",
+      "endTime": "2218-10-24 23:49:51",
+      "durationSeconds": 75,
+      "fileSizeMB": 2.5,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-4275_1785177211614.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Itamaraju - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-5653-1785177221187-600",
+      "cameraId": "cam-5653",
+      "cameraName": "Patio 11",
+      "startTime": "2218-10-24 23:48:36",
+      "endTime": "2218-10-24 23:50:00",
+      "durationSeconds": 84,
+      "fileSizeMB": 2.8,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-5653_1785177211631.mp4",
+      "isE2EELocked": false,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Prado - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-5460-1785177221054-876",
+      "cameraId": "cam-5460",
+      "cameraName": "Pop Cumuru",
+      "startTime": "2218-10-24 23:48:35",
+      "endTime": "2218-10-24 23:49:59",
+      "durationSeconds": 84,
+      "fileSizeMB": 2.8,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-5460_1785177211595.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Prado - BA"
+      ]
+    },
+    {
       "id": "rec-disk-cam-4275-1785177210453-546",
       "cameraId": "cam-4275",
       "cameraName": "Obras",
@@ -497,6 +633,40 @@
         "Gravação Automática 24/7",
         "Nuvem Real HD",
         "Prado - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-5653-1785177448247-299",
+      "cameraId": "cam-5653",
+      "cameraName": "Patio 11",
+      "startTime": "2138-07-08 05:02:54",
+      "endTime": "2138-07-08 05:04:48",
+      "durationSeconds": 114,
+      "fileSizeMB": 3.8,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-5653_1785177442.mp4",
+      "isE2EELocked": false,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Prado - BA"
+      ]
+    },
+    {
+      "id": "rec-disk-cam-3600-1785177528233-692",
+      "cameraId": "cam-3600",
+      "cameraName": "Obras 2",
+      "startTime": "2026-07-27 18:38:39",
+      "endTime": "2026-07-27 18:38:48",
+      "durationSeconds": 9,
+      "fileSizeMB": 0.3,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "streamUrl": "/recordings/rec_auto_cam-3600_1785177440.mp4",
+      "isE2EELocked": true,
+      "tags": [
+        "Gravação Automática 24/7",
+        "Nuvem Real HD",
+        "Itamaraju - BA"
       ]
     },
     {
