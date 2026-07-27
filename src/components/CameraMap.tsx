@@ -46,21 +46,21 @@ const FreeOpenStreetMapComponent: React.FC<FreeOSMMapProps> = ({
     if (!mapInstance.current) {
       const map = L.map(containerRef.current, {
         center: [center.lat, center.lng],
-        zoom: 13,
+        zoom: 9,
         zoomControl: true,
       });
 
-      // CartoDB Dark Tiles matching Central ITL dark theme
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      // Standard OpenStreetMap Tiles (Normal / Light theme)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abc',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
 
       layerGroupRef.current = L.layerGroup().addTo(map);
       mapInstance.current = map;
     } else {
-      mapInstance.current.setView([center.lat, center.lng]);
+      mapInstance.current.setView([center.lat, center.lng], 9);
     }
   }, [center.lat, center.lng]);
 
@@ -112,11 +112,11 @@ const FreeOpenStreetMapComponent: React.FC<FreeOSMMapProps> = ({
 
   return (
     <div className="w-full h-full relative z-0">
-      <div ref={containerRef} className="w-full h-full min-h-[480px] rounded-2xl overflow-hidden" />
+      <div ref={containerRef} className="w-full h-full min-h-[550px] rounded-2xl overflow-hidden" />
       <div className="absolute bottom-3 left-3 z-[400] bg-slate-950/90 text-slate-300 text-[10px] px-2.5 py-1 rounded-xl border border-slate-800 backdrop-blur-md flex items-center space-x-1.5 shadow-lg">
         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-        <span className="font-extrabold text-white">Mapa Grátis OpenStreetMap</span>
-        <span className="text-slate-500">• Central ITL</span>
+        <span className="font-extrabold text-white">Visão Regional (Porto Seguro ↔ Itamaraju ↔ Teixeira de Freitas)</span>
+        <span className="text-slate-500">• OpenStreetMap</span>
       </div>
     </div>
   );
@@ -497,7 +497,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
       {/* Main Map + Inspector Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Map View Box */}
-        <div className="lg:col-span-2 relative bg-slate-950 border border-slate-800 rounded-2xl min-h-[480px] h-[520px] overflow-hidden shadow-2xl flex flex-col z-0">
+        <div className="lg:col-span-2 relative bg-slate-950 border border-slate-800 rounded-2xl min-h-[550px] h-[640px] overflow-hidden shadow-2xl flex flex-col z-0">
           {mapProvider === 'OSM' || !hasValidKey ? (
             <FreeOpenStreetMapComponent
               cameras={filteredCameras}
@@ -518,11 +518,11 @@ export const CameraMap: React.FC<CameraMapProps> = ({
               <APIProvider apiKey={envKey} version="weekly">
                 <Map
                   defaultCenter={center}
-                  defaultZoom={13}
+                  defaultZoom={9}
                   mapId="ITL_SECURITY_MAP"
                   internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                   style={{ width: '100%', height: '100%' }}
-                  colorScheme="DARK"
+                  colorScheme="LIGHT"
                 >
                   {filteredCameras.map((cam) => (
                     <AdvancedMarker

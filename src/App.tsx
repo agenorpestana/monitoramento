@@ -396,6 +396,7 @@ export default function App() {
           setActiveTab={setActiveTab}
           unreadAlertsCount={unreadAlertsCount}
           totalCameras={cameras.length}
+          activeUser={activeUser}
         />
 
         {/* Mobile Tab Navigation */}
@@ -413,9 +414,11 @@ export default function App() {
           <button onClick={() => setActiveTab('cloud-recordings')} className={`p-1.5 flex flex-col items-center ${activeTab === 'cloud-recordings' ? 'text-emerald-400 font-bold' : ''}`}>
             Nuvem
           </button>
-          <button onClick={() => setActiveTab('user-management')} className={`p-1.5 flex flex-col items-center ${activeTab === 'user-management' ? 'text-emerald-400 font-bold' : ''}`}>
-            Acesso
-          </button>
+          {(activeUser.role === 'ADMIN' || activeUser.email === 'suporte@unityautomacoes.com.br' || activeUser.customPermissions?.canManageUsers) && (
+            <button onClick={() => setActiveTab('user-management')} className={`p-1.5 flex flex-col items-center ${activeTab === 'user-management' ? 'text-emerald-400 font-bold' : ''}`}>
+              Acesso
+            </button>
+          )}
         </div>
 
         {/* Content Area */}
@@ -466,14 +469,26 @@ export default function App() {
           )}
 
           {activeTab === 'user-management' && (
-            <UserManagement
-              users={users}
-              cameras={cameras}
-              activeUser={activeUser}
-              onAddUser={handleAddUser}
-              onUpdateUser={handleUpdateUser}
-              onDeleteUser={handleDeleteUser}
-            />
+            (activeUser.role === 'ADMIN' || activeUser.email === 'suporte@unityautomacoes.com.br' || activeUser.customPermissions?.canManageUsers) ? (
+              <UserManagement
+                users={users}
+                cameras={cameras}
+                activeUser={activeUser}
+                onAddUser={handleAddUser}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+              />
+            ) : (
+              <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl max-w-lg mx-auto my-12 space-y-3">
+                <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold">
+                  !
+                </div>
+                <h3 className="font-bold text-sm text-slate-100">Acesso Restrito a Administradores</h3>
+                <p className="text-xs text-slate-400">
+                  A aba de Acesso Multiusuário e Gerenciamento de Usuários está disponível apenas para contas com perfil Administrador.
+                </p>
+              </div>
+            )
           )}
 
           {activeTab === 'activity-reports' && (

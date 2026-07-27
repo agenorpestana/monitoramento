@@ -12,11 +12,14 @@ import {
   Lock,
 } from 'lucide-react';
 
+import { User } from '../types';
+
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   unreadAlertsCount: number;
   totalCameras: number;
+  activeUser?: User;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -24,19 +27,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   unreadAlertsCount,
   totalCameras,
+  activeUser,
 }) => {
-  const navItems = [
+  const isAdmin = activeUser
+    ? activeUser.role === 'ADMIN' ||
+      activeUser.email === 'suporte@unityautomacoes.com.br' ||
+      Boolean(activeUser.customPermissions?.canManageUsers)
+    : true;
+
+  const rawNavItems = [
     { id: 'live-grid', label: 'Câmeras ao Vivo', icon: Grid, badge: totalCameras },
     { id: 'camera-map', label: 'Mapa Vizinhança', icon: Map },
     { id: 'motion-alerts', label: 'Alertas de Movimento', icon: Bell, badge: unreadAlertsCount, alert: unreadAlertsCount > 0 },
     { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },
     { id: 'camera-admin', label: 'Adicionar / RTSP', icon: PlusCircle },
-    { id: 'user-management', label: 'Acesso Multiusuário', icon: Users },
+    { id: 'user-management', label: 'Acesso Multiusuário', icon: Users, adminOnly: true },
     { id: 'activity-reports', label: 'Relatórios Diários', icon: FileText },
     { id: 'backup-manager', label: 'Backup Automático', icon: Database },
     { id: 'push-notifications', label: 'Notificações Push', icon: Smartphone },
     { id: 'e2ee-vault', label: 'Criptografia E2EE', icon: Lock },
   ];
+
+  const navItems = rawNavItems.filter((item) => !item.adminOnly || isAdmin);
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 text-slate-300 flex flex-col justify-between shrink-0 hidden md:flex min-h-[calc(100vh-65px)] p-3">

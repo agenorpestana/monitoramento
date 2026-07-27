@@ -382,6 +382,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
         <div className="divide-y divide-slate-800">
           {users.map((user) => {
+            const isSuperUser =
+              user.email === 'suporte@unityautomacoes.com.br' ||
+              user.id === 'user-superadmin-01' ||
+              (user.role as string) === 'SUPER_ADMIN';
+
             const isAllCameras = !user.allowedCameraIds || user.allowedCameraIds.includes('ALL');
             const allowedCount = isAllCameras
               ? cameras.length
@@ -398,6 +403,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full">
                           {user.role}
                         </span>
+                        {isSuperUser && (
+                          <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold px-2 py-0.5 rounded-full">
+                            ★ SUPER USUÁRIO PROTEGIDO
+                          </span>
+                        )}
                       </h4>
                       <p className="text-[11px] text-slate-400">{user.email}</p>
                     </div>
@@ -417,7 +427,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
                     <span>Ativo: {user.lastActive}</span>
 
-                    {activeUser.customPermissions.canManageUsers && (
+                    {/* Hide Edit & Delete for Super User */}
+                    {!isSuperUser && activeUser.customPermissions.canManageUsers && (
                       <button
                         onClick={() => setEditingUser(user)}
                         className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 rounded-lg flex items-center space-x-1 transition"
@@ -428,7 +439,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                       </button>
                     )}
 
-                    {activeUser.customPermissions.canManageUsers && user.role !== 'ADMIN' && (
+                    {!isSuperUser && activeUser.customPermissions.canManageUsers && user.role !== 'ADMIN' && (
                       <button
                         onClick={() => {
                           if (confirm(`Excluir usuário ${user.name}?`)) onDeleteUser(user.id);
