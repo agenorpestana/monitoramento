@@ -182,34 +182,22 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
     }
   }, [effectiveRecordings]);
 
-  // Sync video time progression
-  useEffect(() => {
-    let timer: any;
-    if (isPlaying && activeRecording) {
-      timer = setInterval(() => {
-        setCurrentTime((prev) => {
-          const maxDur = activeRecording.durationSeconds || 300;
-          if (prev >= maxDur) {
-            setIsPlaying(false);
-            return maxDur;
-          }
-          return prev + 1;
-        });
-      }, 1000 / playbackSpeed);
-    }
-    return () => clearInterval(timer);
-  }, [isPlaying, playbackSpeed, activeRecording]);
-
+  // Sync video element state & playback
   useEffect(() => {
     if (videoRef.current) {
+      videoRef.current.playbackRate = playbackSpeed;
       if (isPlaying) {
-        videoRef.current.playbackRate = playbackSpeed;
-        videoRef.current.play().catch(() => {});
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((e) => {
+            console.log('Autoplay or video playback prevented:', e);
+          });
+        }
       } else {
         videoRef.current.pause();
       }
     }
-  }, [isPlaying, playbackSpeed]);
+  }, [isPlaying, playbackSpeed, activeRecording]);
 
   const activeCamera = useMemo(() => {
     if (!activeRecording) return userAccessibleCameras[0] || null;
@@ -605,6 +593,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl space-y-3 p-4">
               <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
                 <video
+                  key={activeRecording.id}
                   ref={videoRef}
                   src={
                     activeRecording.streamUrl && activeRecording.streamUrl.endsWith('.mp4')
@@ -614,8 +603,13 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   poster={activeCamera?.thumbnailUrl || activeRecording.thumbnailUrl}
                   crossOrigin="anonymous"
                   playsInline
-                  muted
-                  loop
+                  autoPlay={isPlaying}
+                  onTimeUpdate={(e) => {
+                    setCurrentTime(Math.floor(e.currentTarget.currentTime));
+                  }}
+                  onEnded={() => setIsPlaying(false)}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
                   className="w-full h-full object-cover"
                 />
 
