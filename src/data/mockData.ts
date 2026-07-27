@@ -8,6 +8,8 @@ export const INITIAL_USERS: User[] = [
     role: 'ADMIN',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     phone: '+55 11 98765-4321',
+    stateUf: 'BA',
+    city: 'Itamaraju',
     status: 'ACTIVE',
     customPermissions: {
       canViewLive: true,

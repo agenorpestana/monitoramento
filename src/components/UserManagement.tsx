@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Users,
   UserPlus,
@@ -10,7 +10,8 @@ import {
   Eye,
   Sliders,
   X,
-  Edit2
+  Edit2,
+  MapPin,
 } from 'lucide-react';
 import { User, UserRole, CustomPermissions, Camera } from '../types';
 
@@ -22,6 +23,31 @@ interface UserManagementProps {
   onUpdateUser: (id: string, userData: Partial<User>) => void;
   onDeleteUser: (id: string) => void;
 }
+
+interface IbgeUF {
+  sigla: string;
+  nome: string;
+}
+
+interface IbgeCity {
+  id: number;
+  nome: string;
+}
+
+const FALLBACK_UFS: IbgeUF[] = [
+  { sigla: 'BA', nome: 'Bahia' },
+  { sigla: 'SP', nome: 'São Paulo' },
+  { sigla: 'RJ', nome: 'Rio de Janeiro' },
+  { sigla: 'MG', nome: 'Minas Gerais' },
+  { sigla: 'DF', nome: 'Distrito Federal' },
+  { sigla: 'ES', nome: 'Espírito Santo' },
+  { sigla: 'PR', nome: 'Paraná' },
+  { sigla: 'RS', nome: 'Rio Grande do Sul' },
+  { sigla: 'SC', nome: 'Santa Catarina' },
+  { sigla: 'PE', nome: 'Pernambuco' },
+  { sigla: 'CE', nome: 'Ceará' },
+  { sigla: 'GO', nome: 'Goiás' },
+];
 
 export const UserManagement: React.FC<UserManagementProps> = ({
   users,
@@ -35,11 +61,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingCameraAccessUser, setEditingCameraAccessUser] = useState<User | null>(null);
 
+  const [ufs, setUfs] = useState<IbgeUF[]>(FALLBACK_UFS);
+  const [formCities, setFormCities] = useState<IbgeCity[]>([]);
+  const [editCities, setEditCities] = useState<IbgeCity[]>([]);
+  const [loadingFormCities, setLoadingFormCities] = useState(false);
+  const [loadingEditCities, setLoadingEditCities] = useState(false);
+
   const [formState, setFormState] = useState({
     name: '',
     email: '',
     role: 'RESIDENT' as UserRole,
     phone: '',
+    stateUf: 'BA',
+    city: 'Itamaraju',
     allowedCameraIds: ['ALL'] as string[],
     customPermissions: {
       canViewLive: true,
@@ -53,6 +87,48 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       canExportReports: false,
     } as CustomPermissions,
   });
+
+  // Fetch IBGE UFs on mount
+  useEffect(() => {
+    fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setUfs(data.map((item: any) => ({ sigla: item.sigla, nome: item.nome })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Fetch Cities for Form UF
+  useEffect(() => {
+    if (!formState.stateUf) return;
+    setLoadingFormCities(true);
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${formState.stateUf}/municipios?orderBy=nome`)
+      .then((res) => res.json())
+      .then((data) => {
+        setLoadingFormCities(false);
+        if (Array.isArray(data) && data.length > 0) {
+          setFormCities(data);
+        }
+      })
+      .catch(() => setLoadingFormCities(false));
+  }, [formState.stateUf]);
+
+  // Fetch Cities for Edit Modal UF
+  useEffect(() => {
+    if (!editingUser?.stateUf) return;
+    setLoadingEditCities(true);
+    fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${editingUser.stateUf}/municipios?orderBy=nome`)
+      .then((res) => res.json())
+      .then((data) => {
+        setLoadingEditCities(false);
+        if (Array.isArray(data) && data.length > 0) {
+          setEditCities(data);
+        }
+      })
+      .catch(() => setLoadingEditCities(false));
+  }, [editingUser?.stateUf]);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,6 +152,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       email: '',
       role: 'RESIDENT',
       phone: '',
+      stateUf: 'BA',
+      city: 'Itamaraju',
       allowedCameraIds: ['ALL'],
       customPermissions: {
         canViewLive: true,
@@ -104,6 +182,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       email: editingUser.email,
       role: editingUser.role,
       phone: editingUser.phone,
+      stateUf: editingUser.stateUf || 'BA',
+      city: editingUser.city || 'Itamaraju',
       allowedCameraIds: (editingUser.allowedCameraIds || []).length === 0 ? ['ALL'] : editingUser.allowedCameraIds,
       customPermissions: editingUser.customPermissions,
     });
@@ -278,6 +358,54 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 <option value="VIEWER">VISUALIZADOR</option>
               </select>
             </div>
+
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Telefone / WhatsApp:</label>
+              <input
+                type="text"
+                placeholder="+55 73 99999-9999"
+                value={formState.phone}
+                onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Estado (UF):</label>
+              <select
+                value={formState.stateUf}
+                onChange={(e) => setFormState({ ...formState, stateUf: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
+              >
+                {ufs.map((uf) => (
+                  <option key={uf.sigla} value={uf.sigla}>
+                    {uf.nome} ({uf.sigla})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Cidade:</label>
+              <select
+                value={formState.city}
+                onChange={(e) => setFormState({ ...formState, city: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
+                disabled={loadingFormCities}
+              >
+                {loadingFormCities ? (
+                  <option value="">Carregando IBGE...</option>
+                ) : formCities.length > 0 ? (
+                  formCities.map((c) => (
+                    <option key={c.id} value={c.nome}>
+                      {c.nome}
+                    </option>
+                  ))
+                ) : (
+                  <option value={formState.city}>{formState.city}</option>
+                )}
+              </select>
+            </div>
           </div>
 
           {/* Camera Selection Section */}
@@ -409,7 +537,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           </span>
                         )}
                       </h4>
-                      <p className="text-[11px] text-slate-400">{user.email}</p>
+                      <p className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
+                        <span>{user.email}</span>
+                        {(user.city || user.stateUf) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-sans">
+                            <MapPin className="w-3 h-3 text-emerald-400" />
+                            {user.city || 'Cidade N/D'}{user.stateUf ? ` - ${user.stateUf}` : ''}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -600,6 +736,43 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
                     placeholder="+55 73 99999-9999"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Estado (UF):</label>
+                  <select
+                    value={editingUser.stateUf || 'BA'}
+                    onChange={(e) => setEditingUser({ ...editingUser, stateUf: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                  >
+                    {ufs.map((uf) => (
+                      <option key={uf.sigla} value={uf.sigla}>
+                        {uf.nome} ({uf.sigla})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Cidade:</label>
+                  <select
+                    value={editingUser.city || 'Itamaraju'}
+                    onChange={(e) => setEditingUser({ ...editingUser, city: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                    disabled={loadingEditCities}
+                  >
+                    {loadingEditCities ? (
+                      <option value="">Carregando IBGE...</option>
+                    ) : editCities.length > 0 ? (
+                      editCities.map((c) => (
+                        <option key={c.id} value={c.nome}>
+                          {c.nome}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={editingUser.city || 'Itamaraju'}>{editingUser.city || 'Itamaraju'}</option>
+                    )}
+                  </select>
                 </div>
               </div>
 

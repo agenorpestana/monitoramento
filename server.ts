@@ -424,6 +424,10 @@ async function startServer() {
         await pool.query('ALTER TABLE `users` MODIFY `status` VARCHAR(50) DEFAULT "ACTIVE"');
       } catch (e) {}
 
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(10) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `allowed_camera_ids` JSON NULL'); } catch (e) {}
+
       // Purge legacy mock cameras if present in MySQL
       try {
         await pool.query("DELETE FROM cameras WHERE id IN ('cam-wpg8tz', 'cam-jvv51l', 'cam-v7w3f8')");
@@ -478,8 +482,11 @@ async function startServer() {
           email: row.email,
           role: row.role,
           phone: row.phone,
+          stateUf: row.state_uf || '',
+          city: row.city || '',
           status: row.status,
           customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
+          allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
           lastActive: row.last_active,
           createdAt: row.created_at,
         }));
@@ -564,9 +571,9 @@ async function startServer() {
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
-        `INSERT INTO users (id, name, email, password_hash, role, phone, status, custom_permissions, last_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), status=VALUES(status), custom_permissions=VALUES(custom_permissions), last_active=VALUES(last_active)`,
+        `INSERT INTO users (id, name, email, password_hash, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, last_active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), custom_permissions=VALUES(custom_permissions), allowed_camera_ids=VALUES(allowed_camera_ids), last_active=VALUES(last_active)`,
         [
           u.id,
           u.name,
@@ -574,8 +581,11 @@ async function startServer() {
           '$2b$10$itlpasswordhash2026',
           u.role || 'RESIDENT',
           u.phone || '',
+          u.stateUf || '',
+          u.city || '',
           u.status || 'ACTIVE',
           JSON.stringify(u.customPermissions || {}),
+          JSON.stringify(u.allowedCameraIds || ['ALL']),
           u.lastActive || 'Agora',
           u.createdAt || new Date().toISOString().split('T')[0],
         ]

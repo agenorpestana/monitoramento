@@ -25,6 +25,8 @@ export interface User {
   role: UserRole;
   avatar?: string;
   phone?: string;
+  stateUf?: string;
+  city?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   customPermissions: CustomPermissions;
   allowedCameraIds?: string[]; // If empty or contains 'ALL', user has access to all cameras
