@@ -167,26 +167,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
-  // Periodic motion alert checker when logged in
-  useEffect(() => {
-    if (!isLoggedIn || cameras.length === 0) return;
 
-    const interval = setInterval(() => {
-      if (Math.random() < 0.15) {
-        const randomCam = cameras[Math.floor(Math.random() * cameras.length)];
-        if (!randomCam) return;
-
-        const types: AlertType[] = ['HUMAN', 'VEHICLE', 'INTRUSION', 'SOUND'];
-        const chosenType = types[Math.floor(Math.random() * types.length)];
-        const severities: AlertSeverity[] = ['MEDIUM', 'HIGH', 'CRITICAL'];
-        const chosenSev = severities[Math.floor(Math.random() * severities.length)];
-
-        triggerMotionAlert(randomCam.id, chosenType, chosenSev);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [isLoggedIn, cameras]);
 
 
 
