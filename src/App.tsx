@@ -1,4 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Grid,
+  Map,
+  Bell,
+  Film,
+  PlusCircle,
+  Users,
+  FileText,
+  Database,
+  Smartphone,
+  Lock,
+} from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { CameraGrid } from './components/CameraGrid';
@@ -421,23 +433,109 @@ export default function App() {
           totalCameras={cameras.length}
         />
 
-        {/* Mobile Tab Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 flex items-center justify-around p-2 text-[10px] text-slate-400">
-          <button onClick={() => setActiveTab('live-grid')} className={`p-1.5 flex flex-col items-center ${activeTab === 'live-grid' ? 'text-emerald-400 font-bold' : ''}`}>
-            Câmeras
+        {/* Mobile Tab Navigation (Scrollable with all tabs) */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 border-t border-slate-800 backdrop-blur-md px-2 py-1.5 flex items-center space-x-1 overflow-x-auto text-[10px] text-slate-400">
+          <button
+            onClick={() => setActiveTab('live-grid')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'live-grid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Grid className="w-3.5 h-3.5" />
+            <span>Câmeras ({cameras.length})</span>
           </button>
-          <button onClick={() => setActiveTab('camera-map')} className={`p-1.5 flex flex-col items-center ${activeTab === 'camera-map' ? 'text-emerald-400 font-bold' : ''}`}>
-            Mapa
+
+          <button
+            onClick={() => setActiveTab('camera-map')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'camera-map' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Map className="w-3.5 h-3.5" />
+            <span>Mapa</span>
           </button>
-          <button onClick={() => setActiveTab('motion-alerts')} className={`p-1.5 flex flex-col items-center relative ${activeTab === 'motion-alerts' ? 'text-emerald-400 font-bold' : ''}`}>
-            Alertas
-            {unreadAlertsCount > 0 && <span className="absolute top-0 right-2 w-2 h-2 rounded-full bg-rose-500"></span>}
+
+          <button
+            onClick={() => setActiveTab('motion-alerts')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 relative transition ${
+              activeTab === 'motion-alerts' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            <span>Alertas</span>
+            {unreadAlertsCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+            )}
           </button>
-          <button onClick={() => setActiveTab('cloud-recordings')} className={`p-1.5 flex flex-col items-center ${activeTab === 'cloud-recordings' ? 'text-emerald-400 font-bold' : ''}`}>
-            Nuvem
+
+          <button
+            onClick={() => setActiveTab('cloud-recordings')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'cloud-recordings' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Film className="w-3.5 h-3.5" />
+            <span>Nuvem</span>
           </button>
-          <button onClick={() => setActiveTab('user-management')} className={`p-1.5 flex flex-col items-center ${activeTab === 'user-management' ? 'text-emerald-400 font-bold' : ''}`}>
-            Acesso
+
+          <button
+            onClick={() => setActiveTab('camera-admin')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'camera-admin' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>Adicionar</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('user-management')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'user-management' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Acesso</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('activity-reports')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'activity-reports' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Relatórios</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('backup-manager')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'backup-manager' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Backup</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('push-notifications')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'push-notifications' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Push</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('e2ee-vault')}
+            className={`px-3 py-1.5 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
+              activeTab === 'e2ee-vault' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-400'
+            }`}
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span>E2EE</span>
           </button>
         </div>
 

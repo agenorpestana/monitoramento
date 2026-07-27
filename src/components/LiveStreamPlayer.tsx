@@ -477,12 +477,6 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           </div>
 
           <div className="flex items-center space-x-1.5 shrink-0">
-            {camera.isE2EEEncrypted && (
-              <span className="flex items-center space-x-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/30">
-                <Lock className="w-3 h-3" />
-                <span>E2EE Criptografado</span>
-              </span>
-            )}
             <span
               className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                 connectionState === 'OFFLINE'
@@ -501,14 +495,11 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
           </div>
         </div>
 
-        {/* Location and URL Details */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+        {/* Location Details */}
+        <div className="flex items-center justify-between gap-1 text-xs">
           <div className="text-slate-300 font-semibold truncate flex items-center gap-1.5">
             <span className="text-slate-400">Local:</span>
             <span>{camera.location || `${camera.city || 'Itamaraju'} - ${camera.stateUf || 'BA'}`}</span>
-          </div>
-          <div className="text-[10px] font-mono text-cyan-400 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-slate-800 truncate max-w-full sm:max-w-md">
-            {displayStreamUrl}
           </div>
         </div>
 
@@ -539,37 +530,9 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
                     : 'Vídeo RTMP HLS'}
                 </span>
               </button>
-
-              <button
-                onClick={() => setStreamMode('WEBCAM')}
-                className={`px-2.5 py-1 text-xs rounded-xl font-bold transition flex items-center space-x-1 border ${
-                  streamMode === 'WEBCAM'
-                    ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md'
-                    : 'bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <Webcam className="w-3.5 h-3.5" />
-                <span>Webcam</span>
-              </button>
-
-              <button
-                onClick={() => setIsEditingUrl(!isEditingUrl)}
-                className="p-1.5 text-slate-400 hover:text-cyan-300 bg-slate-950 hover:bg-slate-800 rounded-xl border border-slate-800 transition"
-                title="Alterar URL de transmissão"
-              >
-                <Link2 className="w-3.5 h-3.5" />
-              </button>
             </div>
 
             <div className="flex items-center space-x-2">
-              <button
-                onClick={runPlayerDiag}
-                className="px-3 py-1 bg-slate-950 hover:bg-slate-800 text-emerald-400 border border-slate-800 rounded-xl text-xs font-bold transition flex items-center space-x-1.5"
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>Teste / Diagnóstico</span>
-              </button>
-
               <button
                 onClick={toggleFullscreen}
                 className="px-3.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center space-x-1.5"
