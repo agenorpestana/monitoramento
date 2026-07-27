@@ -12,6 +12,7 @@ import {
   X,
   Edit2,
   MapPin,
+  DollarSign,
 } from 'lucide-react';
 import { User, UserRole, CustomPermissions, Camera } from '../types';
 
@@ -543,6 +544,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                           <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-sans">
                             <MapPin className="w-3 h-3 text-emerald-400" />
                             {user.city || 'Cidade N/D'}{user.stateUf ? ` - ${user.stateUf}` : ''}
+                          </span>
+                        )}
+                        {(user.planName || user.chosenDueDay) && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20 font-sans">
+                            <DollarSign className="w-3 h-3 text-cyan-400" />
+                            {user.planName || 'Plano Residencial'} (Venc. Dia {user.chosenDueDay || 5})
                           </span>
                         )}
                       </p>

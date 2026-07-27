@@ -10,6 +10,7 @@ import {
   Database,
   Smartphone,
   Lock,
+  DollarSign,
 } from 'lucide-react';
 
 import { User } from '../types';
@@ -42,6 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },
     { id: 'camera-admin', label: 'Adicionar / RTSP', icon: PlusCircle },
     { id: 'user-management', label: 'Acesso Multiusuário', icon: Users, adminOnly: true },
+    { id: 'financial-management', label: 'Financeiro & Planos', icon: DollarSign },
     { id: 'activity-reports', label: 'Relatórios Diários', icon: FileText },
     { id: 'backup-manager', label: 'Backup Automático', icon: Database },
     { id: 'push-notifications', label: 'Notificações Push', icon: Smartphone },

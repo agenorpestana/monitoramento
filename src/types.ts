@@ -16,7 +16,10 @@ export interface CustomPermissions {
   canAccessAuditLogs: boolean;
   canManageUsers: boolean;
   canExportReports: boolean;
+  canManageFinancial?: boolean;
 }
+
+export type FinancialStatus = 'OK' | 'WARNING' | 'BLOCKED';
 
 export interface User {
   id: string;
@@ -32,6 +35,53 @@ export interface User {
   allowedCameraIds?: string[]; // If empty or contains 'ALL', user has access to all cameras
   lastActive: string;
   createdAt: string;
+
+  // Financial fields
+  planId?: string;
+  planName?: string;
+  monthlyFee?: number;
+  chosenDueDay?: 5 | 10 | 15 | 20;
+  financialStatus?: FinancialStatus;
+  daysOverdue?: number;
+}
+
+export interface FinancialPlan {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  camerasIncluded: number;
+  cloudRetentionDays: number;
+  description: string;
+  popular?: boolean;
+}
+
+export type InvoiceStatus = 'PAID' | 'PENDING' | 'OVERDUE' | 'CANCELLED';
+
+export interface Invoice {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  planName: string;
+  amount: number;
+  originalAmount: number;
+  dueDate: string; // YYYY-MM-DD
+  paymentDate?: string;
+  status: InvoiceStatus;
+  isProRata: boolean;
+  proRataDays?: number;
+  pixCode?: string;
+  pixQrCodeUrl?: string;
+  mercadoPagoPaymentId?: string;
+  createdAt: string;
+}
+
+export interface MercadoPagoConfig {
+  accessToken: string;
+  publicKey: string;
+  webhookSecret: string;
+  isSandbox: boolean;
+  autoApproveSimulated: boolean;
 }
 
 export interface Camera {

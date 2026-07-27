@@ -14,6 +14,10 @@ import { CameraDetailModal } from './components/CameraDetailModal';
 import { E2EEVaultModal } from './components/E2EEVaultModal';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { LandingPage } from './components/LandingPage';
+import { FinancialManagement } from './components/FinancialManagement';
+import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
+import { FinancialAlertBanner } from './components/FinancialAlertBanner';
+import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
 
 import {
   Camera,
@@ -26,6 +30,8 @@ import {
   E2EESettings,
   AlertType,
   AlertSeverity,
+  Invoice,
+  MercadoPagoConfig,
 } from './types';
 
 import {
@@ -38,6 +44,11 @@ import {
   INITIAL_NOTIFICATION_CONFIG,
   INITIAL_E2EE_SETTINGS,
 } from './data/mockData';
+
+import {
+  checkInvoiceFinancialStatus,
+  INITIAL_MP_CONFIG,
+} from './lib/financial';
 
 export default function App() {
   // Authentication State with LocalStorage Persistence
@@ -98,6 +109,27 @@ export default function App() {
   const [backupConfig, setBackupConfig] = useState<BackupConfig>(INITIAL_BACKUP_CONFIG);
   const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(INITIAL_NOTIFICATION_CONFIG);
   const [e2eeSettings, setE2eesettings] = useState<E2EESettings>(INITIAL_E2EE_SETTINGS);
+
+  // Financial States
+  const [invoices, setInvoices] = useState<Invoice[]>([
+    {
+      id: 'inv-1001',
+      userId: 'user-superadmin-01',
+      userName: 'Super Admin Unity',
+      userEmail: 'suporte@unityautomacoes.com.br',
+      planName: 'Plano Vizinhança Protegida ITL',
+      amount: 149.90,
+      originalAmount: 149.90,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: 'PAID',
+      isProRata: false,
+      paymentDate: new Date().toISOString().split('T')[0],
+      createdAt: '2026-07-01',
+    },
+  ]);
+  const [mpConfig, setMpConfig] = useState<MercadoPagoConfig>(INITIAL_MP_CONFIG);
+  const [isMpSettingsOpen, setIsMpSettingsOpen] = useState(false);
+  const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState<Invoice | null>(null);
 
   // Modal States
   const [inspectingCamera, setInspectingCamera] = useState<Camera | null>(null);
@@ -329,6 +361,32 @@ export default function App() {
 
   const unreadAlertsCount = alerts.filter((a) => !a.readStatus).length;
 
+  // Active user financial invoice check
+  const activeUserInvoice = invoices.find(
+    (i) => i.userId === activeUser.id && (i.status === 'PENDING' || i.status === 'OVERDUE')
+  );
+
+  const financialStatusInfo = activeUserInvoice
+    ? checkInvoiceFinancialStatus(activeUserInvoice.dueDate, activeUserInvoice.status)
+    : {
+        financialStatus: 'OK' as const,
+        daysUntilDue: 999,
+        daysOverdue: 0,
+        shouldAlert: false,
+        shouldBlock: false,
+        message: '',
+      };
+
+  const handlePayInvoiceFromApp = (invoiceId: string) => {
+    setInvoices((prev) =>
+      prev.map((i) =>
+        i.id === invoiceId
+          ? { ...i, status: 'PAID' as const, paymentDate: new Date().toISOString().split('T')[0] }
+          : i
+      )
+    );
+  };
+
   // Render Public Landing Page for Guests
   if (!isLoggedIn) {
     return (
@@ -345,7 +403,7 @@ export default function App() {
           onLoginSuccess={(loggedInUser) => {
             setActiveUser(loggedInUser);
             setIsLoggedIn(true);
-            setActiveTab(loggedInUser.role === 'ADMIN' ? 'live-grid' : 'live-grid');
+            setActiveTab('live-grid');
           }}
           activeUser={activeUser}
         />
@@ -356,6 +414,25 @@ export default function App() {
   // Render Authenticated Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
+      {/* System Blocked Overlay when overdue > 5 days */}
+      {financialStatusInfo.shouldBlock && (
+        <SystemBlockedOverlay
+          user={activeUser}
+          overdueInvoice={activeUserInvoice}
+          onPaymentSuccess={handlePayInvoiceFromApp}
+        />
+      )}
+
+      {/* Top Financial Alert Banner when 5 days before due or <=5 days overdue */}
+      {financialStatusInfo.shouldAlert && activeUserInvoice && !financialStatusInfo.shouldBlock && (
+        <FinancialAlertBanner
+          invoice={activeUserInvoice}
+          daysUntilDue={financialStatusInfo.daysUntilDue}
+          daysOverdue={financialStatusInfo.daysOverdue}
+          onOpenPaymentModal={() => setActiveTab('financial-management')}
+        />
+      )}
+
       {/* Top Navigation */}
       <Navbar
         activeUser={activeUser}
@@ -491,6 +568,18 @@ export default function App() {
             )
           )}
 
+          {activeTab === 'financial-management' && (
+            <FinancialManagement
+              currentUser={activeUser}
+              users={users}
+              invoices={invoices}
+              mpConfig={mpConfig}
+              onUpdateInvoices={setInvoices}
+              onUpdateUsers={setUsers}
+              onOpenMpSettings={() => setIsMpSettingsOpen(true)}
+            />
+          )}
+
           {activeTab === 'activity-reports' && (
             <ActivityReports logs={logs} activeUser={activeUser} />
           )}
@@ -560,6 +649,15 @@ export default function App() {
           setIsLoggedIn(true);
         }}
         activeUser={activeUser}
+      />
+
+      {/* Mercado Pago API Settings Modal (Super Admin) */}
+      <MercadoPagoSettingsModal
+        isOpen={isMpSettingsOpen}
+        onClose={() => setIsMpSettingsOpen(false)}
+        config={mpConfig}
+        onSaveConfig={setMpConfig}
+        currentUser={activeUser}
       />
     </div>
   );
