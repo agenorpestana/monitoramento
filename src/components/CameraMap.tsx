@@ -46,7 +46,7 @@ const FreeOpenStreetMapComponent: React.FC<FreeOSMMapProps> = ({
     if (!mapInstance.current) {
       const map = L.map(containerRef.current, {
         center: [center.lat, center.lng],
-        zoom: 9,
+        zoom: 13,
         zoomControl: true,
       });
 
@@ -221,11 +221,11 @@ export const CameraMap: React.FC<CameraMapProps> = ({
     return c.status === filterStatus;
   });
 
-  // Calculate map center default based on cameras lat/lng, defaulting to Itamaraju/Extreme South Bahia
+  // Calculate map center default based on cameras lat/lng
   const center = React.useMemo(() => {
-    if (!cameras.length) return { lat: -17.0000, lng: -39.5000 };
-    const validCams = cameras.filter((c) => c.lat && c.lng && !isNaN(Number(c.lat)) && Number(c.lat) !== 0);
-    if (!validCams.length) return { lat: -17.0000, lng: -39.5000 };
+    if (!cameras.length) return { lat: -17.0397, lng: -39.5312 };
+    const validCams = cameras.filter((c) => c.lat && c.lng);
+    if (!validCams.length) return { lat: -17.0397, lng: -39.5312 };
 
     const avgLat = validCams.reduce((acc, c) => acc + Number(c.lat), 0) / validCams.length;
     const avgLng = validCams.reduce((acc, c) => acc + Number(c.lng), 0) / validCams.length;
@@ -518,7 +518,7 @@ export const CameraMap: React.FC<CameraMapProps> = ({
               <APIProvider apiKey={envKey} version="weekly">
                 <Map
                   defaultCenter={center}
-                  defaultZoom={9}
+                  defaultZoom={13}
                   mapId="ITL_SECURITY_MAP"
                   internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
                   style={{ width: '100%', height: '100%' }}

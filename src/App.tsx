@@ -1,19 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Grid,
-  Map,
-  Bell,
-  Film,
-  PlusCircle,
-  Users,
-  FileText,
-  Database,
-  Smartphone,
-  Lock,
-  Menu,
-  X,
-  ChevronRight,
-} from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { CameraGrid } from './components/CameraGrid';
@@ -118,7 +103,6 @@ export default function App() {
   const [inspectingCamera, setInspectingCamera] = useState<Camera | null>(null);
   const [isE2EEModalOpen, setIsE2EEModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Notification Banner State
   const [recentNotification, setRecentNotification] = useState<MotionAlert | null>(null);
@@ -167,7 +151,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
+  // Periodic motion alert checker when logged in
+  useEffect(() => {
+    if (!isLoggedIn || cameras.length === 0) return;
 
+    const interval = setInterval(() => {
+      if (Math.random() < 0.15) {
+        const randomCam = cameras[Math.floor(Math.random() * cameras.length)];
+        if (!randomCam) return;
+
+        const types: AlertType[] = ['HUMAN', 'VEHICLE', 'INTRUSION', 'SOUND'];
+        const chosenType = types[Math.floor(Math.random() * types.length)];
+        const severities: AlertSeverity[] = ['MEDIUM', 'HIGH', 'CRITICAL'];
+        const chosenSev = severities[Math.floor(Math.random() * severities.length)];
+
+        triggerMotionAlert(randomCam.id, chosenType, chosenSev);
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [isLoggedIn, cameras]);
 
 
 
@@ -393,83 +396,7 @@ export default function App() {
           } catch (e) {}
         }}
         isVaultUnlocked={e2eeSettings.isVaultUnlocked}
-        onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
       />
-
-      {/* Mobile Drawer Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden bg-slate-950/80 backdrop-blur-md flex flex-col justify-end">
-          <div className="bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85vh] overflow-y-auto p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Menu className="w-5 h-5 text-emerald-400" />
-                  Navegação do Sistema
-                </h3>
-                <p className="text-xs text-slate-400">Acesse qualquer módulo do painel Central ITL</p>
-              </div>
-              <button
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <nav className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              {[
-                { id: 'live-grid', label: 'Câmeras ao Vivo', icon: Grid, badge: cameras.length },
-                { id: 'camera-map', label: 'Mapa Vizinhança', icon: Map },
-                { id: 'motion-alerts', label: 'Alertas de Movimento', icon: Bell, badge: unreadAlertsCount, alert: unreadAlertsCount > 0 },
-                { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },
-                { id: 'camera-admin', label: 'Adicionar / RTSP', icon: PlusCircle },
-                { id: 'user-management', label: 'Acesso Multiusuário', icon: Users },
-                { id: 'activity-reports', label: 'Relatórios Diários', icon: FileText },
-                { id: 'backup-manager', label: 'Backup Automático', icon: Database },
-                { id: 'push-notifications', label: 'Notificações Push', icon: Smartphone },
-                { id: 'e2ee-vault', label: 'Criptografia E2EE', icon: Lock },
-              ].map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setActiveTab(item.id);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-2xl font-medium text-xs transition ${
-                      isActive
-                        ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-400 border border-emerald-500/40 font-bold shadow-md'
-                        : 'bg-slate-950/60 text-slate-300 border border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3 truncate">
-                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
-                      <span className="truncate">{item.label}</span>
-                    </div>
-
-                    <div className="flex items-center space-x-2 shrink-0">
-                      {item.badge !== undefined && item.badge > 0 && (
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            item.alert
-                              ? 'bg-rose-500 text-white animate-pulse'
-                              : 'bg-slate-800 text-emerald-400 border border-emerald-500/20'
-                          }`}
-                        >
-                          {item.badge}
-                        </span>
-                      )}
-                      <ChevronRight className="w-4 h-4 text-slate-500" />
-                    </div>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
-      )}
 
       {/* Floating Push Alert Banner */}
       {recentNotification && (
@@ -494,72 +421,28 @@ export default function App() {
           totalCameras={cameras.length}
         />
 
-        {/* Mobile Tab Navigation (Touch-optimized scrollable bar with 'Mais' drawer button) */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 border-t border-slate-800 backdrop-blur-md px-2 py-1.5 flex items-center space-x-1.5 overflow-x-auto text-[10px] text-slate-400 no-scrollbar">
-          <button
-            onClick={() => setActiveTab('live-grid')}
-            className={`px-3 py-2 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
-              activeTab === 'live-grid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-300'
-            }`}
-          >
-            <Grid className="w-3.5 h-3.5" />
-            <span>Câmeras ({cameras.length})</span>
+        {/* Mobile Tab Navigation */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 flex items-center justify-around p-2 text-[10px] text-slate-400">
+          <button onClick={() => setActiveTab('live-grid')} className={`p-1.5 flex flex-col items-center ${activeTab === 'live-grid' ? 'text-emerald-400 font-bold' : ''}`}>
+            Câmeras
           </button>
-
-          <button
-            onClick={() => setActiveTab('camera-map')}
-            className={`px-3 py-2 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
-              activeTab === 'camera-map' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-300'
-            }`}
-          >
-            <Map className="w-3.5 h-3.5" />
-            <span>Mapa</span>
+          <button onClick={() => setActiveTab('camera-map')} className={`p-1.5 flex flex-col items-center ${activeTab === 'camera-map' ? 'text-emerald-400 font-bold' : ''}`}>
+            Mapa
           </button>
-
-          <button
-            onClick={() => setActiveTab('motion-alerts')}
-            className={`px-3 py-2 rounded-xl flex items-center space-x-1.5 shrink-0 relative transition ${
-              activeTab === 'motion-alerts' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-300'
-            }`}
-          >
-            <Bell className="w-3.5 h-3.5" />
-            <span>Alertas</span>
-            {unreadAlertsCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-            )}
+          <button onClick={() => setActiveTab('motion-alerts')} className={`p-1.5 flex flex-col items-center relative ${activeTab === 'motion-alerts' ? 'text-emerald-400 font-bold' : ''}`}>
+            Alertas
+            {unreadAlertsCount > 0 && <span className="absolute top-0 right-2 w-2 h-2 rounded-full bg-rose-500"></span>}
           </button>
-
-          <button
-            onClick={() => setActiveTab('cloud-recordings')}
-            className={`px-3 py-2 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
-              activeTab === 'cloud-recordings' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-300'
-            }`}
-          >
-            <Film className="w-3.5 h-3.5" />
-            <span>Nuvem</span>
+          <button onClick={() => setActiveTab('cloud-recordings')} className={`p-1.5 flex flex-col items-center ${activeTab === 'cloud-recordings' ? 'text-emerald-400 font-bold' : ''}`}>
+            Nuvem
           </button>
-
-          <button
-            onClick={() => setActiveTab('camera-admin')}
-            className={`px-3 py-2 rounded-xl flex items-center space-x-1.5 shrink-0 transition ${
-              activeTab === 'camera-admin' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-bold' : 'bg-slate-800/60 text-slate-300'
-            }`}
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Adicionar</span>
-          </button>
-
-          <button
-            onClick={() => setIsMobileMenuOpen(true)}
-            className="px-3 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold rounded-xl flex items-center space-x-1.5 shrink-0 transition shadow-lg"
-          >
-            <Menu className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Mais (Menu)</span>
+          <button onClick={() => setActiveTab('user-management')} className={`p-1.5 flex flex-col items-center ${activeTab === 'user-management' ? 'text-emerald-400 font-bold' : ''}`}>
+            Acesso
           </button>
         </div>
 
         {/* Content Area */}
-        <main className="flex-1 p-3 sm:p-6 pb-28 md:pb-6 overflow-x-hidden">
+        <main className="flex-1 p-4 sm:p-6 pb-20 md:pb-6 overflow-x-hidden">
           {activeTab === 'live-grid' && (
             <CameraGrid
               cameras={cameras}

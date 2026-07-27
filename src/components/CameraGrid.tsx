@@ -221,9 +221,29 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                       {camera.protocol === 'RTSP' ? 'RTSP' : 'RTMP'}
                     </span>
                   </div>
+                  <p className="text-[10px] text-slate-400 truncate font-mono">
+                    {camera.protocol === 'RTSP'
+                      ? (camera.rtspUrl || camera.fullRtmpUrl || 'RTSP Ao Vivo')
+                      : (camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || 'Transmissão RTMP')}
+                  </p>
                 </div>
 
                 <div className="flex items-center space-x-1 shrink-0">
+                  {/* Two-way Audio Microphone Button */}
+                  {camera.twoWayAudioEnabled && (
+                    <button
+                      onClick={() => toggleMic(camera.id)}
+                      className={`p-2 rounded-xl text-xs font-semibold flex items-center space-x-1 transition border ${
+                        isMicActive
+                          ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
+                          : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700'
+                      }`}
+                      title={isMicActive ? 'Desativar Microfone' : 'Ativar Áudio Bidirecional (Falar no Alto-Falante da Câmera)'}
+                    >
+                      {isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
+                    </button>
+                  )}
+
                   {/* Audio Mute Button */}
                   <button
                     onClick={() => toggleMute(camera.id)}
@@ -231,6 +251,15 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                     title={isMuted ? 'Ativar Som da Câmera' : 'Silenciar Câmera'}
                   >
                     {isMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-500" /> : <Volume2 className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {/* Test Motion Alert Button */}
+                  <button
+                    onClick={() => onTriggerTestAlert(camera.id)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition"
+                    title="Simular disparo de alerta de movimento agora"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Edit Camera Button */}
