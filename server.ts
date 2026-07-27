@@ -125,15 +125,12 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
     activeRtspUrls.delete(key);
 
     // Auto-reconnect supervisor for camera streams experiencing temporary lag or disconnection
-    const targetCam = cameras.find(
-      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key.replace(/^cam_/, '')}`
-    );
-    if (targetCam) {
+    if (cam) {
       setTimeout(() => {
         const currentProc = activeFfmpegProcesses.get(key);
         if (!currentProc || currentProc.exitCode !== null || currentProc.killed) {
-          console.log(`[FFmpeg ITL Auto-Reconnect] Reconectando transmissão HLS da câmera '${targetCam.name}' (${key}) após lag/queda...`);
-          startCameraRtspStream(targetCam);
+          console.log(`[FFmpeg ITL Auto-Reconnect] Reconectando transmissão HLS da câmera '${cam.name}' (${key}) após lag/queda...`);
+          startCameraRtspStream(cam);
         }
       }, 2000);
     }
@@ -145,12 +142,9 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
     activeFfmpegProcesses.delete(key);
     activeRtspUrls.delete(key);
 
-    const targetCam = cameras.find(
-      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key.replace(/^cam_/, '')}`
-    );
-    if (targetCam) {
+    if (cam) {
       setTimeout(() => {
-        startCameraRtspStream(targetCam);
+        startCameraRtspStream(cam);
       }, 3000);
     }
   });
