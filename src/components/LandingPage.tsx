@@ -82,12 +82,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           {/* Desktop Nav Links */}
           <div className="hidden lg:flex items-center space-x-8 text-xs font-medium text-slate-300">
             <a href="#inicio" className="hover:text-emerald-400 transition">Início</a>
+            <a href="#vantagens" className="hover:text-emerald-400 transition font-bold text-emerald-400">Vantagens ITL</a>
+            <a href="#planos" className="hover:text-emerald-400 transition font-bold text-teal-300">Planos & Preços</a>
             <a href="#degustacao" className="hover:text-emerald-400 transition flex items-center gap-1 text-amber-400 font-bold">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" /> Câmeras Degustação
             </a>
             <a href="#cobertura" className="hover:text-emerald-400 transition">Mapa de Câmeras</a>
-            <a href="#vantagens" className="hover:text-emerald-400 transition font-bold text-emerald-400">Vantagens ITL</a>
-            <a href="#planos" className="hover:text-emerald-400 transition font-bold text-teal-300">Planos & Preços</a>
           </div>
 
           <div className="flex items-center space-x-3">
@@ -294,31 +294,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Coverage Map Section */}
-      <section id="cobertura" className="py-16 bg-slate-900/50 border-y border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-center max-w-2xl mx-auto space-y-3">
-            <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-              Vizinhança Protegida ITL
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-black text-white">
-              Mapa de Câmeras em Tempo Real
-            </h2>
-            <p className="text-slate-400 text-xs sm:text-sm">
-              Nossos clientes e bairros integrados contam com câmeras estratégicas transmitindo 24h por dia para garantir a segurança da comunidade.
-            </p>
-          </div>
-
-          <CameraMap
-            cameras={cameras}
-            onSelectCamera={(cam) => {
-              if (onSelectCamera) onSelectCamera(cam);
-              onOpenLogin();
-            }}
-          />
         </div>
       </section>
 
@@ -570,6 +545,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Coverage Map Section */}
+      <section id="cobertura" className="py-16 bg-slate-900/50 border-y border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <span className="text-emerald-400 text-xs font-bold uppercase tracking-wider bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+              Vizinhança Protegida ITL
+            </span>
+            <h2 className="text-2xl sm:text-4xl font-black text-white">
+              Mapa de Câmeras em Tempo Real
+            </h2>
+            <p className="text-slate-400 text-xs sm:text-sm">
+              Nossos clientes e bairros integrados contam com câmeras estratégicas transmitindo 24h por dia para garantir a segurança da comunidade.
+            </p>
+          </div>
+
+          <CameraMap
+            cameras={cameras}
+            onSelectCamera={(cam) => {
+              if (onSelectCamera) onSelectCamera(cam);
+              onOpenLogin();
+            }}
+          />
         </div>
       </section>
 

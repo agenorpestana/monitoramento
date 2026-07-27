@@ -209,64 +209,26 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               </div>
 
               {/* Controls Footer */}
-              <div className="p-3 bg-slate-900 flex items-center justify-between border-t border-slate-800">
+              <div className="p-2.5 bg-slate-900 flex items-center justify-between border-t border-slate-800">
                 <div className="truncate pr-2">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold text-slate-200 truncate">{camera.location}</p>
-                    <span className={`text-[9px] font-mono px-1 py-0.2 rounded border shrink-0 ${
-                      camera.protocol === 'RTSP'
-                        ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800'
-                        : 'bg-emerald-950/80 text-emerald-400 border-emerald-800'
-                    }`}>
-                      {camera.protocol === 'RTSP' ? 'RTSP' : 'RTMP'}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 truncate font-mono">
-                    {camera.protocol === 'RTSP'
-                      ? (camera.rtspUrl || camera.fullRtmpUrl || 'RTSP Ao Vivo')
-                      : (camera.fullRtmpUrl || camera.rtmpUrl || camera.rtspUrl || 'Transmissão RTMP')}
-                  </p>
+                  <p className="text-xs font-semibold text-slate-200 truncate">{camera.name}</p>
                 </div>
 
                 <div className="flex items-center space-x-1 shrink-0">
-                  {/* Two-way Audio Microphone Button */}
-                  {camera.twoWayAudioEnabled && (
-                    <button
-                      onClick={() => toggleMic(camera.id)}
-                      className={`p-2 rounded-xl text-xs font-semibold flex items-center space-x-1 transition border ${
-                        isMicActive
-                          ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
-                          : 'bg-slate-800 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700'
-                      }`}
-                      title={isMicActive ? 'Desativar Microfone' : 'Ativar Áudio Bidirecional (Falar no Alto-Falante da Câmera)'}
-                    >
-                      {isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
-                    </button>
-                  )}
-
                   {/* Audio Mute Button */}
                   <button
                     onClick={() => toggleMute(camera.id)}
-                    className="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition"
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition"
                     title={isMuted ? 'Ativar Som da Câmera' : 'Silenciar Câmera'}
                   >
                     {isMuted ? <VolumeX className="w-3.5 h-3.5 text-slate-500" /> : <Volume2 className="w-3.5 h-3.5" />}
-                  </button>
-
-                  {/* Test Motion Alert Button */}
-                  <button
-                    onClick={() => onTriggerTestAlert(camera.id)}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-500/40 transition"
-                    title="Simular disparo de alerta de movimento agora"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Edit Camera Button */}
                   {activeUser.customPermissions.canManageCameras && onUpdateCamera && (
                     <button
                       onClick={() => setEditingCamera(camera)}
-                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
+                      className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition"
                       title="Editar configurações da câmera"
                     >
                       <Pencil className="w-3.5 h-3.5 text-emerald-400" />
@@ -276,7 +238,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
                   {/* Expand Modal */}
                   <button
                     onClick={() => onSelectCamera(camera)}
-                    className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition"
+                    className="p-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition"
                     title="Detalhes da câmera"
                   >
                     <Maximize2 className="w-3.5 h-3.5" />

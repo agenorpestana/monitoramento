@@ -97,11 +97,6 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
             <div>
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 {camera.name}
-                {camera.isE2EEEncrypted && (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
-                    <Lock className="w-3 h-3" /> E2EE AES-256
-                  </span>
-                )}
               </h3>
               <p className="text-xs text-slate-400">{camera.location}</p>
             </div>
@@ -197,41 +192,22 @@ export const CameraDetailModal: React.FC<CameraDetailModalProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
               <div className="flex items-center space-x-2">
                 <button
-                  onClick={handleMicToggle}
-                  className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-2 transition ${
-                    isMicTransmitting
-                      ? 'bg-rose-600 text-white animate-pulse'
-                      : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                  }`}
-                >
-                  {isMicTransmitting ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-slate-400" />}
-                  <span>{isMicTransmitting ? 'Parar Áudio' : 'Falar na Câmera (RTMP)'}</span>
-                </button>
-
-                <button
                   onClick={() => setIsMuted(!isMuted)}
-                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition"
+                  className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition flex items-center space-x-2 text-xs font-semibold"
                   title={isMuted ? 'Desmutar' : 'Mutar'}
                 >
                   {isMuted ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4" />}
+                  <span>{isMuted ? 'Ativar Som' : 'Silenciar'}</span>
                 </button>
               </div>
 
               <div className="flex items-center space-x-2">
                 <button
                   onClick={handleTakeSnapshot}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl flex items-center space-x-1.5 transition"
+                  className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl flex items-center space-x-1.5 transition shadow-md"
                 >
-                  <CameraIcon className="w-4 h-4 text-cyan-400" />
+                  <CameraIcon className="w-4 h-4" />
                   <span>Capturar Foto</span>
-                </button>
-
-                <button
-                  onClick={() => onTriggerTestAlert(camera.id)}
-                  className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 text-xs font-medium rounded-xl flex items-center space-x-1.5 transition"
-                >
-                  <ShieldAlert className="w-4 h-4 text-rose-400" />
-                  <span>Testar Alerta</span>
                 </button>
               </div>
             </div>
