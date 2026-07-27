@@ -82,7 +82,14 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
 
   const ffmpegArgs: string[] = [];
   if (streamSource.startsWith('rtsp://')) {
-    ffmpegArgs.push('-rtsp_transport', 'tcp');
+    ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '10000000');
+  } else if (streamSource.startsWith('rtmp://') || streamSource.startsWith('http://') || streamSource.startsWith('https://')) {
+    ffmpegArgs.push(
+      '-reconnect', '1',
+      '-reconnect_at_eof', '1',
+      '-reconnect_streamed', '1',
+      '-reconnect_delay_max', '5'
+    );
   }
 
   ffmpegArgs.push(
@@ -116,6 +123,20 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
     logList.push(`Processo finalizado com código ${code}`);
     activeFfmpegProcesses.delete(key);
     activeRtspUrls.delete(key);
+
+    // Auto-reconnect supervisor for camera streams experiencing temporary lag or disconnection
+    const targetCam = cameras.find(
+      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key.replace(/^cam_/, '')}`
+    );
+    if (targetCam) {
+      setTimeout(() => {
+        const currentProc = activeFfmpegProcesses.get(key);
+        if (!currentProc || currentProc.exitCode !== null || currentProc.killed) {
+          console.log(`[FFmpeg ITL Auto-Reconnect] Reconectando transmissão HLS da câmera '${targetCam.name}' (${key}) após lag/queda...`);
+          startCameraRtspStream(targetCam);
+        }
+      }, 2000);
+    }
   });
 
   proc.on('error', (err) => {
@@ -123,6 +144,15 @@ function startCameraRtspStream(cam: Camera, forceRestart = false) {
     logList.push(`Erro FFmpeg: ${err.message}`);
     activeFfmpegProcesses.delete(key);
     activeRtspUrls.delete(key);
+
+    const targetCam = cameras.find(
+      (c) => (c.streamKey || c.id) === key || c.id === key || c.id === `cam-${key.replace(/^cam_/, '')}`
+    );
+    if (targetCam) {
+      setTimeout(() => {
+        startCameraRtspStream(targetCam);
+      }, 3000);
+    }
   });
 
   activeFfmpegProcesses.set(key, proc);
@@ -584,7 +614,13 @@ async function startServer() {
 
   function startAutoRecordingForCamera(cam: Camera) {
     if (!cam || !cam.id) return;
-    if (activeAutoRecordingProcesses.has(cam.id)) return; // Already actively recording a slice
+    if (activeAutoRecordingProcesses.has(cam.id)) {
+      const proc = activeAutoRecordingProcesses.get(cam.id);
+      if (proc && proc.exitCode === null && !proc.killed) {
+        return; // Already actively recording a slice
+      }
+      activeAutoRecordingProcesses.delete(cam.id);
+    }
 
     const streamUrl = getValidStreamSource(cam);
     if (!streamUrl) return;
@@ -605,7 +641,14 @@ async function startServer() {
 
     const ffmpegArgs: string[] = [];
     if (inputSource.startsWith('rtsp://')) {
-      ffmpegArgs.push('-rtsp_transport', 'tcp');
+      ffmpegArgs.push('-rtsp_transport', 'tcp', '-stimeout', '10000000');
+    } else if (inputSource.startsWith('rtmp://') || inputSource.startsWith('http://') || inputSource.startsWith('https://')) {
+      ffmpegArgs.push(
+        '-reconnect', '1',
+        '-reconnect_at_eof', '1',
+        '-reconnect_streamed', '1',
+        '-reconnect_delay_max', '5'
+      );
     }
 
     ffmpegArgs.push(
@@ -620,12 +663,16 @@ async function startServer() {
       outputPath
     );
 
-    console.log(`[Auto Recorder 24/7] Gravando bloco automático real de ${autoRecordingDurationSec}s para '${cam.name}'...`);
+    console.log(`[Auto Recorder 24/7] Gravando bloco automático real para '${cam.name}' (Lag Auto-Recovery Ativo)...`);
     const proc = spawn('ffmpeg', ffmpegArgs);
     activeAutoRecordingProcesses.set(cam.id, proc);
 
+    let isFinalized = false;
     const finalizeSlice = () => {
+      if (isFinalized) return;
+      isFinalized = true;
       activeAutoRecordingProcesses.delete(cam.id);
+
       const endTime = new Date();
       const durationSec = Math.max(1, Math.round((endTime.getTime() - now.getTime()) / 1000));
 
@@ -635,7 +682,7 @@ async function startServer() {
       try {
         if (fs.existsSync(outputPath)) {
           const stats = fs.statSync(outputPath);
-          if (stats.size > 2000) { // Valid video file with content
+          if (stats.size > 500) { // Preserve even small recorded clips during brief lag drops
             validFile = true;
             fileSizeMB = Math.max(0.1, +(stats.size / (1024 * 1024)).toFixed(1));
           } else {
@@ -675,13 +722,13 @@ async function startServer() {
         console.log(`[Auto Recorder 24/7] Bloco real gravado com sucesso para '${cam.name}': ${fileName} (${fileSizeMB}MB)`);
       }
 
-      // Automatically restart next recording slice after 3s
+      // Automatically restart next recording slice after 2s
       setTimeout(() => {
         const currentCam = cameras.find((c) => c.id === cam.id);
         if (currentCam && currentCam.cloudRecordingsActive !== false) {
           startAutoRecordingForCamera(currentCam);
         }
-      }, 3000);
+      }, 2000);
     };
 
     proc.on('close', () => finalizeSlice());
@@ -690,15 +737,18 @@ async function startServer() {
 
   function checkAndStartAllAutoRecordings() {
     cameras.forEach((cam) => {
+      // Ensure HLS stream worker is running
+      startCameraRtspStream(cam);
+
       if (cam.cloudRecordingsActive !== false) {
         startAutoRecordingForCamera(cam);
       }
     });
   }
 
-  // Start continuous 24/7 background recording for all cameras immediately and every 15s
+  // Start continuous 24/7 background recording for all cameras immediately and every 10s
   setTimeout(checkAndStartAllAutoRecordings, 2000);
-  setInterval(checkAndStartAllAutoRecordings, 15000);
+  setInterval(checkAndStartAllAutoRecordings, 10000);
 
   // Helper log function
   const addLog = (userName: string, action: string, category: ActivityLog['category'], details?: string) => {

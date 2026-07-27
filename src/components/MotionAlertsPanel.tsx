@@ -71,21 +71,21 @@ export const MotionAlertsPanel: React.FC<MotionAlertsPanelProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Bell className="w-5 h-5 text-rose-400" />
-            Alertas de Movimento & Detecção com IA em Tempo Real
+            <Bell className="w-5 h-5 text-emerald-400" />
+            Alertas de Movimento & Detecção de Placas (LPR)
           </h2>
           <p className="text-xs text-slate-400">
-            Alertas instantâneos com inteligência artificial para detecção de pessoas, veículos e invasões de perímetro
+            Painel preparado para captura e armazenamento de placas de veículos e eventos de segurança em tempo real
           </p>
         </div>
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => onTriggerTestAlert('cam-02', 'HUMAN', 'HIGH')}
-            className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs rounded-xl flex items-center space-x-1.5 transition shadow-lg shadow-rose-600/20"
+            onClick={() => onTriggerTestAlert('cam-02', 'VEHICLE', 'HIGH')}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl flex items-center space-x-1.5 transition shadow-lg shadow-emerald-600/20"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Simular Alerta de Teste</span>
+            <span>Simular Teste LPR</span>
           </button>
 
           <button
@@ -137,8 +137,20 @@ export const MotionAlertsPanel: React.FC<MotionAlertsPanelProps> = ({
       {/* Alerts Timeline Feed */}
       <div className="space-y-3">
         {filteredAlerts.length === 0 ? (
-          <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 text-xs">
-            Nenhum alerta de movimento encontrado com os filtros selecionados.
+          <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-300 space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400">
+              <Car className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-sm text-slate-100">Nenhum alerta registrado no momento</h3>
+              <p className="text-xs text-slate-400 max-w-xl mx-auto">
+                Alertas fictícios removidos. O sistema está preparado para a integração de Inteligência Artificial gratuita para leitura e reconhecimento de placas de veículos (LPR).
+              </p>
+            </div>
+            <div className="inline-flex items-center space-x-2 bg-emerald-950/40 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[11px] text-emerald-300 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Banco de dados pronto para busca e armazenamento de imagens por placa.</span>
+            </div>
           </div>
         ) : (
           filteredAlerts.map((alert) => (
