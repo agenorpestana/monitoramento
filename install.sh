@@ -555,7 +555,6 @@ DB_HOST=localhost
 DB_USER=${DB_USER}
 DB_PASSWORD="${DB_PASSWORD}"
 DB_NAME=${DB_NAME}
-NODE_ENV=production
 JWT_SECRET="${SECRET_KEY}"
 DATABASE_URL="mysql://${DB_USER}:${DB_PASSWORD}@localhost:3306/${DB_NAME}"
 EOL
@@ -577,9 +576,9 @@ fi
 cd $PM2_START_DIR
 pm2 delete $PM2_NAME 2>/dev/null
 if [[ "$PM2_SCRIPT" == *.ts ]]; then
-    PORT=$APP_PORT pm2 start "npx tsx $PM2_SCRIPT" --name "$PM2_NAME" --update-env
+    PORT=$APP_PORT NODE_ENV=production pm2 start "npx tsx $PM2_SCRIPT" --name "$PM2_NAME" --update-env
 else
-    PORT=$APP_PORT pm2 start "$PM2_SCRIPT" --name "$PM2_NAME" --update-env
+    PORT=$APP_PORT NODE_ENV=production pm2 start "$PM2_SCRIPT" --name "$PM2_NAME" --update-env
 fi
 pm2 save
 

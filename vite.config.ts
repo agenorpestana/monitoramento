@@ -15,16 +15,8 @@ export default defineConfig(() => {
       },
     },
     build: {
-      chunkSizeWarningLimit: 2000,
-      rollupOptions: {
-        output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom'],
-            icons: ['lucide-react'],
-            charts: ['recharts', 'leaflet'],
-          },
-        },
-      },
+      chunkSizeWarningLimit: 3000,
+      minify: 'esbuild' as const,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
