@@ -231,22 +231,7 @@ async function startServer() {
   let backupConfig: BackupConfig = { ...INITIAL_BACKUP_CONFIG };
   let notificationConfig: NotificationConfig = { ...INITIAL_NOTIFICATION_CONFIG };
   let plans: FinancialPlan[] = [...INITIAL_PLANS];
-  let invoices: Invoice[] = [
-    {
-      id: 'inv-1001',
-      userId: 'user-superadmin-01',
-      userName: 'Super Admin Unity',
-      userEmail: 'suporte@unityautomacoes.com.br',
-      planName: 'Plano Vizinhança Protegida ITL',
-      amount: 149.90,
-      originalAmount: 149.90,
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      status: 'PAID',
-      isProRata: false,
-      paymentDate: new Date().toISOString().split('T')[0],
-      createdAt: '2026-07-01',
-    },
-  ];
+  let invoices: Invoice[] = [];
   let mpConfig: MercadoPagoConfig = { ...INITIAL_MP_CONFIG };
   const deletedRecordingIds = new Set<string>();
 
@@ -1303,7 +1288,6 @@ async function startServer() {
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
 
       // Ensure in-memory repositories have initial default seeds if currently empty
-      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
       if (users.length === 0) users = [...INITIAL_USERS];
       if (plans.length === 0) plans = [...INITIAL_PLANS];
 

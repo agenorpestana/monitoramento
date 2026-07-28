@@ -168,23 +168,30 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
   `updated_at` VARCHAR(100) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Initial default seed data
+-- Safe Schema Alterations / Migrations for existing databases
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `state_uf` VARCHAR(20) NULL;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `city` VARCHAR(100) NULL;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan_id` VARCHAR(64) NULL;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan_name` VARCHAR(255) NULL;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `monthly_fee` DOUBLE DEFAULT 0;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `chosen_due_day` INT DEFAULT 5;
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `financial_status` VARCHAR(50) DEFAULT 'OK';
+ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `days_overdue` INT DEFAULT 0;
+
+ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `rtmp_server_url` TEXT NULL;
+ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `full_rtmp_url` TEXT NULL;
+ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `state_uf` VARCHAR(20) NULL;
+ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `city` VARCHAR(100) NULL;
+
+-- Initial essential default data (Super Admin & System Configurations ONLY - NO dummy cameras)
 INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `phone`, `state_uf`, `city`, `status`, `custom_permissions`, `allowed_camera_ids`, `plan_id`, `plan_name`, `monthly_fee`, `chosen_due_day`, `financial_status`, `days_overdue`, `last_active`, `created_at`)
 VALUES ('user-superadmin-01', 'Super Admin Unity', 'suporte@unityautomacoes.com.br', '$2b$10$itlpasswordhash2026', 'ADMIN', '+55 11 98765-4321', 'BA', 'Itamaraju', 'ACTIVE', '{"canViewLive":true,"canViewRecordings":true,"canControlPTZ":true,"canUseTwoWayAudio":true,"canManageCameras":true,"canDeleteRecordings":true,"canAccessAuditLogs":true,"canManageUsers":true,"canExportReports":true}', '["ALL"]', 'plan-vizinhanca-01', 'Plano Vizinhança Protegida ITL', 149.90, 5, 'OK', 0, 'Agora mesmo', '2026-01-01');
-
-INSERT IGNORE INTO `cameras` (`id`, `name`, `location`, `protocol`, `rtsp_url`, `rtmp_url`, `stream_key`, `rtmp_server_url`, `full_rtmp_url`, `state_uf`, `city`, `status`, `is_e2ee_encrypted`, `encryption_key_hash`, `fps`, `resolution`, `storage_used_gb`, `cloud_recordings_active`, `motion_sensitivity`, `ai_detection_enabled`, `two_way_audio_enabled`, `lat`, `lng`, `thumbnail_url`, `created_at`)
-VALUES 
-('cam-principal-01', 'Câmera Portaria Principal', 'Entrada Principal - Itamaraju', 'RTSP', 'rtsp://127.0.0.1:8554/live/portaria', 'rtmp://127.0.0.1/live/portaria', 'portaria-key', '', '', 'BA', 'Itamaraju', 'ONLINE', 1, 'e2ee-hash-portaria-01', 30, '1080p', 1.20, 1, 8, 1, 1, -17.03970000, -39.53120000, 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80', '2026-07-01'),
-('cam-estacionamento-02', 'Câmera Estacionamento VIP', 'Estacionamento Central', 'RTSP', 'rtsp://127.0.0.1:8554/live/estacionamento', 'rtmp://127.0.0.1/live/estacionamento', 'estacionamento-key', '', '', 'BA', 'Itamaraju', 'ONLINE', 1, 'e2ee-hash-estacionamento-02', 30, '1080p', 0.80, 1, 7, 1, 0, -17.04100000, -39.53300000, 'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&auto=format&fit=crop&q=80', '2026-07-01');
 
 INSERT IGNORE INTO `financial_plans` (`id`, `name`, `monthly_price`, `cameras_included`, `cloud_retention_days`, `description`, `popular`, `created_at`)
 VALUES 
 ('plan-vizinhanca-01', 'Plano Vizinhança Protegida ITL', 149.90, 4, 7, 'Ideal para ruas residenciais e condomínios até 4 câmeras HD com retenção de 7 dias.', 1, '2026-07-01'),
 ('plan-comercial-02', 'Plano Comercio Seguro Pro', 299.90, 8, 15, 'Para estabelecimentos comerciais com suporte a 8 câmeras e IA de Detecção Humana.', 0, '2026-07-01'),
 ('plan-enterprise-03', 'Plano Enterprise Cidade Segura', 599.90, 16, 30, 'Máxima segurança e retenção de 30 dias na nuvem com criptografia E2EE.', 0, '2026-07-01');
-
-INSERT IGNORE INTO `financial_invoices` (`id`, `user_id`, `user_name`, `user_email`, `plan_name`, `amount`, `original_amount`, `due_date`, `payment_date`, `status`, `is_pro_rata`, `pro_rata_days`, `created_at`)
-VALUES ('inv-1001', 'user-superadmin-01', 'Super Admin Unity', 'suporte@unityautomacoes.com.br', 'Plano Vizinhança Protegida ITL', 149.90, 149.90, '2026-08-30', '2026-07-28', 'PAID', 0, 0, '2026-07-01');
 
 INSERT IGNORE INTO `mercado_pago_config` (`id`, `access_token`, `public_key`, `webhook_secret`, `is_sandbox`, `auto_approve_simulated`, `updated_at`)
 VALUES ('default', '', '', '', 1, 1, '2026-07-28 00:00:00');
