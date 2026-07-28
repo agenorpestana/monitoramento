@@ -171,7 +171,8 @@ import {
   INITIAL_BACKUP_CONFIG,
   INITIAL_NOTIFICATION_CONFIG,
 } from './src/data/mockData';
-import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, NotificationConfig } from './src/types';
+import { INITIAL_PLANS, INITIAL_MP_CONFIG } from './src/lib/financial';
+import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, NotificationConfig, FinancialPlan, Invoice, MercadoPagoConfig } from './src/types';
 
 const LOCAL_STORE_FILE = path.join(process.cwd(), 'itl_database_store.json');
 
@@ -229,6 +230,24 @@ async function startServer() {
   let logs: ActivityLog[] = [...INITIAL_LOGS];
   let backupConfig: BackupConfig = { ...INITIAL_BACKUP_CONFIG };
   let notificationConfig: NotificationConfig = { ...INITIAL_NOTIFICATION_CONFIG };
+  let plans: FinancialPlan[] = [...INITIAL_PLANS];
+  let invoices: Invoice[] = [
+    {
+      id: 'inv-1001',
+      userId: 'user-superadmin-01',
+      userName: 'Super Admin Unity',
+      userEmail: 'suporte@unityautomacoes.com.br',
+      planName: 'Plano Vizinhança Protegida ITL',
+      amount: 149.90,
+      originalAmount: 149.90,
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: 'PAID',
+      isProRata: false,
+      paymentDate: new Date().toISOString().split('T')[0],
+      createdAt: '2026-07-01',
+    },
+  ];
+  let mpConfig: MercadoPagoConfig = { ...INITIAL_MP_CONFIG };
   const deletedRecordingIds = new Set<string>();
 
   // Real Active Recording Sessions Tracker
@@ -260,6 +279,9 @@ async function startServer() {
         logs,
         backupConfig,
         notificationConfig,
+        plans,
+        invoices,
+        mpConfig,
       };
       fs.writeFileSync(LOCAL_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
@@ -290,6 +312,9 @@ async function startServer() {
         if (parsed.logs && Array.isArray(parsed.logs)) logs = parsed.logs;
         if (parsed.backupConfig) backupConfig = parsed.backupConfig;
         if (parsed.notificationConfig) notificationConfig = parsed.notificationConfig;
+        if (parsed.plans && Array.isArray(parsed.plans)) plans = parsed.plans;
+        if (parsed.invoices && Array.isArray(parsed.invoices)) invoices = parsed.invoices;
+        if (parsed.mpConfig && parsed.mpConfig.accessToken) mpConfig = parsed.mpConfig;
         console.log(`[ITL Storage] ${cameras.length} câmeras e ${users.length} usuários carregados do arquivo local.`);
         return true;
       }
@@ -699,7 +724,7 @@ async function startServer() {
     }
 
     try {
-      // Ensure tables exist with flexible column types
+      // 1. Table: cameras
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cameras\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
@@ -730,25 +755,7 @@ async function startServer() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // Relax column constraints if existing MySQL table was created with tight constraints
-      try {
-        await pool.query('ALTER TABLE `cameras` MODIFY `rtsp_url` TEXT NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `location` TEXT NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `protocol` VARCHAR(50) DEFAULT "RTSP"');
-        await pool.query('ALTER TABLE `cameras` MODIFY `status` VARCHAR(50) DEFAULT "ONLINE"');
-        await pool.query('ALTER TABLE `cameras` MODIFY `created_at` VARCHAR(100) NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `lat` DOUBLE NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `lng` DOUBLE NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `storage_used_gb` DOUBLE DEFAULT 0.1');
-      } catch (e) {}
-
-      // Dynamically add missing columns to cameras table if they do not exist
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
-
+      // 2. Table: users
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`users\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
@@ -757,28 +764,23 @@ async function startServer() {
           \`password_hash\` VARCHAR(255) NULL,
           \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
           \`phone\` VARCHAR(50),
+          \`state_uf\` VARCHAR(20) NULL,
+          \`city\` VARCHAR(100) NULL,
           \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
           \`custom_permissions\` JSON,
           \`allowed_camera_ids\` JSON,
-          \`state_uf\` VARCHAR(20) NULL,
-          \`city\` VARCHAR(100) NULL,
+          \`plan_id\` VARCHAR(64) NULL,
+          \`plan_name\` VARCHAR(255) NULL,
+          \`monthly_fee\` DOUBLE DEFAULT 0,
+          \`chosen_due_day\` INT DEFAULT 5,
+          \`financial_status\` VARCHAR(50) DEFAULT 'OK',
+          \`days_overdue\` INT DEFAULT 0,
           \`last_active\` VARCHAR(100) DEFAULT 'Agora',
           \`created_at\` VARCHAR(100) DEFAULT '2026-01-01'
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      try {
-        await pool.query('ALTER TABLE `users` MODIFY `password_hash` VARCHAR(255) NULL');
-        await pool.query('ALTER TABLE `users` MODIFY `last_active` VARCHAR(100) NULL');
-        await pool.query('ALTER TABLE `users` MODIFY `created_at` VARCHAR(100) NULL');
-        await pool.query('ALTER TABLE `users` MODIFY `role` VARCHAR(50) DEFAULT "RESIDENT"');
-        await pool.query('ALTER TABLE `users` MODIFY `status` VARCHAR(50) DEFAULT "ACTIVE"');
-      } catch (e) {}
-
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `allowed_camera_ids` JSON NULL'); } catch (e) {}
-
+      // 3. Table: cloud_recordings
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
@@ -794,20 +796,164 @@ async function startServer() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // Purge legacy mock cameras if present in MySQL
-      try {
-        await pool.query("DELETE FROM cameras WHERE id IN ('cam-wpg8tz', 'cam-jvv51l', 'cam-v7w3f8')");
-      } catch (e) {}
+      // 4. Table: motion_alerts
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`camera_id\` VARCHAR(64),
+          \`camera_name\` VARCHAR(255),
+          \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
+          \`confidence\` INT DEFAULT 90,
+          \`snapshot_url\` TEXT,
+          \`video_clip_url\` TEXT,
+          \`timestamp\` VARCHAR(100),
+          \`severity\` VARCHAR(50) DEFAULT 'HIGH',
+          \`read_status\` BOOLEAN DEFAULT FALSE,
+          \`pushed_to_mobile\` BOOLEAN DEFAULT TRUE,
+          \`created_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
 
-      // Step 1: Push all local in-memory cameras into MySQL first
-      for (const c of cameras) {
-        await syncCameraToMysql(c);
-      }
+      // 5. Table: activity_logs
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`activity_logs\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`user_id\` VARCHAR(64),
+          \`user_name\` VARCHAR(255),
+          \`action\` TEXT,
+          \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
+          \`details\` TEXT,
+          \`ip_address\` VARCHAR(50),
+          \`timestamp\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
 
-      // Step 2: Load/merge cameras from MySQL
+      // 6. Table: financial_plans
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`financial_plans\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`monthly_price\` DOUBLE DEFAULT 0,
+          \`cameras_included\` INT DEFAULT 4,
+          \`cloud_retention_days\` INT DEFAULT 7,
+          \`description\` TEXT,
+          \`popular\` BOOLEAN DEFAULT FALSE,
+          \`created_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 7. Table: financial_invoices
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`user_id\` VARCHAR(64),
+          \`user_name\` VARCHAR(255),
+          \`user_email\` VARCHAR(255),
+          \`plan_name\` VARCHAR(255),
+          \`amount\` DOUBLE DEFAULT 0,
+          \`original_amount\` DOUBLE DEFAULT 0,
+          \`due_date\` VARCHAR(50),
+          \`payment_date\` VARCHAR(50) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'PENDING',
+          \`is_pro_rata\` BOOLEAN DEFAULT FALSE,
+          \`pro_rata_days\` INT DEFAULT 0,
+          \`pix_code\` TEXT NULL,
+          \`pix_qr_code_url\` TEXT NULL,
+          \`mercado_pago_payment_id\` VARCHAR(100) NULL,
+          \`created_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 8. Table: mercado_pago_config
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
+          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`access_token\` TEXT,
+          \`public_key\` TEXT,
+          \`webhook_secret\` TEXT,
+          \`is_sandbox\` BOOLEAN DEFAULT TRUE,
+          \`auto_approve_simulated\` BOOLEAN DEFAULT TRUE,
+          \`updated_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 9. Table: backup_settings
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`backup_settings\` (
+          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`schedule\` VARCHAR(50),
+          \`destination\` VARCHAR(50),
+          \`retention_days\` INT DEFAULT 30,
+          \`encrypt_backups\` BOOLEAN DEFAULT TRUE,
+          \`auto_backup_enabled\` BOOLEAN DEFAULT TRUE,
+          \`last_backup_date\` VARCHAR(100),
+          \`next_backup_date\` VARCHAR(100),
+          \`status\` VARCHAR(50),
+          \`storage_path\` VARCHAR(255),
+          \`storage_limit_gb\` INT DEFAULT 100
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 10. Table: notification_settings
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`notification_settings\` (
+          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`push_enabled\` BOOLEAN DEFAULT TRUE,
+          \`fcm_server_key\` TEXT,
+          \`telegram_bot_token\` TEXT,
+          \`telegram_chat_id\` VARCHAR(100),
+          \`whatsapp_webhook_url\` TEXT,
+          \`sound_alerts\` BOOLEAN DEFAULT TRUE,
+          \`quiet_hours_enabled\` BOOLEAN DEFAULT FALSE,
+          \`quiet_hours_start\` VARCHAR(20),
+          \`quiet_hours_end\` VARCHAR(20),
+          \`alert_severities\` JSON
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // 11. Table: system_settings
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`system_settings\` (
+          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`storage_limit_gb\` DOUBLE DEFAULT 100,
+          \`vault_unlocked\` BOOLEAN DEFAULT TRUE,
+          \`passphrase_hash\` TEXT,
+          \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
+          \`updated_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+
+      // Relax constraints & add columns dynamically if user had earlier schema versions
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_name` VARCHAR(255) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `monthly_fee` DOUBLE DEFAULT 0'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `chosen_due_day` INT DEFAULT 5'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `financial_status` VARCHAR(50) DEFAULT "OK"'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `days_overdue` INT DEFAULT 0'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
+
+      // Synchronize in-memory repositories with MySQL tables
+      // Push memory items into MySQL
+      for (const c of cameras) { await syncCameraToMysql(c); }
+      for (const u of users) { await syncUserToMysql(u); }
+      for (const r of recordings) { await syncRecordingToMysql(r); }
+      for (const a of alerts) { await syncAlertToMysql(a); }
+      for (const l of logs) { await syncLogToMysql(l); }
+      for (const p of plans) { await syncPlanToMysql(p); }
+      for (const i of invoices) { await syncInvoiceToMysql(i); }
+      await syncMpConfigToMysql(mpConfig);
+      await syncBackupConfigToMysql(backupConfig);
+      await syncNotificationConfigToMysql(notificationConfig);
+      await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100);
+
+      // Load items from MySQL into memory repositories
       const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
       if (camRows && camRows.length > 0) {
-        const mysqlCams: Camera[] = camRows.map((row: any) => ({
+        cameras = camRows.map((row: any) => ({
           id: row.id,
           name: row.name,
           location: row.location || 'Localização ITL',
@@ -834,25 +980,11 @@ async function startServer() {
           thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
           createdAt: row.created_at || '2026-01-01',
         }));
-
-        mysqlCams.forEach((mCam) => {
-          if (!cameras.some((c) => c.id === mCam.id)) {
-            cameras.push(mCam);
-            syncCameraToSqlite(mCam);
-          }
-        });
-        console.log(`[MySQL ITL] ${cameras.length} câmeras sincronizadas bi-direcionalmente com o MySQL.`);
       }
 
-      // Step 3: Push all local in-memory users into MySQL first
-      for (const u of users) {
-        await syncUserToMysql(u);
-      }
-
-      // Step 4: Load/merge users from MySQL
       const [userRows]: any = await pool.query('SELECT * FROM users');
       if (userRows && userRows.length > 0) {
-        const mysqlUsers: User[] = userRows.map((row: any) => ({
+        users = userRows.map((row: any) => ({
           id: row.id,
           name: row.name,
           email: row.email,
@@ -863,23 +995,65 @@ async function startServer() {
           status: row.status,
           customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
           allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
+          planId: row.plan_id || undefined,
+          planName: row.plan_name || undefined,
+          monthlyFee: row.monthly_fee ? parseFloat(row.monthly_fee) : undefined,
+          chosenDueDay: row.chosen_due_day || undefined,
+          financialStatus: row.financial_status || 'OK',
+          daysOverdue: row.days_overdue || 0,
           lastActive: row.last_active,
           createdAt: row.created_at,
         }));
-
-        mysqlUsers.forEach((mUser) => {
-          if (!users.some((u) => u.id === mUser.id || u.email === mUser.email)) {
-            users.push(mUser);
-            syncUserToSqlite(mUser);
-          }
-        });
-        console.log(`[MySQL ITL] ${users.length} usuários sincronizados bi-direcionalmente com o MySQL.`);
       }
 
-      // Step 5: Push recordings to MySQL
-      for (const r of recordings) {
-        await syncRecordingToMysql(r);
+      const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
+      if (planRows && planRows.length > 0) {
+        plans = planRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          monthlyPrice: parseFloat(row.monthly_price || 0),
+          camerasIncluded: row.cameras_included || 4,
+          cloudRetentionDays: row.cloud_retention_days || 7,
+          description: row.description || '',
+          popular: Boolean(row.popular),
+        }));
       }
+
+      const [invoiceRows]: any = await pool.query('SELECT * FROM financial_invoices ORDER BY created_at DESC');
+      if (invoiceRows && invoiceRows.length > 0) {
+        invoices = invoiceRows.map((row: any) => ({
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          userEmail: row.user_email,
+          planName: row.plan_name,
+          amount: parseFloat(row.amount || 0),
+          originalAmount: parseFloat(row.original_amount || 0),
+          dueDate: row.due_date,
+          paymentDate: row.payment_date || undefined,
+          status: row.status,
+          isProRata: Boolean(row.is_pro_rata),
+          proRataDays: row.pro_rata_days || undefined,
+          pixCode: row.pix_code || undefined,
+          pixQrCodeUrl: row.pix_qr_code_url || undefined,
+          mercadoPagoPaymentId: row.mercado_pago_payment_id || undefined,
+          createdAt: row.created_at,
+        }));
+      }
+
+      const [mpRows]: any = await pool.query("SELECT * FROM mercado_pago_config WHERE id = 'default'");
+      if (mpRows && mpRows.length > 0) {
+        const row = mpRows[0];
+        mpConfig = {
+          accessToken: row.access_token || '',
+          publicKey: row.public_key || '',
+          webhookSecret: row.webhook_secret || '',
+          isSandbox: Boolean(row.is_sandbox),
+          autoApproveSimulated: Boolean(row.auto_approve_simulated),
+        };
+      }
+
+      console.log(`[MySQL ITL Complete Sync] Conectado e Sincronizado com SUCESSO! (${cameras.length} câmeras, ${users.length} usuários, ${plans.length} planos, ${invoices.length} faturas em '${dbName}')`);
     } catch (err: any) {
       console.log('[MySQL ITL Sync Warning]', err.message);
       loadFromLocalFile();
@@ -901,7 +1075,7 @@ async function startServer() {
           rec.cameraName,
           rec.startTime,
           rec.endTime,
-          rec.durationSec || 0,
+          rec.durationSeconds || (rec as any).durationSec || 0,
           rec.fileSizeMB || 0,
           rec.streamUrl || '',
           rec.thumbnailUrl || '',
@@ -1020,6 +1194,219 @@ async function startServer() {
       await pool.query('DELETE FROM users WHERE id = ?', [id]);
     } catch (e) {
       console.error('[MySQL Sync Error] Erro ao remover usuário:', e);
+    }
+  };
+
+  const syncAlertToMysql = async (alert: MotionAlert) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO motion_alerts (id, camera_id, camera_name, event_type, confidence, snapshot_url, video_clip_url, timestamp, severity, read_status, pushed_to_mobile, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), event_type=VALUES(event_type), confidence=VALUES(confidence), snapshot_url=VALUES(snapshot_url), video_clip_url=VALUES(video_clip_url), timestamp=VALUES(timestamp), severity=VALUES(severity), read_status=VALUES(read_status), pushed_to_mobile=VALUES(pushed_to_mobile)`,
+        [
+          alert.id,
+          alert.cameraId,
+          alert.cameraName,
+          alert.eventType || 'HUMAN',
+          alert.confidence || 90,
+          alert.snapshotUrl || '',
+          alert.videoClipUrl || '',
+          alert.timestamp || new Date().toISOString(),
+          alert.severity || 'HIGH',
+          alert.readStatus ? 1 : 0,
+          alert.pushedToMobile ? 1 : 0,
+          alert.timestamp ? alert.timestamp.split(' ')[0] : new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Motion alert:', e.message || e);
+    }
+  };
+
+  const syncLogToMysql = async (log: ActivityLog) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO activity_logs (id, user_id, user_name, action, category, details, ip_address, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE action=VALUES(action), category=VALUES(category), details=VALUES(details)`,
+        [
+          log.id,
+          log.userId || 'sys',
+          log.userName || 'Sistema ITL',
+          log.action || '',
+          log.category || 'SYSTEM',
+          log.details || '',
+          log.ipAddress || '127.0.0.1',
+          log.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19)
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Activity log:', e.message || e);
+    }
+  };
+
+  const syncPlanToMysql = async (plan: FinancialPlan) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO financial_plans (id, name, monthly_price, cameras_included, cloud_retention_days, description, popular, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), monthly_price=VALUES(monthly_price), cameras_included=VALUES(cameras_included), cloud_retention_days=VALUES(cloud_retention_days), description=VALUES(description), popular=VALUES(popular)`,
+        [
+          plan.id,
+          plan.name,
+          plan.monthlyPrice || 0,
+          plan.camerasIncluded || 4,
+          plan.cloudRetentionDays || 7,
+          plan.description || '',
+          plan.popular ? 1 : 0,
+          new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Financial plan:', e.message || e);
+    }
+  };
+
+  const deletePlanFromMysql = async (id: string) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM financial_plans WHERE id = ?', [id]);
+    } catch (e) {}
+  };
+
+  const syncInvoiceToMysql = async (inv: Invoice) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO financial_invoices (id, user_id, user_name, user_email, plan_name, amount, original_amount, due_date, payment_date, status, is_pro_rata, pro_rata_days, pix_code, pix_qr_code_url, mercado_pago_payment_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE user_name=VALUES(user_name), user_email=VALUES(user_email), plan_name=VALUES(plan_name), amount=VALUES(amount), original_amount=VALUES(original_amount), due_date=VALUES(due_date), payment_date=VALUES(payment_date), status=VALUES(status), is_pro_rata=VALUES(is_pro_rata), pro_rata_days=VALUES(pro_rata_days), pix_code=VALUES(pix_code), pix_qr_code_url=VALUES(pix_qr_code_url), mercado_pago_payment_id=VALUES(mercado_pago_payment_id)`,
+        [
+          inv.id,
+          inv.userId,
+          inv.userName,
+          inv.userEmail,
+          inv.planName,
+          inv.amount || 0,
+          inv.originalAmount || 0,
+          inv.dueDate || '',
+          inv.paymentDate || null,
+          inv.status || 'PENDING',
+          inv.isProRata ? 1 : 0,
+          inv.proRataDays || 0,
+          inv.pixCode || '',
+          inv.pixQrCodeUrl || '',
+          inv.mercadoPagoPaymentId || '',
+          inv.createdAt || new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Invoice:', e.message || e);
+    }
+  };
+
+  const deleteInvoiceFromMysql = async (id: string) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM financial_invoices WHERE id = ?', [id]);
+    } catch (e) {}
+  };
+
+  const syncMpConfigToMysql = async (cfg: MercadoPagoConfig) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO mercado_pago_config (id, access_token, public_key, webhook_secret, is_sandbox, auto_approve_simulated, updated_at)
+         VALUES ('default', ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE access_token=VALUES(access_token), public_key=VALUES(public_key), webhook_secret=VALUES(webhook_secret), is_sandbox=VALUES(is_sandbox), auto_approve_simulated=VALUES(auto_approve_simulated), updated_at=VALUES(updated_at)`,
+        [
+          cfg.accessToken || '',
+          cfg.publicKey || '',
+          cfg.webhookSecret || '',
+          cfg.isSandbox ? 1 : 0,
+          cfg.autoApproveSimulated ? 1 : 0,
+          new Date().toISOString()
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] MP config:', e.message || e);
+    }
+  };
+
+  const syncBackupConfigToMysql = async (cfg: BackupConfig) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO backup_settings (id, schedule, destination, retention_days, encrypt_backups, auto_backup_enabled, last_backup_date, next_backup_date, status, storage_path, storage_limit_gb)
+         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE schedule=VALUES(schedule), destination=VALUES(destination), retention_days=VALUES(retention_days), encrypt_backups=VALUES(encrypt_backups), auto_backup_enabled=VALUES(auto_backup_enabled), last_backup_date=VALUES(last_backup_date), next_backup_date=VALUES(next_backup_date), status=VALUES(status), storage_path=VALUES(storage_path), storage_limit_gb=VALUES(storage_limit_gb)`,
+        [
+          cfg.schedule || 'WEEKLY_SUNDAY_0200',
+          cfg.destination || 'LOCAL_VPS',
+          cfg.retentionDays || 30,
+          cfg.encryptBackups ? 1 : 0,
+          cfg.autoBackupEnabled ? 1 : 0,
+          cfg.lastBackupDate || '',
+          cfg.nextBackupDate || '',
+          cfg.status || 'IDLE',
+          cfg.storagePath || '/var/www/itl-backups/',
+          cfg.storageLimitGB || 100
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Backup config:', e.message || e);
+    }
+  };
+
+  const syncNotificationConfigToMysql = async (cfg: NotificationConfig) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO notification_settings (id, push_enabled, fcm_server_key, telegram_bot_token, telegram_chat_id, whatsapp_webhook_url, sound_alerts, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, alert_severities)
+         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE push_enabled=VALUES(push_enabled), fcm_server_key=VALUES(fcm_server_key), telegram_bot_token=VALUES(telegram_bot_token), telegram_chat_id=VALUES(telegram_chat_id), whatsapp_webhook_url=VALUES(whatsapp_webhook_url), sound_alerts=VALUES(sound_alerts), quiet_hours_enabled=VALUES(quiet_hours_enabled), quiet_hours_start=VALUES(quiet_hours_start), quiet_hours_end=VALUES(quiet_hours_end), alert_severities=VALUES(alert_severities)`,
+        [
+          cfg.pushEnabled ? 1 : 0,
+          cfg.fcmServerKey || '',
+          cfg.telegramBotToken || '',
+          cfg.telegramChatId || '',
+          cfg.whatsappWebhookUrl || '',
+          cfg.soundAlerts ? 1 : 0,
+          cfg.quietHoursEnabled ? 1 : 0,
+          cfg.quietHoursStart || '23:00',
+          cfg.quietHoursEnd || '06:00',
+          JSON.stringify(cfg.alertSeverities || ['CRITICAL', 'HIGH', 'MEDIUM'])
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Notification config:', e.message || e);
+    }
+  };
+
+  const syncSystemSettingsToMysql = async (storageLimitGB: number) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO system_settings (id, storage_limit_gb, vault_unlocked, passphrase_hash, algorithm, updated_at)
+         VALUES ('default', ?, 1, 'e2ee-master-passphrase-itl-sec-2026', 'AES-256-GCM', ?)
+         ON DUPLICATE KEY UPDATE storage_limit_gb=VALUES(storage_limit_gb), updated_at=VALUES(updated_at)`,
+        [storageLimitGB, new Date().toISOString()]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] System settings:', e.message || e);
     }
   };
 
@@ -1667,21 +2054,51 @@ async function startServer() {
 
   // Endpoints para status e sincronização do Banco de Dados MySQL
   app.get('/api/db-status', async (req, res) => {
-    let countInDb = 0;
+    let counts = {
+      cameras: 0,
+      users: 0,
+      recordings: 0,
+      alerts: 0,
+      logs: 0,
+      plans: 0,
+      invoices: 0
+    };
     if (!isMysqlActive || !pool) {
       await initMysqlAndSync();
     }
     if (isMysqlActive && pool) {
       try {
-        const [rows]: any = await pool.query('SELECT COUNT(*) as count FROM cameras');
-        countInDb = rows[0]?.count || 0;
+        const [c]: any = await pool.query('SELECT COUNT(*) as cnt FROM cameras');
+        const [u]: any = await pool.query('SELECT COUNT(*) as cnt FROM users');
+        const [r]: any = await pool.query('SELECT COUNT(*) as cnt FROM cloud_recordings');
+        const [a]: any = await pool.query('SELECT COUNT(*) as cnt FROM motion_alerts');
+        const [l]: any = await pool.query('SELECT COUNT(*) as cnt FROM activity_logs');
+        const [p]: any = await pool.query('SELECT COUNT(*) as cnt FROM financial_plans');
+        const [i]: any = await pool.query('SELECT COUNT(*) as cnt FROM financial_invoices');
+        counts = {
+          cameras: c[0]?.cnt || 0,
+          users: u[0]?.cnt || 0,
+          recordings: r[0]?.cnt || 0,
+          alerts: a[0]?.cnt || 0,
+          logs: l[0]?.cnt || 0,
+          plans: p[0]?.cnt || 0,
+          invoices: i[0]?.cnt || 0
+        };
       } catch (e) {}
     }
     res.json({
       isMysqlActive,
       dbName: process.env.DB_NAME || 'itl_cameras',
-      cameraCountInMemory: cameras.length,
-      cameraCountInMysql: countInDb,
+      memoryCounts: {
+        cameras: cameras.length,
+        users: users.length,
+        recordings: recordings.length,
+        alerts: alerts.length,
+        logs: logs.length,
+        plans: plans.length,
+        invoices: invoices.length
+      },
+      mysqlCounts: counts,
       status: isMysqlActive ? 'CONECTADO_E_ATIVO' : 'DESCONECTADO_USANDO_JSON_LOCAL'
     });
   });
@@ -1689,16 +2106,135 @@ async function startServer() {
   app.post('/api/db-sync', async (req, res) => {
     await initMysqlAndSync();
     if (isMysqlActive && pool) {
-      for (const cam of cameras) {
-        await syncCameraToMysql(cam);
-      }
-      for (const user of users) {
-        await syncUserToMysql(user);
-      }
-      return res.json({ success: true, message: `Sincronização concluída. ${cameras.length} câmeras e ${users.length} usuários salvos no MySQL.` });
+      for (const cam of cameras) { await syncCameraToMysql(cam); }
+      for (const user of users) { await syncUserToMysql(user); }
+      for (const rec of recordings) { await syncRecordingToMysql(rec); }
+      for (const alert of alerts) { await syncAlertToMysql(alert); }
+      for (const log of logs) { await syncLogToMysql(log); }
+      for (const plan of plans) { await syncPlanToMysql(plan); }
+      for (const inv of invoices) { await syncInvoiceToMysql(inv); }
+      await syncMpConfigToMysql(mpConfig);
+      await syncBackupConfigToMysql(backupConfig);
+      await syncNotificationConfigToMysql(notificationConfig);
+      await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100);
+
+      return res.json({
+        success: true,
+        message: `Sincronização completa de todas as 11 tabelas concluída com sucesso! (${cameras.length} câmeras, ${users.length} usuários, ${recordings.length} gravações, ${plans.length} planos, ${invoices.length} faturas salvas no MySQL).`
+      });
     } else {
-      return res.status(500).json({ success: false, message: 'Não foi possível conectar ao MySQL local para sincronizar.' });
+      return res.status(500).json({ success: false, message: 'Não foi possível conectar ao MySQL para sincronizar.' });
     }
+  });
+
+  // Financial Plans Endpoints
+  app.get('/api/financial/plans', (req, res) => {
+    res.json(plans);
+  });
+
+  app.post('/api/financial/plans', async (req, res) => {
+    const { name, monthlyPrice, camerasIncluded, cloudRetentionDays, description, popular } = req.body;
+    const newPlan: FinancialPlan = {
+      id: `plan-${Date.now()}`,
+      name: name || 'Plano Personalizado',
+      monthlyPrice: Number(monthlyPrice) || 0,
+      camerasIncluded: Number(camerasIncluded) || 4,
+      cloudRetentionDays: Number(cloudRetentionDays) || 7,
+      description: description || '',
+      popular: Boolean(popular),
+    };
+    plans.push(newPlan);
+    saveToLocalFile();
+    await syncPlanToMysql(newPlan);
+    addLog('Sistema ITL', `Criou novo plano financeiro '${newPlan.name}'`, 'FINANCIAL', `ID: ${newPlan.id}, Valor: R$ ${newPlan.monthlyPrice}`);
+    res.json(newPlan);
+  });
+
+  app.put('/api/financial/plans/:id', async (req, res) => {
+    const { id } = req.params;
+    const idx = plans.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      plans[idx] = { ...plans[idx], ...req.body };
+      saveToLocalFile();
+      await syncPlanToMysql(plans[idx]);
+      addLog('Sistema ITL', `Atualizou plano financeiro '${plans[idx].name}'`, 'FINANCIAL', `ID: ${id}`);
+      return res.json(plans[idx]);
+    }
+    res.status(404).json({ error: 'Plano não encontrado' });
+  });
+
+  app.delete('/api/financial/plans/:id', async (req, res) => {
+    const { id } = req.params;
+    plans = plans.filter((p) => p.id !== id);
+    saveToLocalFile();
+    await deletePlanFromMysql(id);
+    addLog('Sistema ITL', `Removeu plano financeiro`, 'FINANCIAL', `ID: ${id}`);
+    res.json({ success: true });
+  });
+
+  // Financial Invoices Endpoints
+  app.get('/api/financial/invoices', (req, res) => {
+    res.json(invoices);
+  });
+
+  app.post('/api/financial/invoices', async (req, res) => {
+    const { userId, userName, userEmail, planName, amount, originalAmount, dueDate, isProRata, proRataDays, pixCode, pixQrCodeUrl } = req.body;
+    const newInvoice: Invoice = {
+      id: `inv-${Date.now()}`,
+      userId: userId || 'user-guest',
+      userName: userName || 'Cliente ITL',
+      userEmail: userEmail || '',
+      planName: planName || 'Plano ITL',
+      amount: Number(amount) || 0,
+      originalAmount: Number(originalAmount) || Number(amount) || 0,
+      dueDate: dueDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      status: req.body.status || 'PENDING',
+      isProRata: Boolean(isProRata),
+      proRataDays: Number(proRataDays) || 0,
+      pixCode: pixCode || '',
+      pixQrCodeUrl: pixQrCodeUrl || '',
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    invoices.unshift(newInvoice);
+    saveToLocalFile();
+    await syncInvoiceToMysql(newInvoice);
+    addLog('Sistema ITL', `Gerou nova fatura para '${newInvoice.userName}'`, 'FINANCIAL', `Fatura ID: ${newInvoice.id}, Valor: R$ ${newInvoice.amount}`);
+    res.json(newInvoice);
+  });
+
+  app.put('/api/financial/invoices/:id', async (req, res) => {
+    const { id } = req.params;
+    const idx = invoices.findIndex((i) => i.id === id);
+    if (idx !== -1) {
+      invoices[idx] = { ...invoices[idx], ...req.body };
+      saveToLocalFile();
+      await syncInvoiceToMysql(invoices[idx]);
+      addLog('Sistema ITL', `Atualizou fatura '${id}' (${invoices[idx].status})`, 'FINANCIAL', `Usuário: ${invoices[idx].userName}`);
+      return res.json(invoices[idx]);
+    }
+    res.status(404).json({ error: 'Fatura não encontrada' });
+  });
+
+  app.delete('/api/financial/invoices/:id', async (req, res) => {
+    const { id } = req.params;
+    invoices = invoices.filter((i) => i.id !== id);
+    saveToLocalFile();
+    await deleteInvoiceFromMysql(id);
+    addLog('Sistema ITL', `Removeu fatura`, 'FINANCIAL', `ID: ${id}`);
+    res.json({ success: true });
+  });
+
+  // Mercado Pago Config Endpoints
+  app.get('/api/mercadopago/config', (req, res) => {
+    res.json(mpConfig);
+  });
+
+  app.put('/api/mercadopago/config', async (req, res) => {
+    mpConfig = { ...mpConfig, ...req.body };
+    saveToLocalFile();
+    await syncMpConfigToMysql(mpConfig);
+    addLog('Super Admin Unity', 'Atualizou configurações de integração com Mercado Pago', 'SETTINGS', `Sandbox: ${mpConfig.isSandbox}`);
+    res.json(mpConfig);
   });
 
   // Cameras

@@ -99,7 +99,18 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
     return matchesSearch && inv.status === statusFilter;
   });
 
-  const handlePayInvoice = (invoiceId: string) => {
+  const handlePayInvoice = async (invoiceId: string) => {
+    try {
+      await fetch(`/api/financial/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'PAID',
+          paymentDate: new Date().toISOString().split('T')[0],
+        }),
+      });
+    } catch (e) {}
+
     const updated = invoices.map((inv) => {
       if (inv.id === invoiceId) {
         return {
@@ -126,6 +137,13 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
         }
         return u;
       });
+      try {
+        await fetch(`/api/users/${inv.userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ financialStatus: 'OK', daysOverdue: 0 }),
+        });
+      } catch (e) {}
       onUpdateUsers(updatedUsers);
     }
 
@@ -134,7 +152,7 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
     }
   };
 
-  const handleCreateSubscription = (e: React.FormEvent) => {
+  const handleCreateSubscription = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!targetUser) return;
 
@@ -154,6 +172,14 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
       createdAt: new Date().toISOString().split('T')[0],
     };
 
+    try {
+      await fetch('/api/financial/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newInvoice),
+      });
+    } catch (e) {}
+
     onUpdateInvoices([newInvoice, ...invoices]);
 
     // Update User Plan and Due Day
@@ -170,6 +196,20 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
       }
       return u;
     });
+
+    try {
+      await fetch(`/api/users/${targetUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId: selectedPlan.id,
+          planName: selectedPlan.name,
+          monthlyFee: selectedPlan.monthlyPrice,
+          chosenDueDay: chosenDueDay,
+          financialStatus: 'OK',
+        }),
+      });
+    } catch (e) {}
 
     onUpdateUsers(updatedUsers);
     setIsCreatingSubscription(false);

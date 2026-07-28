@@ -31,6 +31,7 @@ import {
   AlertType,
   AlertSeverity,
   Invoice,
+  FinancialPlan,
   MercadoPagoConfig,
 } from './types';
 
@@ -48,6 +49,7 @@ import {
 import {
   checkInvoiceFinancialStatus,
   INITIAL_MP_CONFIG,
+  INITIAL_PLANS,
 } from './lib/financial';
 
 export default function App() {
@@ -111,6 +113,7 @@ export default function App() {
   const [e2eeSettings, setE2eesettings] = useState<E2EESettings>(INITIAL_E2EE_SETTINGS);
 
   // Financial States
+  const [plans, setPlans] = useState<FinancialPlan[]>(INITIAL_PLANS);
   const [invoices, setInvoices] = useState<Invoice[]>([
     {
       id: 'inv-1001',
@@ -143,7 +146,7 @@ export default function App() {
   useEffect(() => {
     const fetchBackendData = async () => {
       try {
-        const [cRes, aRes, rRes, uRes, lRes, bRes, nRes] = await Promise.all([
+        const [cRes, aRes, rRes, uRes, lRes, bRes, nRes, pRes, iRes, mpRes] = await Promise.all([
           fetch('/api/cameras').then((r) => r.json()),
           fetch('/api/alerts').then((r) => r.json()),
           fetch('/api/recordings').then((r) => r.json()),
@@ -151,6 +154,9 @@ export default function App() {
           fetch('/api/logs').then((r) => r.json()),
           fetch('/api/backup').then((r) => r.json()),
           fetch('/api/notifications').then((r) => r.json()),
+          fetch('/api/financial/plans').then((r) => r.json()),
+          fetch('/api/financial/invoices').then((r) => r.json()),
+          fetch('/api/mercadopago/config').then((r) => r.json()),
         ]);
 
         if (Array.isArray(cRes)) setCameras(cRes);
@@ -162,6 +168,9 @@ export default function App() {
         if (Array.isArray(lRes)) setLogs(lRes);
         if (bRes && bRes.schedule) setBackupConfig(bRes);
         if (nRes && nRes.pushEnabled !== undefined) setNotificationConfig(nRes);
+        if (Array.isArray(pRes) && pRes.length > 0) setPlans(pRes);
+        if (Array.isArray(iRes) && iRes.length > 0) setInvoices(iRes);
+        if (mpRes && mpRes.accessToken) setMpConfig(mpRes);
       } catch (err) {
         console.log('Servidor backend inicializado.');
       }
@@ -377,7 +386,17 @@ export default function App() {
         message: '',
       };
 
-  const handlePayInvoiceFromApp = (invoiceId: string) => {
+  const handlePayInvoiceFromApp = async (invoiceId: string) => {
+    try {
+      await fetch(`/api/financial/invoices/${invoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'PAID',
+          paymentDate: new Date().toISOString().split('T')[0],
+        }),
+      });
+    } catch (e) {}
     setInvoices((prev) =>
       prev.map((i) =>
         i.id === invoiceId
@@ -385,6 +404,22 @@ export default function App() {
           : i
       )
     );
+  };
+
+  const handleSaveMpConfig = async (newConfig: MercadoPagoConfig) => {
+    try {
+      const res = await fetch('/api/mercadopago/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig),
+      });
+      const data = await res.json();
+      if (data && data.accessToken) {
+        setMpConfig(data);
+        return;
+      }
+    } catch (e) {}
+    setMpConfig(newConfig);
   };
 
   // Render Public Landing Page for Guests
@@ -656,7 +691,7 @@ export default function App() {
         isOpen={isMpSettingsOpen}
         onClose={() => setIsMpSettingsOpen(false)}
         config={mpConfig}
-        onSaveConfig={setMpConfig}
+        onSaveConfig={handleSaveMpConfig}
         currentUser={activeUser}
       />
     </div>

@@ -148,7 +148,7 @@ export interface ActivityLog {
   userId?: string;
   userName: string;
   action: string;
-  category: 'AUTH' | 'LIVE_VIEW' | 'RECORDING' | 'SYSTEM' | 'BACKUP' | 'PTZ' | 'AUDIO';
+  category: 'AUTH' | 'LIVE_VIEW' | 'RECORDING' | 'SYSTEM' | 'BACKUP' | 'PTZ' | 'AUDIO' | 'FINANCIAL' | 'SETTINGS';
   details?: string;
   ipAddress?: string;
   timestamp: string;
