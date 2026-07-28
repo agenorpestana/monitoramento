@@ -649,6 +649,349 @@ async function startServer() {
     }
   };
 
+  // Helper functions to persist data to MySQL
+  async function syncRecordingToMysql(rec: CloudRecording) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO cloud_recordings (id, camera_id, camera_name, start_time, end_time, duration_sec, file_size_mb, stream_url, thumbnail_url, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), start_time=VALUES(start_time), end_time=VALUES(end_time), duration_sec=VALUES(duration_sec), file_size_mb=VALUES(file_size_mb), stream_url=VALUES(stream_url), thumbnail_url=VALUES(thumbnail_url)`,
+        [
+          rec.id,
+          rec.cameraId,
+          rec.cameraName,
+          rec.startTime,
+          rec.endTime,
+          rec.durationSeconds || (rec as any).durationSec || 0,
+          rec.fileSizeMB || 0,
+          rec.streamUrl || '',
+          rec.thumbnailUrl || '',
+          rec.startTime ? rec.startTime.split(' ')[0] : new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar gravação no MySQL:', e.message || e);
+    }
+  }
+
+  async function syncCameraToMysql(cam: Camera) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      const safeLat = isNaN(Number(cam.lat)) ? -17.0397 : Number(cam.lat);
+      const safeLng = isNaN(Number(cam.lng)) ? -39.5312 : Number(cam.lng);
+      const safeStorage = isNaN(Number(cam.storageUsedGB)) ? 0.1 : Number(cam.storageUsedGB);
+
+      await pool.query(
+        `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), encryption_key_hash=VALUES(encryption_key_hash), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
+        [
+          cam.id,
+          cam.name,
+          cam.location || '',
+          cam.protocol || 'RTSP',
+          cam.rtspUrl || '',
+          cam.rtmpUrl || '',
+          cam.streamKey || '',
+          cam.rtmpServerUrl || '',
+          cam.fullRtmpUrl || '',
+          cam.stateUf || '',
+          cam.city || '',
+          cam.status || 'ONLINE',
+          cam.isE2EEEncrypted ? 1 : 0,
+          cam.encryptionKeyHash || '',
+          cam.fps || 30,
+          cam.resolution || '1080p',
+          safeStorage,
+          cam.cloudRecordingsActive ? 1 : 0,
+          cam.motionSensitivity || 7,
+          cam.aiDetectionEnabled ? 1 : 0,
+          cam.twoWayAudioEnabled ? 1 : 0,
+          safeLat,
+          safeLng,
+          cam.thumbnailUrl || '',
+          cam.createdAt || new Date().toISOString().split('T')[0],
+        ]
+      );
+      console.log(`[MySQL ITL Sync] Câmera '${cam.name}' (${cam.id}) GRAVADA no MySQL com SUCESSO!`);
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar câmera no MySQL:', e.message || e);
+    }
+  }
+
+  async function deleteCameraFromMysql(id: string) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM cameras WHERE id = ?', [id]);
+    } catch (e) {
+      console.error('[MySQL Sync Error] Erro ao deletar câmera:', e);
+    }
+  }
+
+  async function syncUserToMysql(u: User) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO users (id, name, email, password_hash, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, plan_id, plan_name, monthly_fee, chosen_due_day, financial_status, days_overdue, last_active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), custom_permissions=VALUES(custom_permissions), allowed_camera_ids=VALUES(allowed_camera_ids), plan_id=VALUES(plan_id), plan_name=VALUES(plan_name), monthly_fee=VALUES(monthly_fee), chosen_due_day=VALUES(chosen_due_day), financial_status=VALUES(financial_status), days_overdue=VALUES(days_overdue), last_active=VALUES(last_active)`,
+        [
+          u.id,
+          u.name,
+          u.email,
+          '$2b$10$itlpasswordhash2026',
+          u.role || 'RESIDENT',
+          u.phone || '',
+          u.stateUf || '',
+          u.city || '',
+          u.status || 'ACTIVE',
+          JSON.stringify(u.customPermissions || {}),
+          JSON.stringify(u.allowedCameraIds || ['ALL']),
+          u.planId || null,
+          u.planName || null,
+          u.monthlyFee || 0,
+          u.chosenDueDay || 5,
+          u.financialStatus || 'OK',
+          u.daysOverdue || 0,
+          u.lastActive || 'Agora',
+          u.createdAt || new Date().toISOString().split('T')[0],
+        ]
+      );
+      console.log(`[MySQL ITL Sync] Usuário '${u.name}' (${u.id}) GRAVADO no MySQL com SUCESSO!`);
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar usuário no MySQL:', e.message || e);
+    }
+  }
+
+  async function deleteUserFromMysql(id: string) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM users WHERE id = ?', [id]);
+    } catch (e) {
+      console.error('[MySQL Sync Error] Erro ao remover usuário:', e);
+    }
+  }
+
+  async function syncAlertToMysql(alert: MotionAlert) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO motion_alerts (id, camera_id, camera_name, event_type, confidence, snapshot_url, video_clip_url, timestamp, severity, read_status, pushed_to_mobile, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), event_type=VALUES(event_type), confidence=VALUES(confidence), snapshot_url=VALUES(snapshot_url), video_clip_url=VALUES(video_clip_url), timestamp=VALUES(timestamp), severity=VALUES(severity), read_status=VALUES(read_status), pushed_to_mobile=VALUES(pushed_to_mobile)`,
+        [
+          alert.id,
+          alert.cameraId,
+          alert.cameraName,
+          alert.eventType || 'HUMAN',
+          alert.confidence || 90,
+          alert.snapshotUrl || '',
+          alert.videoClipUrl || '',
+          alert.timestamp || new Date().toISOString(),
+          alert.severity || 'HIGH',
+          alert.readStatus ? 1 : 0,
+          alert.pushedToMobile ? 1 : 0,
+          alert.timestamp ? alert.timestamp.split(' ')[0] : new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Motion alert:', e.message || e);
+    }
+  }
+
+  async function syncLogToMysql(log: ActivityLog) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO activity_logs (id, user_id, user_name, action, category, details, ip_address, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE action=VALUES(action), category=VALUES(category), details=VALUES(details)`,
+        [
+          log.id,
+          log.userId || 'sys',
+          log.userName || 'Sistema ITL',
+          log.action || '',
+          log.category || 'SYSTEM',
+          log.details || '',
+          log.ipAddress || '127.0.0.1',
+          log.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19)
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Activity log:', e.message || e);
+    }
+  }
+
+  async function syncPlanToMysql(plan: FinancialPlan) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO financial_plans (id, name, monthly_price, cameras_included, cloud_retention_days, description, popular, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), monthly_price=VALUES(monthly_price), cameras_included=VALUES(cameras_included), cloud_retention_days=VALUES(cloud_retention_days), description=VALUES(description), popular=VALUES(popular)`,
+        [
+          plan.id,
+          plan.name,
+          plan.monthlyPrice || 0,
+          plan.camerasIncluded || 4,
+          plan.cloudRetentionDays || 7,
+          plan.description || '',
+          plan.popular ? 1 : 0,
+          new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Financial plan:', e.message || e);
+    }
+  }
+
+  async function deletePlanFromMysql(id: string) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM financial_plans WHERE id = ?', [id]);
+    } catch (e) {}
+  }
+
+  async function syncInvoiceToMysql(inv: Invoice) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO financial_invoices (id, user_id, user_name, user_email, plan_name, amount, original_amount, due_date, payment_date, status, is_pro_rata, pro_rata_days, pix_code, pix_qr_code_url, mercado_pago_payment_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE user_name=VALUES(user_name), user_email=VALUES(user_email), plan_name=VALUES(plan_name), amount=VALUES(amount), original_amount=VALUES(original_amount), due_date=VALUES(due_date), payment_date=VALUES(payment_date), status=VALUES(status), is_pro_rata=VALUES(is_pro_rata), pro_rata_days=VALUES(pro_rata_days), pix_code=VALUES(pix_code), pix_qr_code_url=VALUES(pix_qr_code_url), mercado_pago_payment_id=VALUES(mercado_pago_payment_id)`,
+        [
+          inv.id,
+          inv.userId,
+          inv.userName,
+          inv.userEmail,
+          inv.planName,
+          inv.amount || 0,
+          inv.originalAmount || 0,
+          inv.dueDate || '',
+          inv.paymentDate || null,
+          inv.status || 'PENDING',
+          inv.isProRata ? 1 : 0,
+          inv.proRataDays || 0,
+          inv.pixCode || '',
+          inv.pixQrCodeUrl || '',
+          inv.mercadoPagoPaymentId || '',
+          inv.createdAt || new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Invoice:', e.message || e);
+    }
+  }
+
+  async function deleteInvoiceFromMysql(id: string) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM financial_invoices WHERE id = ?', [id]);
+    } catch (e) {}
+  }
+
+  async function syncMpConfigToMysql(cfg: MercadoPagoConfig) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO mercado_pago_config (id, access_token, public_key, webhook_secret, is_sandbox, auto_approve_simulated, updated_at)
+         VALUES ('default', ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE access_token=VALUES(access_token), public_key=VALUES(public_key), webhook_secret=VALUES(webhook_secret), is_sandbox=VALUES(is_sandbox), auto_approve_simulated=VALUES(auto_approve_simulated), updated_at=VALUES(updated_at)`,
+        [
+          cfg.accessToken || '',
+          cfg.publicKey || '',
+          cfg.webhookSecret || '',
+          cfg.isSandbox ? 1 : 0,
+          cfg.autoApproveSimulated ? 1 : 0,
+          new Date().toISOString()
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] MP config:', e.message || e);
+    }
+  }
+
+  async function syncBackupConfigToMysql(cfg: BackupConfig) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO backup_settings (id, schedule, destination, retention_days, encrypt_backups, auto_backup_enabled, last_backup_date, next_backup_date, status, storage_path, storage_limit_gb)
+         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE schedule=VALUES(schedule), destination=VALUES(destination), retention_days=VALUES(retention_days), encrypt_backups=VALUES(encrypt_backups), auto_backup_enabled=VALUES(auto_backup_enabled), last_backup_date=VALUES(last_backup_date), next_backup_date=VALUES(next_backup_date), status=VALUES(status), storage_path=VALUES(storage_path), storage_limit_gb=VALUES(storage_limit_gb)`,
+        [
+          cfg.schedule || 'WEEKLY_SUNDAY_0200',
+          cfg.destination || 'LOCAL_VPS',
+          cfg.retentionDays || 30,
+          cfg.encryptBackups ? 1 : 0,
+          cfg.autoBackupEnabled ? 1 : 0,
+          cfg.lastBackupDate || '',
+          cfg.nextBackupDate || '',
+          cfg.status || 'IDLE',
+          cfg.storagePath || '/var/www/itl-backups/',
+          cfg.storageLimitGB || 100
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Backup config:', e.message || e);
+    }
+  }
+
+  async function syncNotificationConfigToMysql(cfg: NotificationConfig) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO notification_settings (id, push_enabled, fcm_server_key, telegram_bot_token, telegram_chat_id, whatsapp_webhook_url, sound_alerts, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, alert_severities)
+         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE push_enabled=VALUES(push_enabled), fcm_server_key=VALUES(fcm_server_key), telegram_bot_token=VALUES(telegram_bot_token), telegram_chat_id=VALUES(telegram_chat_id), whatsapp_webhook_url=VALUES(whatsapp_webhook_url), sound_alerts=VALUES(sound_alerts), quiet_hours_enabled=VALUES(quiet_hours_enabled), quiet_hours_start=VALUES(quiet_hours_start), quiet_hours_end=VALUES(quiet_hours_end), alert_severities=VALUES(alert_severities)`,
+        [
+          cfg.pushEnabled ? 1 : 0,
+          cfg.fcmServerKey || '',
+          cfg.telegramBotToken || '',
+          cfg.telegramChatId || '',
+          cfg.whatsappWebhookUrl || '',
+          cfg.soundAlerts ? 1 : 0,
+          cfg.quietHoursEnabled ? 1 : 0,
+          cfg.quietHoursStart || '23:00',
+          cfg.quietHoursEnd || '06:00',
+          JSON.stringify(cfg.alertSeverities || ['CRITICAL', 'HIGH', 'MEDIUM'])
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Notification config:', e.message || e);
+    }
+  }
+
+  async function syncSystemSettingsToMysql(storageLimitGB: number) {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO system_settings (id, storage_limit_gb, vault_unlocked, passphrase_hash, algorithm, updated_at)
+         VALUES ('default', ?, 1, 'e2ee-master-passphrase-itl-sec-2026', 'AES-256-GCM', ?)
+         ON DUPLICATE KEY UPDATE storage_limit_gb=VALUES(storage_limit_gb), updated_at=VALUES(updated_at)`,
+        [storageLimitGB, new Date().toISOString()]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] System settings:', e.message || e);
+    }
+  }
+
   // Attempt MySQL Pool initialization & Sync
   const initMysqlAndSync = async () => {
     const dbHost = process.env.DB_HOST || '127.0.0.1';
@@ -1085,362 +1428,6 @@ async function startServer() {
     } catch (err: any) {
       console.log('[MySQL ITL Sync Warning]', err.message);
       loadFromLocalFile();
-    }
-  };
-
-  // Helper to persist cloud recording to MySQL
-  const syncRecordingToMysql = async (rec: CloudRecording) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO cloud_recordings (id, camera_id, camera_name, start_time, end_time, duration_sec, file_size_mb, stream_url, thumbnail_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), start_time=VALUES(start_time), end_time=VALUES(end_time), duration_sec=VALUES(duration_sec), file_size_mb=VALUES(file_size_mb), stream_url=VALUES(stream_url), thumbnail_url=VALUES(thumbnail_url)`,
-        [
-          rec.id,
-          rec.cameraId,
-          rec.cameraName,
-          rec.startTime,
-          rec.endTime,
-          rec.durationSeconds || (rec as any).durationSec || 0,
-          rec.fileSizeMB || 0,
-          rec.streamUrl || '',
-          rec.thumbnailUrl || '',
-          rec.startTime ? rec.startTime.split(' ')[0] : new Date().toISOString().split('T')[0]
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Erro ao gravar gravação no MySQL:', e.message || e);
-    }
-  };
-
-  // Helper to persist camera to MySQL
-  const syncCameraToMysql = async (cam: Camera) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) {
-      console.log('[MySQL Sync] Pool inativo. Tentando conectar ao MySQL...');
-      await initMysqlAndSync();
-    }
-    if (!isMysqlActive || !pool) {
-      console.error(`[MySQL Sync Warning] MySQL indisponível. Câmera ${cam.id} (${cam.name}) mantida no arquivo de persistência local.`);
-      return;
-    }
-    try {
-      const safeLat = isNaN(Number(cam.lat)) ? -17.0397 : Number(cam.lat);
-      const safeLng = isNaN(Number(cam.lng)) ? -39.5312 : Number(cam.lng);
-      const safeStorage = isNaN(Number(cam.storageUsedGB)) ? 0.1 : Number(cam.storageUsedGB);
-
-      await pool.query(
-        `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE
-         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), encryption_key_hash=VALUES(encryption_key_hash), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
-        [
-          cam.id,
-          cam.name,
-          cam.location || '',
-          cam.protocol || 'RTSP',
-          cam.rtspUrl || '',
-          cam.rtmpUrl || '',
-          cam.streamKey || '',
-          cam.rtmpServerUrl || '',
-          cam.fullRtmpUrl || '',
-          cam.stateUf || '',
-          cam.city || '',
-          cam.status || 'ONLINE',
-          cam.isE2EEEncrypted ? 1 : 0,
-          cam.encryptionKeyHash || '',
-          cam.fps || 30,
-          cam.resolution || '1080p',
-          safeStorage,
-          cam.cloudRecordingsActive ? 1 : 0,
-          cam.motionSensitivity || 7,
-          cam.aiDetectionEnabled ? 1 : 0,
-          cam.twoWayAudioEnabled ? 1 : 0,
-          safeLat,
-          safeLng,
-          cam.thumbnailUrl || '',
-          cam.createdAt || new Date().toISOString().split('T')[0],
-        ]
-      );
-      console.log(`[MySQL ITL Sync] Câmera '${cam.name}' (${cam.id}) GRAVADA no MySQL com SUCESSO!`);
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Erro ao gravar câmera no MySQL:', e.message || e);
-    }
-  };
-
-  // Helper to remove camera from MySQL
-  const deleteCameraFromMysql = async (id: string) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM cameras WHERE id = ?', [id]);
-    } catch (e) {
-      console.error('[MySQL Sync Error] Erro ao deletar câmera:', e);
-    }
-  };
-
-  // Helper to sync user to MySQL
-  const syncUserToMysql = async (u: User) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) {
-      await initMysqlAndSync();
-    }
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO users (id, name, email, password_hash, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, plan_id, plan_name, monthly_fee, chosen_due_day, financial_status, days_overdue, last_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), custom_permissions=VALUES(custom_permissions), allowed_camera_ids=VALUES(allowed_camera_ids), plan_id=VALUES(plan_id), plan_name=VALUES(plan_name), monthly_fee=VALUES(monthly_fee), chosen_due_day=VALUES(chosen_due_day), financial_status=VALUES(financial_status), days_overdue=VALUES(days_overdue), last_active=VALUES(last_active)`,
-        [
-          u.id,
-          u.name,
-          u.email,
-          '$2b$10$itlpasswordhash2026',
-          u.role || 'RESIDENT',
-          u.phone || '',
-          u.stateUf || '',
-          u.city || '',
-          u.status || 'ACTIVE',
-          JSON.stringify(u.customPermissions || {}),
-          JSON.stringify(u.allowedCameraIds || ['ALL']),
-          u.planId || null,
-          u.planName || null,
-          u.monthlyFee || 0,
-          u.chosenDueDay || 5,
-          u.financialStatus || 'OK',
-          u.daysOverdue || 0,
-          u.lastActive || 'Agora',
-          u.createdAt || new Date().toISOString().split('T')[0],
-        ]
-      );
-      console.log(`[MySQL ITL Sync] Usuário '${u.name}' (${u.id}) GRAVADO no MySQL com SUCESSO!`);
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Erro ao gravar usuário no MySQL:', e.message || e);
-    }
-  };
-
-  const deleteUserFromMysql = async (id: string) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM users WHERE id = ?', [id]);
-    } catch (e) {
-      console.error('[MySQL Sync Error] Erro ao remover usuário:', e);
-    }
-  };
-
-  const syncAlertToMysql = async (alert: MotionAlert) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO motion_alerts (id, camera_id, camera_name, event_type, confidence, snapshot_url, video_clip_url, timestamp, severity, read_status, pushed_to_mobile, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), event_type=VALUES(event_type), confidence=VALUES(confidence), snapshot_url=VALUES(snapshot_url), video_clip_url=VALUES(video_clip_url), timestamp=VALUES(timestamp), severity=VALUES(severity), read_status=VALUES(read_status), pushed_to_mobile=VALUES(pushed_to_mobile)`,
-        [
-          alert.id,
-          alert.cameraId,
-          alert.cameraName,
-          alert.eventType || 'HUMAN',
-          alert.confidence || 90,
-          alert.snapshotUrl || '',
-          alert.videoClipUrl || '',
-          alert.timestamp || new Date().toISOString(),
-          alert.severity || 'HIGH',
-          alert.readStatus ? 1 : 0,
-          alert.pushedToMobile ? 1 : 0,
-          alert.timestamp ? alert.timestamp.split(' ')[0] : new Date().toISOString().split('T')[0]
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Motion alert:', e.message || e);
-    }
-  };
-
-  const syncLogToMysql = async (log: ActivityLog) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO activity_logs (id, user_id, user_name, action, category, details, ip_address, timestamp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE action=VALUES(action), category=VALUES(category), details=VALUES(details)`,
-        [
-          log.id,
-          log.userId || 'sys',
-          log.userName || 'Sistema ITL',
-          log.action || '',
-          log.category || 'SYSTEM',
-          log.details || '',
-          log.ipAddress || '127.0.0.1',
-          log.timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19)
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Activity log:', e.message || e);
-    }
-  };
-
-  const syncPlanToMysql = async (plan: FinancialPlan) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO financial_plans (id, name, monthly_price, cameras_included, cloud_retention_days, description, popular, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), monthly_price=VALUES(monthly_price), cameras_included=VALUES(cameras_included), cloud_retention_days=VALUES(cloud_retention_days), description=VALUES(description), popular=VALUES(popular)`,
-        [
-          plan.id,
-          plan.name,
-          plan.monthlyPrice || 0,
-          plan.camerasIncluded || 4,
-          plan.cloudRetentionDays || 7,
-          plan.description || '',
-          plan.popular ? 1 : 0,
-          new Date().toISOString().split('T')[0]
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Financial plan:', e.message || e);
-    }
-  };
-
-  const deletePlanFromMysql = async (id: string) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM financial_plans WHERE id = ?', [id]);
-    } catch (e) {}
-  };
-
-  const syncInvoiceToMysql = async (inv: Invoice) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO financial_invoices (id, user_id, user_name, user_email, plan_name, amount, original_amount, due_date, payment_date, status, is_pro_rata, pro_rata_days, pix_code, pix_qr_code_url, mercado_pago_payment_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE user_name=VALUES(user_name), user_email=VALUES(user_email), plan_name=VALUES(plan_name), amount=VALUES(amount), original_amount=VALUES(original_amount), due_date=VALUES(due_date), payment_date=VALUES(payment_date), status=VALUES(status), is_pro_rata=VALUES(is_pro_rata), pro_rata_days=VALUES(pro_rata_days), pix_code=VALUES(pix_code), pix_qr_code_url=VALUES(pix_qr_code_url), mercado_pago_payment_id=VALUES(mercado_pago_payment_id)`,
-        [
-          inv.id,
-          inv.userId,
-          inv.userName,
-          inv.userEmail,
-          inv.planName,
-          inv.amount || 0,
-          inv.originalAmount || 0,
-          inv.dueDate || '',
-          inv.paymentDate || null,
-          inv.status || 'PENDING',
-          inv.isProRata ? 1 : 0,
-          inv.proRataDays || 0,
-          inv.pixCode || '',
-          inv.pixQrCodeUrl || '',
-          inv.mercadoPagoPaymentId || '',
-          inv.createdAt || new Date().toISOString().split('T')[0]
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Invoice:', e.message || e);
-    }
-  };
-
-  const deleteInvoiceFromMysql = async (id: string) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM financial_invoices WHERE id = ?', [id]);
-    } catch (e) {}
-  };
-
-  const syncMpConfigToMysql = async (cfg: MercadoPagoConfig) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO mercado_pago_config (id, access_token, public_key, webhook_secret, is_sandbox, auto_approve_simulated, updated_at)
-         VALUES ('default', ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE access_token=VALUES(access_token), public_key=VALUES(public_key), webhook_secret=VALUES(webhook_secret), is_sandbox=VALUES(is_sandbox), auto_approve_simulated=VALUES(auto_approve_simulated), updated_at=VALUES(updated_at)`,
-        [
-          cfg.accessToken || '',
-          cfg.publicKey || '',
-          cfg.webhookSecret || '',
-          cfg.isSandbox ? 1 : 0,
-          cfg.autoApproveSimulated ? 1 : 0,
-          new Date().toISOString()
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] MP config:', e.message || e);
-    }
-  };
-
-  const syncBackupConfigToMysql = async (cfg: BackupConfig) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO backup_settings (id, schedule, destination, retention_days, encrypt_backups, auto_backup_enabled, last_backup_date, next_backup_date, status, storage_path, storage_limit_gb)
-         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE schedule=VALUES(schedule), destination=VALUES(destination), retention_days=VALUES(retention_days), encrypt_backups=VALUES(encrypt_backups), auto_backup_enabled=VALUES(auto_backup_enabled), last_backup_date=VALUES(last_backup_date), next_backup_date=VALUES(next_backup_date), status=VALUES(status), storage_path=VALUES(storage_path), storage_limit_gb=VALUES(storage_limit_gb)`,
-        [
-          cfg.schedule || 'WEEKLY_SUNDAY_0200',
-          cfg.destination || 'LOCAL_VPS',
-          cfg.retentionDays || 30,
-          cfg.encryptBackups ? 1 : 0,
-          cfg.autoBackupEnabled ? 1 : 0,
-          cfg.lastBackupDate || '',
-          cfg.nextBackupDate || '',
-          cfg.status || 'IDLE',
-          cfg.storagePath || '/var/www/itl-backups/',
-          cfg.storageLimitGB || 100
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Backup config:', e.message || e);
-    }
-  };
-
-  const syncNotificationConfigToMysql = async (cfg: NotificationConfig) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO notification_settings (id, push_enabled, fcm_server_key, telegram_bot_token, telegram_chat_id, whatsapp_webhook_url, sound_alerts, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, alert_severities)
-         VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE push_enabled=VALUES(push_enabled), fcm_server_key=VALUES(fcm_server_key), telegram_bot_token=VALUES(telegram_bot_token), telegram_chat_id=VALUES(telegram_chat_id), whatsapp_webhook_url=VALUES(whatsapp_webhook_url), sound_alerts=VALUES(sound_alerts), quiet_hours_enabled=VALUES(quiet_hours_enabled), quiet_hours_start=VALUES(quiet_hours_start), quiet_hours_end=VALUES(quiet_hours_end), alert_severities=VALUES(alert_severities)`,
-        [
-          cfg.pushEnabled ? 1 : 0,
-          cfg.fcmServerKey || '',
-          cfg.telegramBotToken || '',
-          cfg.telegramChatId || '',
-          cfg.whatsappWebhookUrl || '',
-          cfg.soundAlerts ? 1 : 0,
-          cfg.quietHoursEnabled ? 1 : 0,
-          cfg.quietHoursStart || '23:00',
-          cfg.quietHoursEnd || '06:00',
-          JSON.stringify(cfg.alertSeverities || ['CRITICAL', 'HIGH', 'MEDIUM'])
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Notification config:', e.message || e);
-    }
-  };
-
-  const syncSystemSettingsToMysql = async (storageLimitGB: number) => {
-    saveToLocalFile();
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO system_settings (id, storage_limit_gb, vault_unlocked, passphrase_hash, algorithm, updated_at)
-         VALUES ('default', ?, 1, 'e2ee-master-passphrase-itl-sec-2026', 'AES-256-GCM', ?)
-         ON DUPLICATE KEY UPDATE storage_limit_gb=VALUES(storage_limit_gb), updated_at=VALUES(updated_at)`,
-        [storageLimitGB, new Date().toISOString()]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] System settings:', e.message || e);
     }
   };
 
