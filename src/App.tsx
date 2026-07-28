@@ -19,6 +19,7 @@ import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
 import { FinancialAlertBanner } from './components/FinancialAlertBanner';
 import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
 import { DvrMatrixView } from './components/DvrMatrixView';
+import { LicensePlateRecognition } from './components/LicensePlateRecognition';
 
 import {
   Camera,
@@ -580,6 +581,13 @@ export default function App() {
               onDeleteRecordingsBatch={handleDeleteRecordingsBatch}
               isVaultUnlocked={e2eeSettings.isVaultUnlocked}
               onUnlockVault={() => setIsE2EEModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'license-plates' && (
+            <LicensePlateRecognition
+              cameras={cameras}
+              onTriggerAlert={(camId, eventType, severity) => triggerMotionAlert(camId, eventType as any, severity)}
             />
           )}
 

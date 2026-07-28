@@ -180,6 +180,24 @@ export interface NotificationConfig {
   alertSeverities: AlertSeverity[];
 }
 
+export interface LicensePlateRecord {
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  city?: string;
+  stateUf?: string;
+  plateNumber: string; // e.g., BRA2E19 or ABC1234
+  vehicleType: 'Carro' | 'Moto' | 'Caminhão' | 'SUV' | 'Van' | 'Ônibus' | 'Outro';
+  vehicleColor?: string;
+  confidence: number; // Percentage e.g. 96
+  snapshotUrl: string;
+  timestamp: string; // ISO or formatted date string
+  lat?: number;
+  lng?: number;
+  isStolenOrWanted?: boolean; // Alerta de veículo roubado / procurado
+  notes?: string;
+}
+
 export interface E2EESettings {
   isVaultUnlocked: boolean;
   passphraseHash: string;
