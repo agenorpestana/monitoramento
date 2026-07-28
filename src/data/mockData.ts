@@ -28,7 +28,54 @@ export const INITIAL_USERS: User[] = [
   }
 ];
 
-export const INITIAL_CAMERAS: Camera[] = [];
+export const INITIAL_CAMERAS: Camera[] = [
+  {
+    id: 'cam-principal-01',
+    name: 'Câmera Portaria Principal',
+    location: 'Entrada Principal - Itamaraju',
+    protocol: 'RTSP',
+    rtspUrl: 'rtsp://127.0.0.1:8554/live/portaria',
+    rtmpUrl: 'rtmp://127.0.0.1/live/portaria',
+    streamKey: 'portaria-key',
+    status: 'ONLINE',
+    isE2EEEncrypted: true,
+    encryptionKeyHash: 'e2ee-hash-portaria-01',
+    fps: 30,
+    resolution: '1080p',
+    storageUsedGB: 1.2,
+    cloudRecordingsActive: true,
+    motionSensitivity: 8,
+    aiDetectionEnabled: true,
+    twoWayAudioEnabled: true,
+    lat: -17.0397,
+    lng: -39.5312,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+    createdAt: '2026-07-01',
+  },
+  {
+    id: 'cam-estacionamento-02',
+    name: 'Câmera Estacionamento VIP',
+    location: 'Estacionamento Central',
+    protocol: 'RTSP',
+    rtspUrl: 'rtsp://127.0.0.1:8554/live/estacionamento',
+    rtmpUrl: 'rtmp://127.0.0.1/live/estacionamento',
+    streamKey: 'estacionamento-key',
+    status: 'ONLINE',
+    isE2EEEncrypted: true,
+    encryptionKeyHash: 'e2ee-hash-estacionamento-02',
+    fps: 30,
+    resolution: '1080p',
+    storageUsedGB: 0.8,
+    cloudRecordingsActive: true,
+    motionSensitivity: 7,
+    aiDetectionEnabled: true,
+    twoWayAudioEnabled: false,
+    lat: -17.0410,
+    lng: -39.5330,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=800&auto=format&fit=crop&q=80',
+    createdAt: '2026-07-01',
+  }
+];
 
 export const INITIAL_ALERTS: MotionAlert[] = [];
 

@@ -959,6 +959,11 @@ async function startServer() {
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
 
+      // Ensure in-memory repositories have initial default seeds if currently empty
+      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
+      if (users.length === 0) users = [...INITIAL_USERS];
+      if (plans.length === 0) plans = [...INITIAL_PLANS];
+
       // Synchronize in-memory repositories with MySQL tables
       // Push memory items into MySQL
       try { for (const c of cameras) { await syncCameraToMysql(c); } } catch (e: any) { console.error('[MySQL Sync Cameras Error]', e.message); }
