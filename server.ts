@@ -699,63 +699,69 @@ async function startServer() {
     }
 
     try {
-      // Ensure tables exist
+      // Ensure tables exist with flexible column types
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cameras\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
-          \`location\` VARCHAR(255),
-          \`protocol\` VARCHAR(20) DEFAULT 'RTSP',
+          \`location\` TEXT,
+          \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
           \`rtsp_url\` TEXT,
           \`rtmp_url\` TEXT,
           \`stream_key\` VARCHAR(100),
           \`rtmp_server_url\` TEXT,
           \`full_rtmp_url\` TEXT,
-          \`state_uf\` VARCHAR(10),
+          \`state_uf\` VARCHAR(20),
           \`city\` VARCHAR(100),
-          \`status\` VARCHAR(20) DEFAULT 'ONLINE',
+          \`status\` VARCHAR(50) DEFAULT 'ONLINE',
           \`is_e2ee_encrypted\` BOOLEAN DEFAULT TRUE,
-          \`encryption_key_hash\` VARCHAR(255),
+          \`encryption_key_hash\` TEXT,
           \`fps\` INT DEFAULT 30,
           \`resolution\` VARCHAR(50) DEFAULT '1080p',
-          \`storage_used_gb\` DECIMAL(10,2) DEFAULT 0.00,
+          \`storage_used_gb\` DOUBLE DEFAULT 0.1,
           \`cloud_recordings_active\` BOOLEAN DEFAULT TRUE,
           \`motion_sensitivity\` INT DEFAULT 7,
           \`ai_detection_enabled\` BOOLEAN DEFAULT TRUE,
           \`two_way_audio_enabled\` BOOLEAN DEFAULT TRUE,
-          \`lat\` DECIMAL(10, 8),
-          \`lng\` DECIMAL(11, 8),
+          \`lat\` DOUBLE NULL,
+          \`lng\` DOUBLE NULL,
           \`thumbnail_url\` TEXT,
-          \`created_at\` VARCHAR(50)
+          \`created_at\` VARCHAR(100)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
 
-      // Relax column constraints if existing table had NOT NULL or ENUM/DATETIME constraints
+      // Relax column constraints if existing MySQL table was created with tight constraints
       try {
         await pool.query('ALTER TABLE `cameras` MODIFY `rtsp_url` TEXT NULL');
-        await pool.query('ALTER TABLE `cameras` MODIFY `location` VARCHAR(255) NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `location` TEXT NULL');
         await pool.query('ALTER TABLE `cameras` MODIFY `protocol` VARCHAR(50) DEFAULT "RTSP"');
         await pool.query('ALTER TABLE `cameras` MODIFY `status` VARCHAR(50) DEFAULT "ONLINE"');
         await pool.query('ALTER TABLE `cameras` MODIFY `created_at` VARCHAR(100) NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `lat` DOUBLE NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `lng` DOUBLE NULL');
+        await pool.query('ALTER TABLE `cameras` MODIFY `storage_used_gb` DOUBLE DEFAULT 0.1');
       } catch (e) {}
 
       // Dynamically add missing columns to cameras table if they do not exist
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(10) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
 
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`users\` (
           \`id\` VARCHAR(64) PRIMARY KEY,
           \`name\` VARCHAR(255) NOT NULL,
-          \`email\` VARCHAR(255) UNIQUE NOT NULL,
+          \`email\` VARCHAR(255) NOT NULL,
           \`password_hash\` VARCHAR(255) NULL,
           \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
           \`phone\` VARCHAR(50),
           \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
           \`custom_permissions\` JSON,
+          \`allowed_camera_ids\` JSON,
+          \`state_uf\` VARCHAR(20) NULL,
+          \`city\` VARCHAR(100) NULL,
           \`last_active\` VARCHAR(100) DEFAULT 'Agora',
           \`created_at\` VARCHAR(100) DEFAULT '2026-01-01'
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -769,19 +775,39 @@ async function startServer() {
         await pool.query('ALTER TABLE `users` MODIFY `status` VARCHAR(50) DEFAULT "ACTIVE"');
       } catch (e) {}
 
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(10) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `users` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `users` ADD COLUMN `allowed_camera_ids` JSON NULL'); } catch (e) {}
+
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
+          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`camera_id\` VARCHAR(64),
+          \`camera_name\` VARCHAR(255),
+          \`start_time\` VARCHAR(100),
+          \`end_time\` VARCHAR(100),
+          \`duration_sec\` INT DEFAULT 0,
+          \`file_size_mb\` DOUBLE DEFAULT 0,
+          \`stream_url\` TEXT,
+          \`thumbnail_url\` TEXT,
+          \`created_at\` VARCHAR(100)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
 
       // Purge legacy mock cameras if present in MySQL
       try {
         await pool.query("DELETE FROM cameras WHERE id IN ('cam-wpg8tz', 'cam-jvv51l', 'cam-v7w3f8')");
       } catch (e) {}
 
-      // Load existing cameras from MySQL
+      // Step 1: Push all local in-memory cameras into MySQL first
+      for (const c of cameras) {
+        await syncCameraToMysql(c);
+      }
+
+      // Step 2: Load/merge cameras from MySQL
       const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
       if (camRows && camRows.length > 0) {
-        cameras = camRows.map((row: any) => ({
+        const mysqlCams: Camera[] = camRows.map((row: any) => ({
           id: row.id,
           name: row.name,
           location: row.location || 'Localização ITL',
@@ -808,19 +834,25 @@ async function startServer() {
           thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
           createdAt: row.created_at || '2026-01-01',
         }));
-        console.log(`[MySQL ITL] ${cameras.length} câmeras recuperadas do banco MySQL.`);
-      } else {
-        // Seed MySQL with current cameras if table is empty
-        console.log(`[MySQL ITL] Tabela MySQL vazia. Sincronizando ${cameras.length} câmeras para o MySQL...`);
-        for (const c of cameras) {
-          await syncCameraToMysql(c);
-        }
+
+        mysqlCams.forEach((mCam) => {
+          if (!cameras.some((c) => c.id === mCam.id)) {
+            cameras.push(mCam);
+            syncCameraToSqlite(mCam);
+          }
+        });
+        console.log(`[MySQL ITL] ${cameras.length} câmeras sincronizadas bi-direcionalmente com o MySQL.`);
       }
 
-      // Load users from MySQL
+      // Step 3: Push all local in-memory users into MySQL first
+      for (const u of users) {
+        await syncUserToMysql(u);
+      }
+
+      // Step 4: Load/merge users from MySQL
       const [userRows]: any = await pool.query('SELECT * FROM users');
       if (userRows && userRows.length > 0) {
-        users = userRows.map((row: any) => ({
+        const mysqlUsers: User[] = userRows.map((row: any) => ({
           id: row.id,
           name: row.name,
           email: row.email,
@@ -834,15 +866,50 @@ async function startServer() {
           lastActive: row.last_active,
           createdAt: row.created_at,
         }));
-        console.log(`[MySQL ITL] ${users.length} usuários recuperados do banco MySQL.`);
-      } else {
-        for (const u of users) {
-          await syncUserToMysql(u);
-        }
+
+        mysqlUsers.forEach((mUser) => {
+          if (!users.some((u) => u.id === mUser.id || u.email === mUser.email)) {
+            users.push(mUser);
+            syncUserToSqlite(mUser);
+          }
+        });
+        console.log(`[MySQL ITL] ${users.length} usuários sincronizados bi-direcionalmente com o MySQL.`);
+      }
+
+      // Step 5: Push recordings to MySQL
+      for (const r of recordings) {
+        await syncRecordingToMysql(r);
       }
     } catch (err: any) {
       console.log('[MySQL ITL Sync Warning]', err.message);
       loadFromLocalFile();
+    }
+  };
+
+  // Helper to persist cloud recording to MySQL
+  const syncRecordingToMysql = async (rec: CloudRecording) => {
+    saveToLocalFile();
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query(
+        `INSERT INTO cloud_recordings (id, camera_id, camera_name, start_time, end_time, duration_sec, file_size_mb, stream_url, thumbnail_url, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), start_time=VALUES(start_time), end_time=VALUES(end_time), duration_sec=VALUES(duration_sec), file_size_mb=VALUES(file_size_mb), stream_url=VALUES(stream_url), thumbnail_url=VALUES(thumbnail_url)`,
+        [
+          rec.id,
+          rec.cameraId,
+          rec.cameraName,
+          rec.startTime,
+          rec.endTime,
+          rec.durationSec || 0,
+          rec.fileSizeMB || 0,
+          rec.streamUrl || '',
+          rec.thumbnailUrl || '',
+          rec.startTime ? rec.startTime.split(' ')[0] : new Date().toISOString().split('T')[0]
+        ]
+      );
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao gravar gravação no MySQL:', e.message || e);
     }
   };
 
@@ -858,11 +925,15 @@ async function startServer() {
       return;
     }
     try {
+      const safeLat = isNaN(Number(cam.lat)) ? -17.0397 : Number(cam.lat);
+      const safeLng = isNaN(Number(cam.lng)) ? -39.5312 : Number(cam.lng);
+      const safeStorage = isNaN(Number(cam.storageUsedGB)) ? 0.1 : Number(cam.storageUsedGB);
+
       await pool.query(
         `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
-         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
+         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), encryption_key_hash=VALUES(encryption_key_hash), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
         [
           cam.id,
           cam.name,
@@ -880,13 +951,13 @@ async function startServer() {
           cam.encryptionKeyHash || '',
           cam.fps || 30,
           cam.resolution || '1080p',
-          cam.storageUsedGB || 0,
+          safeStorage,
           cam.cloudRecordingsActive ? 1 : 0,
           cam.motionSensitivity || 7,
           cam.aiDetectionEnabled ? 1 : 0,
           cam.twoWayAudioEnabled ? 1 : 0,
-          cam.lat || -17.0397,
-          cam.lng || -39.5312,
+          safeLat,
+          safeLng,
           cam.thumbnailUrl || '',
           cam.createdAt || new Date().toISOString().split('T')[0],
         ]
@@ -1127,6 +1198,8 @@ async function startServer() {
         recordings.unshift(newRec);
         if (recordings.length > 5000) recordings = recordings.slice(0, 5000);
         
+        syncRecordingToMysql(newRec);
+
         // Auto-enforce FIFO Pruning to maintain storage limit
         pruneRecordingsFIFO();
 
