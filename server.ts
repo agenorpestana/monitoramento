@@ -191,11 +191,30 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
-  // Setup directory for real recorded video streams
-  const recordingsDir = path.join(process.cwd(), 'public', 'recordings');
+  // Setup directory for real recorded video streams (stored OUTSIDE public/ to avoid Vite build file-copy conflicts)
+  const recordingsDir = path.join(process.cwd(), 'recordings');
   if (!fs.existsSync(recordingsDir)) {
     try { fs.mkdirSync(recordingsDir, { recursive: true }); } catch (e) {}
   }
+
+  // Migrate any legacy files from public/recordings to recordings/ and clean old folder
+  const oldRecordingsDir = path.join(process.cwd(), 'public', 'recordings');
+  if (fs.existsSync(oldRecordingsDir)) {
+    try {
+      const files = fs.readdirSync(oldRecordingsDir);
+      for (const file of files) {
+        const oldFile = path.join(oldRecordingsDir, file);
+        const newFile = path.join(recordingsDir, file);
+        try {
+          fs.renameSync(oldFile, newFile);
+        } catch (e) {
+          try { fs.copyFileSync(oldFile, newFile); fs.unlinkSync(oldFile); } catch (e2) {}
+        }
+      }
+      try { fs.rmSync(oldRecordingsDir, { recursive: true, force: true }); } catch (e) {}
+    } catch (e) {}
+  }
+
   app.use('/recordings', express.static(recordingsDir));
 
   // Database Connection Pool Setup
@@ -964,9 +983,15 @@ async function startServer() {
       if (currentMB > maxMB) {
         deletedRecordingIds.add(rec.id);
         if (rec.streamUrl && rec.streamUrl.startsWith('/recordings/')) {
-          const fullPath = path.join(process.cwd(), 'public', rec.streamUrl);
+          const fileName = path.basename(rec.streamUrl);
+          const fullPath = path.join(recordingsDir, fileName);
           if (fs.existsSync(fullPath)) {
             try { fs.unlinkSync(fullPath); } catch (e) {}
+          } else {
+            const legacyPath = path.join(process.cwd(), 'public', rec.streamUrl);
+            if (fs.existsSync(legacyPath)) {
+              try { fs.unlinkSync(legacyPath); } catch (e) {}
+            }
           }
         }
         currentMB -= (rec.fileSizeMB || 0);
@@ -1908,9 +1933,15 @@ async function startServer() {
     deletedRecordingIds.add(id);
     const target = recordings.find((r) => r.id === id);
     if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
-      const fullFilePath = path.join(process.cwd(), 'public', target.streamUrl);
+      const fileName = path.basename(target.streamUrl);
+      const fullFilePath = path.join(recordingsDir, fileName);
       if (fs.existsSync(fullFilePath)) {
         try { fs.unlinkSync(fullFilePath); } catch (e) {}
+      } else {
+        const legacyPath = path.join(process.cwd(), 'public', target.streamUrl);
+        if (fs.existsSync(legacyPath)) {
+          try { fs.unlinkSync(legacyPath); } catch (e) {}
+        }
       }
     }
     recordings = recordings.filter((r) => r.id !== id);
@@ -1927,9 +1958,15 @@ async function startServer() {
         deletedRecordingIds.add(id);
         const target = recordings.find((r) => r.id === id);
         if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
-          const fullFilePath = path.join(process.cwd(), 'public', target.streamUrl);
+          const fileName = path.basename(target.streamUrl);
+          const fullFilePath = path.join(recordingsDir, fileName);
           if (fs.existsSync(fullFilePath)) {
             try { fs.unlinkSync(fullFilePath); } catch (e) {}
+          } else {
+            const legacyPath = path.join(process.cwd(), 'public', target.streamUrl);
+            if (fs.existsSync(legacyPath)) {
+              try { fs.unlinkSync(legacyPath); } catch (e) {}
+            }
           }
         }
       });
@@ -2081,13 +2118,7 @@ async function startServer() {
 
         const mpData = await mpResponse.json();
         if (mpData.status === 'approved' || mpData.status === 'in_process' || mpData.id) {
-          const invIndex = invoices.findIndex((i) => i.id === invoiceId);
-          if (invIndex !== -1) {
-            invoices[invIndex].status = 'PAID';
-            invoices[invIndex].paymentDate = new Date().toISOString().split('T')[0];
-          }
-
-          const targetUser = users.find((u) => u.email === userEmail || (invIndex !== -1 && u.id === invoices[invIndex].userId));
+          const targetUser = users.find((u) => u.email === userEmail);
           if (targetUser) {
             targetUser.financialStatus = 'OK';
             targetUser.daysOverdue = 0;
@@ -2096,7 +2127,7 @@ async function startServer() {
           }
 
           saveToLocalFile();
-          addLog('Sistema Financeiro', `Pagamento APROVADO via Mercado Pago para fatura ${invoiceId}`, 'FINANCIAL');
+          addLog('Sistema Financeiro', `Pagamento APROVADO via Mercado Pago para fatura ${invoiceId}`, 'SYSTEM');
 
           return res.json({
             success: true,
@@ -2111,22 +2142,16 @@ async function startServer() {
     }
 
     // Default Sandbox / Fallback Approval
-    const invIndex = invoices.findIndex((i) => i.id === invoiceId);
-    if (invIndex !== -1) {
-      invoices[invIndex].status = 'PAID';
-      invoices[invIndex].paymentDate = new Date().toISOString().split('T')[0];
-
-      const targetUser = users.find((u) => u.email === userEmail || u.id === invoices[invIndex].userId);
-      if (targetUser) {
-        targetUser.financialStatus = 'OK';
-        targetUser.daysOverdue = 0;
-        syncUserToSqlite(targetUser);
-        await syncUserToMysql(targetUser);
-      }
-
-      saveToLocalFile();
-      addLog('Sistema Financeiro', `Pagamento APROVADO (Mercado Pago) para fatura ${invoiceId}`, 'FINANCIAL');
+    const targetUser = users.find((u) => u.email === userEmail);
+    if (targetUser) {
+      targetUser.financialStatus = 'OK';
+      targetUser.daysOverdue = 0;
+      syncUserToSqlite(targetUser);
+      await syncUserToMysql(targetUser);
     }
+
+    saveToLocalFile();
+    addLog('Sistema Financeiro', `Pagamento APROVADO (Mercado Pago) para fatura ${invoiceId}`, 'SYSTEM');
 
     res.json({
       success: true,

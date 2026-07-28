@@ -1,6 +1,33 @@
 {
   "cameras": [
     {
+      "id": "cam-5218",
+      "name": "Câmera Entrada Norte",
+      "location": "Portão 1",
+      "protocol": "RTSP",
+      "rtspUrl": "rtsp://admin:12345@192.168.1.101:554/live",
+      "rtmpUrl": "rtmp://localhost:1935/live/cam_285218",
+      "streamKey": "cam_285218",
+      "rtmpServerUrl": "rtmp://localhost:1935/live",
+      "fullRtmpUrl": "http://localhost/live/cam_285218.m3u8",
+      "stateUf": "BA",
+      "city": "Itamaraju",
+      "status": "ONLINE",
+      "isE2EEEncrypted": true,
+      "encryptionKeyHash": "e2ee-aes256-bmjk4e6r",
+      "fps": 30,
+      "resolution": "1080p Full HD",
+      "storageUsedGB": 0.1,
+      "cloudRecordingsActive": true,
+      "motionSensitivity": 7,
+      "aiDetectionEnabled": true,
+      "twoWayAudioEnabled": true,
+      "lat": -17.03425846276576,
+      "lng": -39.5350771036888,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "createdAt": "2026-07-28"
+    },
+    {
       "id": "cam-6291",
       "name": "Câmera Teste DB",
       "location": "Portaria Principal",
@@ -36,7 +63,6 @@
       "name": "Super Admin Unity",
       "email": "suporte@unityautomacoes.com.br",
       "role": "ADMIN",
-      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
       "phone": "+55 11 98765-4321",
       "stateUf": "BA",
       "city": "Itamaraju",
@@ -61,13 +87,13 @@
   ],
   "logs": [
     {
-      "id": "log-1785238886429",
+      "id": "log-1785240285257",
       "userName": "ITL Admin",
-      "action": "Nova câmera adicionada (RTSP): Câmera Teste DB",
+      "action": "Nova câmera adicionada (RTSP): Câmera Entrada Norte",
       "category": "SYSTEM",
-      "details": "URL: http://localhost/live/cam_886291.m3u8",
+      "details": "URL: http://localhost/live/cam_285218.m3u8",
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-07-28 11:41:26"
+      "timestamp": "2026-07-28 12:04:45"
     },
     {
       "id": "log-101",

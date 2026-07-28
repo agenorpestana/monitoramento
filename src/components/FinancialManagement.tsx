@@ -332,10 +332,11 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
           </div>
         </div>
 
-        {/* PIX Modal for Client */}
+        {/* Mercado Pago Payment Modal for Client */}
         {selectedInvoiceForPix && (
-          <PixModal
+          <MercadoPagoCheckoutModal
             invoice={selectedInvoiceForPix}
+            mpConfig={mpConfig}
             onClose={() => setSelectedInvoiceForPix(null)}
             onConfirmPay={handlePayInvoice}
           />
