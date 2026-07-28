@@ -724,10 +724,11 @@ async function startServer() {
     }
 
     try {
-      // 1. Table: cameras
+    // Create each table in isolated try-catch blocks so one failure won't prevent creating others
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cameras\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
           \`location\` TEXT,
           \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
@@ -739,26 +740,28 @@ async function startServer() {
           \`state_uf\` VARCHAR(20),
           \`city\` VARCHAR(100),
           \`status\` VARCHAR(50) DEFAULT 'ONLINE',
-          \`is_e2ee_encrypted\` BOOLEAN DEFAULT TRUE,
+          \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
           \`encryption_key_hash\` TEXT,
           \`fps\` INT DEFAULT 30,
           \`resolution\` VARCHAR(50) DEFAULT '1080p',
           \`storage_used_gb\` DOUBLE DEFAULT 0.1,
-          \`cloud_recordings_active\` BOOLEAN DEFAULT TRUE,
+          \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
           \`motion_sensitivity\` INT DEFAULT 7,
-          \`ai_detection_enabled\` BOOLEAN DEFAULT TRUE,
-          \`two_way_audio_enabled\` BOOLEAN DEFAULT TRUE,
+          \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
+          \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
           \`lat\` DOUBLE NULL,
           \`lng\` DOUBLE NULL,
           \`thumbnail_url\` TEXT,
-          \`created_at\` VARCHAR(100)
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] cameras:', e.message); }
 
-      // 2. Table: users
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`users\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
           \`email\` VARCHAR(255) NOT NULL,
           \`password_hash\` VARCHAR(255) NULL,
@@ -776,14 +779,16 @@ async function startServer() {
           \`financial_status\` VARCHAR(50) DEFAULT 'OK',
           \`days_overdue\` INT DEFAULT 0,
           \`last_active\` VARCHAR(100) DEFAULT 'Agora',
-          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01'
+          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] users:', e.message); }
 
-      // 3. Table: cloud_recordings
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`camera_id\` VARCHAR(64),
           \`camera_name\` VARCHAR(255),
           \`start_time\` VARCHAR(100),
@@ -792,14 +797,16 @@ async function startServer() {
           \`file_size_mb\` DOUBLE DEFAULT 0,
           \`stream_url\` TEXT,
           \`thumbnail_url\` TEXT,
-          \`created_at\` VARCHAR(100)
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] cloud_recordings:', e.message); }
 
-      // 4. Table: motion_alerts
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`camera_id\` VARCHAR(64),
           \`camera_name\` VARCHAR(255),
           \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
@@ -808,44 +815,50 @@ async function startServer() {
           \`video_clip_url\` TEXT,
           \`timestamp\` VARCHAR(100),
           \`severity\` VARCHAR(50) DEFAULT 'HIGH',
-          \`read_status\` BOOLEAN DEFAULT FALSE,
-          \`pushed_to_mobile\` BOOLEAN DEFAULT TRUE,
-          \`created_at\` VARCHAR(100)
+          \`read_status\` TINYINT(1) DEFAULT 0,
+          \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] motion_alerts:', e.message); }
 
-      // 5. Table: activity_logs
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`activity_logs\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`user_id\` VARCHAR(64),
           \`user_name\` VARCHAR(255),
           \`action\` TEXT,
           \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
           \`details\` TEXT,
           \`ip_address\` VARCHAR(50),
-          \`timestamp\` VARCHAR(100)
+          \`timestamp\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] activity_logs:', e.message); }
 
-      // 6. Table: financial_plans
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`financial_plans\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
           \`monthly_price\` DOUBLE DEFAULT 0,
           \`cameras_included\` INT DEFAULT 4,
           \`cloud_retention_days\` INT DEFAULT 7,
           \`description\` TEXT,
-          \`popular\` BOOLEAN DEFAULT FALSE,
-          \`created_at\` VARCHAR(100)
+          \`popular\` TINYINT(1) DEFAULT 0,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] financial_plans:', e.message); }
 
-      // 7. Table: financial_invoices
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
-          \`id\` VARCHAR(64) PRIMARY KEY,
+          \`id\` VARCHAR(64) NOT NULL,
           \`user_id\` VARCHAR(64),
           \`user_name\` VARCHAR(255),
           \`user_email\` VARCHAR(255),
@@ -855,73 +868,83 @@ async function startServer() {
           \`due_date\` VARCHAR(50),
           \`payment_date\` VARCHAR(50) NULL,
           \`status\` VARCHAR(50) DEFAULT 'PENDING',
-          \`is_pro_rata\` BOOLEAN DEFAULT FALSE,
+          \`is_pro_rata\` TINYINT(1) DEFAULT 0,
           \`pro_rata_days\` INT DEFAULT 0,
           \`pix_code\` TEXT NULL,
           \`pix_qr_code_url\` TEXT NULL,
           \`mercado_pago_payment_id\` VARCHAR(100) NULL,
-          \`created_at\` VARCHAR(100)
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] financial_invoices:', e.message); }
 
-      // 8. Table: mercado_pago_config
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
-          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
           \`access_token\` TEXT,
           \`public_key\` TEXT,
           \`webhook_secret\` TEXT,
-          \`is_sandbox\` BOOLEAN DEFAULT TRUE,
-          \`auto_approve_simulated\` BOOLEAN DEFAULT TRUE,
-          \`updated_at\` VARCHAR(100)
+          \`is_sandbox\` TINYINT(1) DEFAULT 1,
+          \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
+          \`updated_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] mercado_pago_config:', e.message); }
 
-      // 9. Table: backup_settings
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`backup_settings\` (
-          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
           \`schedule\` VARCHAR(50),
           \`destination\` VARCHAR(50),
           \`retention_days\` INT DEFAULT 30,
-          \`encrypt_backups\` BOOLEAN DEFAULT TRUE,
-          \`auto_backup_enabled\` BOOLEAN DEFAULT TRUE,
+          \`encrypt_backups\` TINYINT(1) DEFAULT 1,
+          \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
           \`last_backup_date\` VARCHAR(100),
           \`next_backup_date\` VARCHAR(100),
           \`status\` VARCHAR(50),
           \`storage_path\` VARCHAR(255),
-          \`storage_limit_gb\` INT DEFAULT 100
+          \`storage_limit_gb\` INT DEFAULT 100,
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] backup_settings:', e.message); }
 
-      // 10. Table: notification_settings
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`notification_settings\` (
-          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
-          \`push_enabled\` BOOLEAN DEFAULT TRUE,
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`push_enabled\` TINYINT(1) DEFAULT 1,
           \`fcm_server_key\` TEXT,
           \`telegram_bot_token\` TEXT,
           \`telegram_chat_id\` VARCHAR(100),
           \`whatsapp_webhook_url\` TEXT,
-          \`sound_alerts\` BOOLEAN DEFAULT TRUE,
-          \`quiet_hours_enabled\` BOOLEAN DEFAULT FALSE,
+          \`sound_alerts\` TINYINT(1) DEFAULT 1,
+          \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
           \`quiet_hours_start\` VARCHAR(20),
           \`quiet_hours_end\` VARCHAR(20),
-          \`alert_severities\` JSON
+          \`alert_severities\` JSON,
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] notification_settings:', e.message); }
 
-      // 11. Table: system_settings
+    try {
       await pool.query(`
         CREATE TABLE IF NOT EXISTS \`system_settings\` (
-          \`id\` VARCHAR(64) PRIMARY KEY DEFAULT 'default',
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
           \`storage_limit_gb\` DOUBLE DEFAULT 100,
-          \`vault_unlocked\` BOOLEAN DEFAULT TRUE,
+          \`vault_unlocked\` TINYINT(1) DEFAULT 1,
           \`passphrase_hash\` TEXT,
           \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
-          \`updated_at\` VARCHAR(100)
+          \`updated_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+    } catch (e: any) { console.error('[MySQL Table Error] system_settings:', e.message); }
 
       // Relax constraints & add columns dynamically if user had earlier schema versions
       try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL'); } catch (e) {}
@@ -938,17 +961,17 @@ async function startServer() {
 
       // Synchronize in-memory repositories with MySQL tables
       // Push memory items into MySQL
-      for (const c of cameras) { await syncCameraToMysql(c); }
-      for (const u of users) { await syncUserToMysql(u); }
-      for (const r of recordings) { await syncRecordingToMysql(r); }
-      for (const a of alerts) { await syncAlertToMysql(a); }
-      for (const l of logs) { await syncLogToMysql(l); }
-      for (const p of plans) { await syncPlanToMysql(p); }
-      for (const i of invoices) { await syncInvoiceToMysql(i); }
-      await syncMpConfigToMysql(mpConfig);
-      await syncBackupConfigToMysql(backupConfig);
-      await syncNotificationConfigToMysql(notificationConfig);
-      await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100);
+      try { for (const c of cameras) { await syncCameraToMysql(c); } } catch (e: any) { console.error('[MySQL Sync Cameras Error]', e.message); }
+      try { for (const u of users) { await syncUserToMysql(u); } } catch (e: any) { console.error('[MySQL Sync Users Error]', e.message); }
+      try { for (const r of recordings) { await syncRecordingToMysql(r); } } catch (e: any) { console.error('[MySQL Sync Recordings Error]', e.message); }
+      try { for (const a of alerts) { await syncAlertToMysql(a); } } catch (e: any) { console.error('[MySQL Sync Alerts Error]', e.message); }
+      try { for (const l of logs) { await syncLogToMysql(l); } } catch (e: any) { console.error('[MySQL Sync Logs Error]', e.message); }
+      try { for (const p of plans) { await syncPlanToMysql(p); } } catch (e: any) { console.error('[MySQL Sync Plans Error]', e.message); }
+      try { for (const i of invoices) { await syncInvoiceToMysql(i); } } catch (e: any) { console.error('[MySQL Sync Invoices Error]', e.message); }
+      try { await syncMpConfigToMysql(mpConfig); } catch (e: any) {}
+      try { await syncBackupConfigToMysql(backupConfig); } catch (e: any) {}
+      try { await syncNotificationConfigToMysql(notificationConfig); } catch (e: any) {}
+      try { await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100); } catch (e: any) {}
 
       // Load items from MySQL into memory repositories
       const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
@@ -1162,9 +1185,9 @@ async function startServer() {
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
-        `INSERT INTO users (id, name, email, password_hash, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, last_active, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), custom_permissions=VALUES(custom_permissions), allowed_camera_ids=VALUES(allowed_camera_ids), last_active=VALUES(last_active)`,
+        `INSERT INTO users (id, name, email, password_hash, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, plan_id, plan_name, monthly_fee, chosen_due_day, financial_status, days_overdue, last_active, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role), phone=VALUES(phone), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), custom_permissions=VALUES(custom_permissions), allowed_camera_ids=VALUES(allowed_camera_ids), plan_id=VALUES(plan_id), plan_name=VALUES(plan_name), monthly_fee=VALUES(monthly_fee), chosen_due_day=VALUES(chosen_due_day), financial_status=VALUES(financial_status), days_overdue=VALUES(days_overdue), last_active=VALUES(last_active)`,
         [
           u.id,
           u.name,
@@ -1177,6 +1200,12 @@ async function startServer() {
           u.status || 'ACTIVE',
           JSON.stringify(u.customPermissions || {}),
           JSON.stringify(u.allowedCameraIds || ['ALL']),
+          u.planId || null,
+          u.planName || null,
+          u.monthlyFee || 0,
+          u.chosenDueDay || 5,
+          u.financialStatus || 'OK',
+          u.daysOverdue || 0,
           u.lastActive || 'Agora',
           u.createdAt || new Date().toISOString().split('T')[0],
         ]
