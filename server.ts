@@ -990,8 +990,12 @@ async function startServer() {
       loadFromLocalFile();
 
       // Ensure default essential seeds if memory is empty
+      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
       if (users.length === 0) users = [...INITIAL_USERS];
       if (plans.length === 0) plans = [...INITIAL_PLANS];
+      if (alerts.length === 0) alerts = [...INITIAL_ALERTS];
+      if (recordings.length === 0) recordings = [...INITIAL_RECORDINGS];
+      if (logs.length === 0) logs = [...INITIAL_LOGS];
 
       // 2. Sync Cameras
       for (const c of cameras) { try { await syncCameraToMysql(c); } catch (e) {} }
@@ -1090,6 +1094,8 @@ async function startServer() {
             fileSizeMB: parseFloat(row.file_size_mb || 0),
             streamUrl: row.stream_url,
             thumbnailUrl: row.thumbnail_url,
+            isE2EELocked: true,
+            tags: ['Gravação Nuvem ITL', row.camera_name || 'Câmera ITL'],
           };
           if (!recMap.has(dbRec.id)) {
             recMap.set(dbRec.id, dbRec);
@@ -1230,6 +1236,7 @@ async function startServer() {
     const dbUser = process.env.DB_USER || 'itl_user';
     const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
     const dbName = process.env.DB_NAME || 'itl_cameras';
+    const dbPort = process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306;
 
     const hostsToTry = [dbHost, '127.0.0.1', 'localhost'];
     const credentials = [
@@ -1246,28 +1253,11 @@ async function startServer() {
     for (const hostCandidate of hostsToTry) {
       if (isMysqlActive) break;
       for (const cred of credentials) {
+        // Attempt 1: Direct connection to target database
         try {
-          // Step 1: Connect without database to ensure database exists
-          const rootPool = mysql.createPool({
-            host: hostCandidate,
-            user: cred.user,
-            password: cred.pass,
-            waitForConnections: true,
-            connectionLimit: 5,
-            queueLimit: 0,
-            connectTimeout: 3000,
-          });
-
-          const conn = await rootPool.getConnection();
-          await conn.ping();
-          // Create database if it does not exist
-          await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-          conn.release();
-          await rootPool.end();
-
-          // Step 2: Create pool connected to the target database
           const targetPool = mysql.createPool({
             host: hostCandidate,
+            port: dbPort,
             user: cred.user,
             password: cred.pass,
             database: dbName,
@@ -1284,10 +1274,57 @@ async function startServer() {
           pool = targetPool;
           isMysqlActive = true;
           connectedHost = hostCandidate;
-          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost} (banco '${dbName}', usuário '${cred.user}')`);
+          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost}:${dbPort} (banco '${dbName}', usuário '${cred.user}')`);
           break;
-        } catch (err: any) {
-          // Continue trying host/credential candidates
+        } catch (directErr: any) {
+          // Attempt 2: If direct connection failed, try connecting without database to create it
+          try {
+            const rootPool = mysql.createPool({
+              host: hostCandidate,
+              port: dbPort,
+              user: cred.user,
+              password: cred.pass,
+              waitForConnections: true,
+              connectionLimit: 5,
+              queueLimit: 0,
+              connectTimeout: 3000,
+            });
+
+            const conn = await rootPool.getConnection();
+            await conn.ping();
+            try {
+              await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+            } catch (createDbErr: any) {
+              console.log(`[MySQL ITL Info] Tentativa de criar banco '${dbName}': ${createDbErr.message}`);
+            }
+            conn.release();
+            await rootPool.end();
+
+            // Try targetPool once more after database creation attempt
+            const targetPool2 = mysql.createPool({
+              host: hostCandidate,
+              port: dbPort,
+              user: cred.user,
+              password: cred.pass,
+              database: dbName,
+              waitForConnections: true,
+              connectionLimit: 10,
+              queueLimit: 0,
+              connectTimeout: 3000,
+            });
+
+            const testConn2 = await targetPool2.getConnection();
+            await testConn2.ping();
+            testConn2.release();
+
+            pool = targetPool2;
+            isMysqlActive = true;
+            connectedHost = hostCandidate;
+            console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost}:${dbPort} (banco '${dbName}', usuário '${cred.user}')`);
+            break;
+          } catch (retryErr: any) {
+            // Continue trying host/credential candidates
+          }
         }
       }
     }
@@ -1549,8 +1586,10 @@ async function startServer() {
   await initMysqlAndSync();
 
   // Background interval for continuous two-way sync every 10 seconds
-  setInterval(() => {
-    if (isMysqlActive && pool) {
+  setInterval(async () => {
+    if (!isMysqlActive || !pool) {
+      await initMysqlAndSync();
+    } else {
       fullTwoWaySync().catch((e) => console.error('[Background Sync Interval Warning]', e.message || e));
     }
   }, 10000);
