@@ -749,10 +749,11 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
         </div>
       )}
 
-      {/* PIX Modal View */}
+      {/* Mercado Pago Payment Checkout Modal (PIX + Credit Card) */}
       {selectedInvoiceForPix && (
-        <PixModal
+        <MercadoPagoCheckoutModal
           invoice={selectedInvoiceForPix}
+          mpConfig={mpConfig}
           onClose={() => setSelectedInvoiceForPix(null)}
           onConfirmPay={handlePayInvoice}
         />
@@ -761,15 +762,34 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({
   );
 };
 
-// PIX Checkout Popup Modal
-interface PixModalProps {
+// Mercado Pago Production Checkout Popup Modal (PIX & Credit Card)
+interface MercadoPagoCheckoutModalProps {
   invoice: Invoice;
+  mpConfig: MercadoPagoConfig;
   onClose: () => void;
   onConfirmPay: (invoiceId: string) => void;
 }
 
-const PixModal: React.FC<PixModalProps> = ({ invoice, onClose, onConfirmPay }) => {
+const MercadoPagoCheckoutModal: React.FC<MercadoPagoCheckoutModalProps> = ({
+  invoice,
+  mpConfig,
+  onClose,
+  onConfirmPay,
+}) => {
+  const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit_card'>('pix');
   const [copied, setCopied] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [cardError, setCardError] = useState<string | null>(null);
+  const [cardSuccess, setCardSuccess] = useState<string | null>(null);
+
+  // Credit Card Form State
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardHolder, setCardHolder] = useState(invoice.userName || '');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [docNumber, setDocNumber] = useState('');
+  const [installments, setInstallments] = useState(1);
+
   const { pixCode, qrCodeUrl } = generateMercadoPagoPixPayload(invoice);
 
   const handleCopy = () => {
@@ -778,71 +798,298 @@ const PixModal: React.FC<PixModalProps> = ({ invoice, onClose, onConfirmPay }) =
     setTimeout(() => setCopied(false), 3000);
   };
 
+  const handleProcessCardPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCardError(null);
+    setCardSuccess(null);
+
+    if (cardNumber.replace(/\s/g, '').length < 13) {
+      setCardError('Número do cartão inválido.');
+      return;
+    }
+    if (!cardExpiry.includes('/') || cardExpiry.length < 5) {
+      setCardError('Data de validade inválida (formato MM/AA).');
+      return;
+    }
+    if (cardCvv.length < 3) {
+      setCardError('Código CVV inválido.');
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const res = await fetch('/api/payments/mercadopago/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          paymentMethod: 'credit_card',
+          amount: invoice.amount,
+          userEmail: invoice.userEmail,
+          userName: invoice.userName,
+          cardData: {
+            cardNumber: cardNumber.replace(/\s/g, ''),
+            cardHolder,
+            cardExpiry,
+            cardCvv,
+            docNumber,
+            installments,
+          },
+          mpConfig,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setCardSuccess('Pagamento com Cartão APROVADO via Mercado Pago!');
+        setTimeout(() => {
+          onConfirmPay(invoice.id);
+        }, 1500);
+      } else {
+        setCardError(data.error || 'Erro ao processar pagamento com cartão no Mercado Pago.');
+      }
+    } catch (e: any) {
+      setCardError('Falha na comunicação com o servidor de pagamento.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl text-slate-100 animate-in zoom-in-95">
+    <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+      <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-5 shadow-2xl text-slate-100 my-auto animate-in zoom-in-95">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
-            <QrCode className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-base font-bold text-white">PIX Mercado Pago</h3>
+            <CreditCard className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-base font-bold text-white">Pagamento Mercado Pago</h3>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="text-center space-y-2">
-          <p className="text-xs text-slate-400">Cliente: {invoice.userName}</p>
+        {/* Invoice Summary */}
+        <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 text-center space-y-1">
+          <p className="text-xs text-slate-400">Cliente: <strong className="text-white">{invoice.userName}</strong> ({invoice.planName})</p>
           <p className="text-2xl font-black text-emerald-400 font-mono">
             R$ {invoice.amount.toFixed(2)}
           </p>
           <p className="text-[11px] text-slate-400 font-mono">Vencimento: {invoice.dueDate}</p>
         </div>
 
-        {/* QR Code */}
-        <div className="bg-white p-3 rounded-2xl max-w-[200px] mx-auto shadow-lg">
-          <img src={qrCodeUrl} alt="QR Code PIX" className="w-full h-auto" />
-        </div>
-
-        {/* PIX Copy & Paste Payload */}
-        <div className="space-y-1">
-          <label className="text-[11px] text-slate-400 font-semibold block">PIX Copia e Cola:</label>
-          <div className="relative">
-            <input
-              type="text"
-              readOnly
-              value={pixCode}
-              className="w-full bg-slate-950 border border-slate-800 text-[10px] font-mono text-cyan-300 p-2.5 pr-10 rounded-xl outline-none truncate"
-            />
-            <button
-              onClick={handleCopy}
-              className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg transition"
-            >
-              {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
-          {copied && <p className="text-[10px] text-emerald-400 font-bold">Copiado!</p>}
-        </div>
-
-        {/* Confirm Payment Action */}
-        <div className="space-y-2 pt-2">
-          {invoice.status !== 'PAID' && (
-            <button
-              onClick={() => onConfirmPay(invoice.id)}
-              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center space-x-1.5"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Confirmar Pagamento (Dar Baixa Instantânea)</span>
-            </button>
-          )}
-
+        {/* Payment Method Selector Tabs */}
+        <div className="grid grid-cols-2 gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
           <button
-            onClick={onClose}
-            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+            type="button"
+            onClick={() => setPaymentMethod('pix')}
+            className={`py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition ${
+              paymentMethod === 'pix'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
           >
-            Fechar
+            <QrCode className="w-4 h-4" />
+            <span>PIX Instantâneo</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentMethod('credit_card')}
+            className={`py-2 px-3 text-xs font-bold rounded-xl flex items-center justify-center space-x-1.5 transition ${
+              paymentMethod === 'credit_card'
+                ? 'bg-emerald-500 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Cartão de Crédito</span>
           </button>
         </div>
+
+        {/* TAB 1: PIX Mercado Pago */}
+        {paymentMethod === 'pix' && (
+          <div className="space-y-4 animate-in fade-in">
+            {/* QR Code */}
+            <div className="bg-white p-3 rounded-2xl max-w-[190px] mx-auto shadow-lg">
+              <img src={qrCodeUrl} alt="QR Code PIX" className="w-full h-auto" />
+            </div>
+
+            {/* PIX Copy & Paste Payload */}
+            <div className="space-y-1">
+              <label className="text-[11px] text-slate-400 font-semibold block">PIX Copia e Cola:</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  readOnly
+                  value={pixCode}
+                  className="w-full bg-slate-950 border border-slate-800 text-[10px] font-mono text-cyan-300 p-2.5 pr-10 rounded-xl outline-none truncate"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg transition"
+                >
+                  {copied ? <CheckCircle2 className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+              {copied && <p className="text-[10px] text-emerald-400 font-bold">Copiado para a área de transferência!</p>}
+            </div>
+
+            <div className="space-y-2 pt-1">
+              {invoice.status !== 'PAID' && (
+                <button
+                  type="button"
+                  onClick={() => onConfirmPay(invoice.id)}
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/20"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Confirmar Pagamento PIX (Baixa Instantânea)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: Cartão de Crédito Mercado Pago */}
+        {paymentMethod === 'credit_card' && (
+          <form onSubmit={handleProcessCardPayment} className="space-y-3 animate-in fade-in">
+            <div>
+              <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                Número do Cartão:
+              </label>
+              <input
+                type="text"
+                placeholder="0000 0000 0000 0000"
+                maxLength={19}
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim())}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                Nome do Titular (como no cartão):
+              </label>
+              <input
+                type="text"
+                placeholder="NOME COMPLETO"
+                value={cardHolder}
+                onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                  Validade (MM/AA):
+                </label>
+                <input
+                  type="text"
+                  placeholder="12/28"
+                  maxLength={5}
+                  value={cardExpiry}
+                  onChange={(e) => {
+                    let val = e.target.value.replace(/\D/g, '');
+                    if (val.length >= 3) val = val.slice(0, 2) + '/' + val.slice(2, 4);
+                    setCardExpiry(val);
+                  }}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                  Código (CVV):
+                </label>
+                <input
+                  type="text"
+                  placeholder="123"
+                  maxLength={4}
+                  value={cardCvv}
+                  onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                  CPF / CNPJ do Titular:
+                </label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00"
+                  value={docNumber}
+                  onChange={(e) => setDocNumber(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs font-mono p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-slate-300 font-semibold block mb-1">
+                  Parcelas:
+                </label>
+                <select
+                  value={installments}
+                  onChange={(e) => setInstallments(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs p-2.5 rounded-xl outline-none focus:border-emerald-500"
+                >
+                  <option value={1}>1x R$ {invoice.amount.toFixed(2)} (À vista)</option>
+                  <option value={2}>2x R$ {(invoice.amount / 2).toFixed(2)}</option>
+                  <option value={3}>3x R$ {(invoice.amount / 3).toFixed(2)}</option>
+                  <option value={6}>6x R$ {(invoice.amount / 6).toFixed(2)}</option>
+                  <option value={12}>12x R$ {(invoice.amount / 12).toFixed(2)}</option>
+                </select>
+              </div>
+            </div>
+
+            {cardError && (
+              <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 bg-rose-950/40 p-2 rounded-lg border border-rose-500/30">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {cardError}
+              </p>
+            )}
+
+            {cardSuccess && (
+              <p className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-950/40 p-2 rounded-lg border border-emerald-500/30">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {cardSuccess}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isProcessing}
+              className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl transition flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-500/20"
+            >
+              {isProcessing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Processando Cartão no Mercado Pago...</span>
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4" />
+                  <span>Pagar R$ {invoice.amount.toFixed(2)} com Cartão</span>
+                </>
+              )}
+            </button>
+          </form>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
+        >
+          Fechar
+        </button>
       </div>
     </div>
   );

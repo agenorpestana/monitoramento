@@ -293,27 +293,26 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const totalStorageGB = totalStorageMB / 1024;
   const storagePercentage = Math.min(100, Math.round((totalStorageGB / storageLimitGB) * 100));
 
-  const handleFifoPrune = () => {
-    if (recordings.length === 0) return;
-    const sorted = [...recordings].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    let currentMB = totalStorageMB;
-    const maxMB = storageLimitGB * 1024;
-
-    const toDelete: string[] = [];
-    for (const r of sorted) {
-      if (currentMB > maxMB) {
-        toDelete.push(r.id);
-        currentMB -= r.fileSizeMB || 0;
+  const handleFifoPrune = async () => {
+    try {
+      const res = await fetch('/api/recordings/prune', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limitGB: storageLimitGB }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.prunedCount > 0) {
+          alert(`Limpeza FIFO executada com sucesso! ${data.prunedCount} fatias mais antigas foram eliminadas. Armazenamento atual: ${data.currentGB.toFixed(2)} GB.`);
+          window.location.reload();
+        } else {
+          alert(`O armazenamento (${data.currentGB.toFixed(2)} GB) já está dentro do limite de ${storageLimitGB} GB. Nenhuma ação necessária.`);
+        }
       } else {
-        break;
+        alert(data.message || 'Erro ao executar limpeza FIFO.');
       }
-    }
-
-    if (toDelete.length > 0) {
-      toDelete.forEach((id) => onDeleteRecording(id));
-      alert(`Limpeza FIFO executada! ${toDelete.length} gravação(ões) mais antiga(s) foi(ram) excluída(s) para manter o limite de ${storageLimitGB} GB.`);
-    } else {
-      alert(`O uso de armazenamento (${totalStorageGB.toFixed(2)} GB) está dentro do limite de ${storageLimitGB} GB. Nenhuma ação necessária.`);
+    } catch (e) {
+      alert('Erro de conexão ao solicitar limpeza de armazenamento.');
     }
   };
 
@@ -487,82 +486,6 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
         </div>
       </div>
 
-      {/* Real Stream Manual Clip Recorder Control Panel */}
-      <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl space-y-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
-              Clipe Manual sob Demanda (RTMP / RTSP / HLS)
-            </h3>
-            <p className="text-xs text-slate-400">
-              Inicie um clipe manual imediato em tempo real para qualquer uma das câmeras ativas.
-            </p>
-          </div>
-
-          {isRecording ? (
-            <div className="flex items-center gap-3 bg-rose-950/60 border border-rose-500/50 px-3 py-1.5 rounded-xl">
-              <span className="w-3 h-3 rounded-full bg-rose-500 animate-ping" />
-              <div className="text-xs font-mono">
-                <span className="text-rose-400 font-bold uppercase">Gravando Real: </span>
-                <span className="text-white font-semibold">{activeSessionCamName || 'Câmera Selecionada'}</span>
-                <span className="text-slate-400 ml-2">({Math.floor(recordingElapsedSec / 60).toString().padStart(2, '0')}:{(recordingElapsedSec % 60).toString().padStart(2, '0')}s)</span>
-              </div>
-              <button
-                onClick={handleStopRealRecording}
-                className="ml-auto px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center gap-1 transition shadow-lg"
-              >
-                <Square className="w-3 h-3 fill-current" />
-                <span>Parar e Salvar</span>
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={targetRecordingCamId}
-                onChange={(e) => setTargetRecordingCamId(e.target.value)}
-                className="bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs outline-none focus:border-emerald-500"
-              >
-                {userAccessibleCameras.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    🎥 {c.name} ({c.protocol || 'RTMP'})
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedDuration}
-                onChange={(e) => setSelectedDuration(parseInt(e.target.value))}
-                className="bg-slate-950 border border-slate-800 text-slate-200 px-3 py-1.5 rounded-xl text-xs outline-none focus:border-emerald-500"
-              >
-                <option value={60}>1 minuto</option>
-                <option value={300}>5 minutos</option>
-                <option value={600}>10 minutos</option>
-                <option value={1800}>30 minutos</option>
-              </select>
-
-              <button
-                onClick={handleStartRealRecording}
-                className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 transition"
-              >
-                <Radio className="w-3.5 h-3.5" />
-                <span>Iniciar Gravação Real</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {recordingStatusMsg && (
-          <p className="text-xs text-emerald-400 font-mono flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5" /> {recordingStatusMsg}
-          </p>
-        )}
-        {recordingError && (
-          <p className="text-xs text-rose-400 font-mono flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5" /> {recordingError}
-          </p>
-        )}
-      </div>
       {showStorageModal && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">

@@ -162,8 +162,9 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
           }`}
         >
           {accessibleCameras.map((camera) => {
-          const isMicActive = activeMicCameraId === camera.id;
-          const isMuted = !!mutedCameraIds[camera.id];
+            const isMicActive = activeMicCameraId === camera.id;
+            // Default audio is MUTED (true) for all live cameras to prevent noise overlay
+            const isMuted = mutedCameraIds[camera.id] === undefined ? true : mutedCameraIds[camera.id];
 
           return (
             <div
