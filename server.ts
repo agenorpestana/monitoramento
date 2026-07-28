@@ -977,8 +977,272 @@ async function startServer() {
     }
   }
 
+  // Dedicated Two-Way Sync Routine between Local JSON File (Memory) and MySQL
+  async function fullTwoWaySync() {
+    if (!isMysqlActive || !pool) return;
+    try {
+      // 1. Ensure latest state from local JSON file is loaded into memory
+      loadFromLocalFile();
+
+      // Ensure default essential seeds if memory is empty
+      if (users.length === 0) users = [...INITIAL_USERS];
+      if (plans.length === 0) plans = [...INITIAL_PLANS];
+
+      // 2. Push all local JSON memory entities into MySQL (upsert)
+      for (const c of cameras) { try { await syncCameraToMysql(c); } catch (e) {} }
+      for (const u of users) { try { await syncUserToMysql(u); } catch (e) {} }
+      for (const r of recordings) { try { await syncRecordingToMysql(r); } catch (e) {} }
+      for (const a of alerts) { try { await syncAlertToMysql(a); } catch (e) {} }
+      for (const l of logs) { try { await syncLogToMysql(l); } catch (e) {} }
+      for (const p of plans) { try { await syncPlanToMysql(p); } catch (e) {} }
+      for (const i of invoices) { try { await syncInvoiceToMysql(i); } catch (e) {} }
+      try { await syncMpConfigToMysql(mpConfig); } catch (e) {}
+      try { await syncBackupConfigToMysql(backupConfig); } catch (e) {}
+      try { await syncNotificationConfigToMysql(notificationConfig); } catch (e) {}
+      try { await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100); } catch (e) {}
+
+      // 3. Query MySQL for records and merge with local JSON memory state
+      // Cameras
+      const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
+      if (camRows && Array.isArray(camRows)) {
+        const dbCams = camRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          location: row.location || 'Localização ITL',
+          protocol: row.protocol || 'RTSP',
+          rtspUrl: row.rtsp_url || '',
+          rtmpUrl: row.rtmp_url || '',
+          streamKey: row.stream_key || '',
+          rtmpServerUrl: row.rtmp_server_url || '',
+          fullRtmpUrl: row.full_rtmp_url || '',
+          stateUf: row.state_uf || '',
+          city: row.city || '',
+          status: row.status || 'ONLINE',
+          isE2EEEncrypted: Boolean(row.is_e2ee_encrypted),
+          encryptionKeyHash: row.encryption_key_hash || '',
+          fps: row.fps || 30,
+          resolution: row.resolution || '1080p',
+          storageUsedGB: parseFloat(row.storage_used_gb || 0),
+          cloudRecordingsActive: Boolean(row.cloud_recordings_active),
+          motionSensitivity: row.motion_sensitivity || 7,
+          aiDetectionEnabled: Boolean(row.ai_detection_enabled),
+          twoWayAudioEnabled: Boolean(row.two_way_audio_enabled),
+          lat: parseFloat(row.lat || -17.0397),
+          lng: parseFloat(row.lng || -39.5312),
+          thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+          createdAt: row.created_at || '2026-01-01',
+        }));
+
+        const camMap = new Map<string, Camera>();
+        for (const c of dbCams) camMap.set(c.id, c);
+        for (const c of cameras) {
+          if (!camMap.has(c.id)) {
+            camMap.set(c.id, c);
+            await syncCameraToMysql(c);
+          }
+        }
+        cameras = Array.from(camMap.values());
+      }
+
+      // Users
+      const [userRows]: any = await pool.query('SELECT * FROM users');
+      if (userRows && Array.isArray(userRows)) {
+        const dbUsers = userRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          phone: row.phone,
+          stateUf: row.state_uf || '',
+          city: row.city || '',
+          status: row.status,
+          customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
+          allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
+          planId: row.plan_id || undefined,
+          planName: row.plan_name || undefined,
+          monthlyFee: row.monthly_fee ? parseFloat(row.monthly_fee) : undefined,
+          chosenDueDay: row.chosen_due_day || undefined,
+          financialStatus: row.financial_status || 'OK',
+          daysOverdue: row.days_overdue || 0,
+          lastActive: row.last_active,
+          createdAt: row.created_at,
+        }));
+
+        const userMap = new Map<string, User>();
+        for (const u of dbUsers) userMap.set(u.id, u);
+        for (const u of users) {
+          if (!userMap.has(u.id)) {
+            userMap.set(u.id, u);
+            await syncUserToMysql(u);
+          }
+        }
+        users = Array.from(userMap.values());
+      }
+
+      // Cloud Recordings
+      const [recRows]: any = await pool.query('SELECT * FROM cloud_recordings ORDER BY start_time DESC');
+      if (recRows && Array.isArray(recRows)) {
+        const dbRecs = recRows.map((row: any) => ({
+          id: row.id,
+          cameraId: row.camera_id,
+          cameraName: row.camera_name,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          durationSeconds: row.duration_sec || 0,
+          fileSizeMB: parseFloat(row.file_size_mb || 0),
+          streamUrl: row.stream_url,
+          thumbnailUrl: row.thumbnail_url,
+        }));
+
+        const recMap = new Map<string, CloudRecording>();
+        for (const r of dbRecs) {
+          if (!deletedRecordingIds.has(r.id)) recMap.set(r.id, r);
+        }
+        for (const r of recordings) {
+          if (!deletedRecordingIds.has(r.id) && !recMap.has(r.id)) {
+            recMap.set(r.id, r);
+            await syncRecordingToMysql(r);
+          }
+        }
+        recordings = Array.from(recMap.values());
+      }
+
+      // Motion Alerts
+      const [alertRows]: any = await pool.query('SELECT * FROM motion_alerts ORDER BY timestamp DESC LIMIT 100');
+      if (alertRows && Array.isArray(alertRows)) {
+        const dbAlerts = alertRows.map((row: any) => ({
+          id: row.id,
+          cameraId: row.camera_id,
+          cameraName: row.camera_name,
+          eventType: row.event_type || 'HUMAN',
+          confidence: row.confidence || 90,
+          snapshotUrl: row.snapshot_url || '',
+          videoClipUrl: row.video_clip_url || '',
+          timestamp: row.timestamp || new Date().toISOString(),
+          severity: row.severity || 'HIGH',
+          readStatus: Boolean(row.read_status),
+          pushedToMobile: Boolean(row.pushed_to_mobile),
+        }));
+
+        const alertMap = new Map<string, MotionAlert>();
+        for (const a of dbAlerts) alertMap.set(a.id, a);
+        for (const a of alerts) {
+          if (!alertMap.has(a.id)) {
+            alertMap.set(a.id, a);
+            await syncAlertToMysql(a);
+          }
+        }
+        alerts = Array.from(alertMap.values());
+      }
+
+      // Activity Logs
+      const [logRows]: any = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 200');
+      if (logRows && Array.isArray(logRows)) {
+        const dbLogs = logRows.map((row: any) => ({
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          action: row.action,
+          category: row.category,
+          details: row.details,
+          ipAddress: row.ip_address,
+          timestamp: row.timestamp,
+        }));
+
+        const logMap = new Map<string, ActivityLog>();
+        for (const l of dbLogs) logMap.set(l.id, l);
+        for (const l of logs) {
+          if (!logMap.has(l.id)) {
+            logMap.set(l.id, l);
+            await syncLogToMysql(l);
+          }
+        }
+        logs = Array.from(logMap.values());
+      }
+
+      // Financial Plans
+      const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
+      if (planRows && Array.isArray(planRows)) {
+        const dbPlans = planRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          monthlyPrice: parseFloat(row.monthly_price || 0),
+          camerasIncluded: row.cameras_included || 4,
+          cloudRetentionDays: row.cloud_retention_days || 7,
+          description: row.description || '',
+          popular: Boolean(row.popular),
+        }));
+
+        const planMap = new Map<string, FinancialPlan>();
+        for (const p of dbPlans) planMap.set(p.id, p);
+        for (const p of plans) {
+          if (!planMap.has(p.id)) {
+            planMap.set(p.id, p);
+            await syncPlanToMysql(p);
+          }
+        }
+        plans = Array.from(planMap.values());
+      }
+
+      // Financial Invoices
+      const [invoiceRows]: any = await pool.query('SELECT * FROM financial_invoices ORDER BY created_at DESC');
+      if (invoiceRows && Array.isArray(invoiceRows)) {
+        const dbInvoices = invoiceRows.map((row: any) => ({
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          userEmail: row.user_email,
+          planName: row.plan_name,
+          amount: parseFloat(row.amount || 0),
+          originalAmount: parseFloat(row.original_amount || 0),
+          dueDate: row.due_date,
+          paymentDate: row.payment_date || undefined,
+          status: row.status,
+          isProRata: Boolean(row.is_pro_rata),
+          proRataDays: row.pro_rata_days || undefined,
+          pixCode: row.pix_code || undefined,
+          pixQrCodeUrl: row.pix_qr_code_url || undefined,
+          mercadoPagoPaymentId: row.mercado_pago_payment_id || undefined,
+          createdAt: row.created_at,
+        }));
+
+        const invoiceMap = new Map<string, Invoice>();
+        for (const i of dbInvoices) invoiceMap.set(i.id, i);
+        for (const i of invoices) {
+          if (!invoiceMap.has(i.id)) {
+            invoiceMap.set(i.id, i);
+            await syncInvoiceToMysql(i);
+          }
+        }
+        invoices = Array.from(invoiceMap.values());
+      }
+
+      // Mercado Pago Config
+      const [mpRows]: any = await pool.query("SELECT * FROM mercado_pago_config WHERE id = 'default'");
+      if (mpRows && mpRows.length > 0) {
+        const row = mpRows[0];
+        if (row.access_token) {
+          mpConfig = {
+            accessToken: row.access_token || '',
+            publicKey: row.public_key || '',
+            webhookSecret: row.webhook_secret || '',
+            isSandbox: Boolean(row.is_sandbox),
+            autoApproveSimulated: Boolean(row.auto_approve_simulated),
+          };
+        }
+      }
+
+      // 4. Save consolidated merge back to local JSON file
+      saveToLocalFile();
+    } catch (err: any) {
+      console.error('[MySQL Full Two-Way Sync Error]', err.message || err);
+    }
+  }
+
   // Attempt MySQL Pool initialization & Sync
   const initMysqlAndSync = async () => {
+    // Load local JSON state first
+    loadFromLocalFile();
     const dbHost = process.env.DB_HOST || '127.0.0.1';
     const dbUser = process.env.DB_USER || 'itl_user';
     const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
@@ -1287,126 +1551,8 @@ async function startServer() {
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
       try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
 
-      // Ensure in-memory repositories have initial default seeds if currently empty
-      if (users.length === 0) users = [...INITIAL_USERS];
-      if (plans.length === 0) plans = [...INITIAL_PLANS];
-
-      // Synchronize in-memory repositories with MySQL tables
-      // Push memory items into MySQL
-      try { for (const c of cameras) { await syncCameraToMysql(c); } } catch (e: any) { console.error('[MySQL Sync Cameras Error]', e.message); }
-      try { for (const u of users) { await syncUserToMysql(u); } } catch (e: any) { console.error('[MySQL Sync Users Error]', e.message); }
-      try { for (const r of recordings) { await syncRecordingToMysql(r); } } catch (e: any) { console.error('[MySQL Sync Recordings Error]', e.message); }
-      try { for (const a of alerts) { await syncAlertToMysql(a); } } catch (e: any) { console.error('[MySQL Sync Alerts Error]', e.message); }
-      try { for (const l of logs) { await syncLogToMysql(l); } } catch (e: any) { console.error('[MySQL Sync Logs Error]', e.message); }
-      try { for (const p of plans) { await syncPlanToMysql(p); } } catch (e: any) { console.error('[MySQL Sync Plans Error]', e.message); }
-      try { for (const i of invoices) { await syncInvoiceToMysql(i); } } catch (e: any) { console.error('[MySQL Sync Invoices Error]', e.message); }
-      try { await syncMpConfigToMysql(mpConfig); } catch (e: any) {}
-      try { await syncBackupConfigToMysql(backupConfig); } catch (e: any) {}
-      try { await syncNotificationConfigToMysql(notificationConfig); } catch (e: any) {}
-      try { await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100); } catch (e: any) {}
-
-      // Load items from MySQL into memory repositories
-      const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
-      if (camRows && camRows.length > 0) {
-        cameras = camRows.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          location: row.location || 'Localização ITL',
-          protocol: row.protocol || 'RTSP',
-          rtspUrl: row.rtsp_url || '',
-          rtmpUrl: row.rtmp_url || '',
-          streamKey: row.stream_key || '',
-          rtmpServerUrl: row.rtmp_server_url || '',
-          fullRtmpUrl: row.full_rtmp_url || '',
-          stateUf: row.state_uf || '',
-          city: row.city || '',
-          status: row.status || 'ONLINE',
-          isE2EEEncrypted: Boolean(row.is_e2ee_encrypted),
-          encryptionKeyHash: row.encryption_key_hash || '',
-          fps: row.fps || 30,
-          resolution: row.resolution || '1080p',
-          storageUsedGB: parseFloat(row.storage_used_gb || 0),
-          cloudRecordingsActive: Boolean(row.cloud_recordings_active),
-          motionSensitivity: row.motion_sensitivity || 7,
-          aiDetectionEnabled: Boolean(row.ai_detection_enabled),
-          twoWayAudioEnabled: Boolean(row.two_way_audio_enabled),
-          lat: parseFloat(row.lat || -17.0397),
-          lng: parseFloat(row.lng || -39.5312),
-          thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
-          createdAt: row.created_at || '2026-01-01',
-        }));
-      }
-
-      const [userRows]: any = await pool.query('SELECT * FROM users');
-      if (userRows && userRows.length > 0) {
-        users = userRows.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          email: row.email,
-          role: row.role,
-          phone: row.phone,
-          stateUf: row.state_uf || '',
-          city: row.city || '',
-          status: row.status,
-          customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
-          allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
-          planId: row.plan_id || undefined,
-          planName: row.plan_name || undefined,
-          monthlyFee: row.monthly_fee ? parseFloat(row.monthly_fee) : undefined,
-          chosenDueDay: row.chosen_due_day || undefined,
-          financialStatus: row.financial_status || 'OK',
-          daysOverdue: row.days_overdue || 0,
-          lastActive: row.last_active,
-          createdAt: row.created_at,
-        }));
-      }
-
-      const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
-      if (planRows && planRows.length > 0) {
-        plans = planRows.map((row: any) => ({
-          id: row.id,
-          name: row.name,
-          monthlyPrice: parseFloat(row.monthly_price || 0),
-          camerasIncluded: row.cameras_included || 4,
-          cloudRetentionDays: row.cloud_retention_days || 7,
-          description: row.description || '',
-          popular: Boolean(row.popular),
-        }));
-      }
-
-      const [invoiceRows]: any = await pool.query('SELECT * FROM financial_invoices ORDER BY created_at DESC');
-      if (invoiceRows && invoiceRows.length > 0) {
-        invoices = invoiceRows.map((row: any) => ({
-          id: row.id,
-          userId: row.user_id,
-          userName: row.user_name,
-          userEmail: row.user_email,
-          planName: row.plan_name,
-          amount: parseFloat(row.amount || 0),
-          originalAmount: parseFloat(row.original_amount || 0),
-          dueDate: row.due_date,
-          paymentDate: row.payment_date || undefined,
-          status: row.status,
-          isProRata: Boolean(row.is_pro_rata),
-          proRataDays: row.pro_rata_days || undefined,
-          pixCode: row.pix_code || undefined,
-          pixQrCodeUrl: row.pix_qr_code_url || undefined,
-          mercadoPagoPaymentId: row.mercado_pago_payment_id || undefined,
-          createdAt: row.created_at,
-        }));
-      }
-
-      const [mpRows]: any = await pool.query("SELECT * FROM mercado_pago_config WHERE id = 'default'");
-      if (mpRows && mpRows.length > 0) {
-        const row = mpRows[0];
-        mpConfig = {
-          accessToken: row.access_token || '',
-          publicKey: row.public_key || '',
-          webhookSecret: row.webhook_secret || '',
-          isSandbox: Boolean(row.is_sandbox),
-          autoApproveSimulated: Boolean(row.auto_approve_simulated),
-        };
-      }
+      // Execute complete initial two-way synchronization between JSON file and MySQL
+      await fullTwoWaySync();
 
       console.log(`[MySQL ITL Complete Sync] Conectado e Sincronizado com SUCESSO! (${cameras.length} câmeras, ${users.length} usuários, ${plans.length} planos, ${invoices.length} faturas em '${dbName}')`);
     } catch (err: any) {
@@ -1418,6 +1564,13 @@ async function startServer() {
   // Initialize DB engines on startup
   await initSqliteEngine();
   await initMysqlAndSync();
+
+  // Background interval for continuous two-way sync every 10 seconds
+  setInterval(() => {
+    if (isMysqlActive && pool) {
+      fullTwoWaySync().catch((e) => console.error('[Background Sync Interval Warning]', e.message || e));
+    }
+  }, 10000);
 
   // Start FFmpeg streams for RTSP cameras
   cameras.forEach((c) => startCameraRtspStream(c));
