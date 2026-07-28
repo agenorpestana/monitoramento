@@ -1159,10 +1159,19 @@ async function startServer() {
       }
 
       // 7. Sync Financial Plans
+      // Ensure official system plans (INITIAL_PLANS) are upserted into MySQL
+      for (const p of INITIAL_PLANS) { try { await syncPlanToMysql(p); } catch (e) {} }
       for (const p of plans) { try { await syncPlanToMysql(p); } catch (e) {} }
+
+      // Clean obsolete/demo plans if they exist in MySQL
+      try {
+        await pool.query("DELETE FROM financial_plans WHERE id IN ('plan-comercial-02', 'plan-enterprise-03', 'plan-vizinhanca-01')");
+      } catch (e) {}
+
       const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
       if (planRows && Array.isArray(planRows)) {
         const planMap = new Map<string, FinancialPlan>();
+        for (const p of INITIAL_PLANS) planMap.set(p.id, p);
         for (const p of plans) planMap.set(p.id, p);
         for (const row of planRows) {
           const dbPlan: FinancialPlan = {
@@ -1559,17 +1568,77 @@ async function startServer() {
     } catch (e: any) { console.error('[MySQL Table Error] system_settings:', e.message); }
 
       // Relax constraints & add columns dynamically if user had earlier schema versions
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_name` VARCHAR(255) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `monthly_fee` DOUBLE DEFAULT 0'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `chosen_due_day` INT DEFAULT 5'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `financial_status` VARCHAR(50) DEFAULT "OK"'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `users` ADD COLUMN `days_overdue` INT DEFAULT 0'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
-      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
+      const alterQueries = [
+        // Users
+        'ALTER TABLE `users` ADD COLUMN `phone` VARCHAR(50) NULL',
+        'ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(20) NULL',
+        'ALTER TABLE `users` ADD COLUMN `city` VARCHAR(100) NULL',
+        'ALTER TABLE `users` ADD COLUMN `status` VARCHAR(50) DEFAULT "ACTIVE"',
+        'ALTER TABLE `users` ADD COLUMN `custom_permissions` JSON NULL',
+        'ALTER TABLE `users` ADD COLUMN `allowed_camera_ids` JSON NULL',
+        'ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL',
+        'ALTER TABLE `users` ADD COLUMN `plan_name` VARCHAR(255) NULL',
+        'ALTER TABLE `users` ADD COLUMN `monthly_fee` DOUBLE DEFAULT 0',
+        'ALTER TABLE `users` ADD COLUMN `chosen_due_day` INT DEFAULT 5',
+        'ALTER TABLE `users` ADD COLUMN `financial_status` VARCHAR(50) DEFAULT "OK"',
+        'ALTER TABLE `users` ADD COLUMN `days_overdue` INT DEFAULT 0',
+        'ALTER TABLE `users` ADD COLUMN `last_active` VARCHAR(100) NULL',
+        'ALTER TABLE `users` ADD COLUMN `created_at` VARCHAR(100) NULL',
+
+        // Cameras
+        'ALTER TABLE `cameras` ADD COLUMN `location` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `protocol` VARCHAR(50) DEFAULT "RTSP"',
+        'ALTER TABLE `cameras` ADD COLUMN `rtsp_url` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `rtmp_url` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `stream_key` VARCHAR(100) NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `status` VARCHAR(50) DEFAULT "ONLINE"',
+        'ALTER TABLE `cameras` ADD COLUMN `is_e2ee_encrypted` TINYINT(1) DEFAULT 1',
+        'ALTER TABLE `cameras` ADD COLUMN `encryption_key_hash` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `fps` INT DEFAULT 30',
+        'ALTER TABLE `cameras` ADD COLUMN `resolution` VARCHAR(50) DEFAULT "1080p"',
+        'ALTER TABLE `cameras` ADD COLUMN `storage_used_gb` DOUBLE DEFAULT 0.1',
+        'ALTER TABLE `cameras` ADD COLUMN `cloud_recordings_active` TINYINT(1) DEFAULT 1',
+        'ALTER TABLE `cameras` ADD COLUMN `motion_sensitivity` INT DEFAULT 7',
+        'ALTER TABLE `cameras` ADD COLUMN `ai_detection_enabled` TINYINT(1) DEFAULT 1',
+        'ALTER TABLE `cameras` ADD COLUMN `two_way_audio_enabled` TINYINT(1) DEFAULT 1',
+        'ALTER TABLE `cameras` ADD COLUMN `lat` DOUBLE NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `lng` DOUBLE NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL',
+        'ALTER TABLE `cameras` ADD COLUMN `created_at` VARCHAR(100) NULL',
+
+        // Financial Plans
+        'ALTER TABLE `financial_plans` ADD COLUMN `monthly_price` DOUBLE DEFAULT 0',
+        'ALTER TABLE `financial_plans` ADD COLUMN `cameras_included` INT DEFAULT 4',
+        'ALTER TABLE `financial_plans` ADD COLUMN `cloud_retention_days` INT DEFAULT 7',
+        'ALTER TABLE `financial_plans` ADD COLUMN `description` TEXT NULL',
+        'ALTER TABLE `financial_plans` ADD COLUMN `popular` TINYINT(1) DEFAULT 0',
+        'ALTER TABLE `financial_plans` ADD COLUMN `created_at` VARCHAR(100) NULL',
+
+        // Financial Invoices
+        'ALTER TABLE `financial_invoices` ADD COLUMN `user_id` VARCHAR(64) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `user_name` VARCHAR(255) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `user_email` VARCHAR(255) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `plan_name` VARCHAR(255) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `amount` DOUBLE DEFAULT 0',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `original_amount` DOUBLE DEFAULT 0',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `due_date` VARCHAR(100) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `payment_date` VARCHAR(100) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `status` VARCHAR(50) DEFAULT "PENDING"',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `is_pro_rata` TINYINT(1) DEFAULT 0',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `pro_rata_days` INT DEFAULT 0',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `pix_code` TEXT NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `pix_qr_code_url` TEXT NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `mercado_pago_payment_id` VARCHAR(100) NULL',
+        'ALTER TABLE `financial_invoices` ADD COLUMN `created_at` VARCHAR(100) NULL'
+      ];
+
+      for (const q of alterQueries) {
+        try { await pool.query(q); } catch (e) {}
+      }
 
       // Execute complete initial two-way synchronization between JSON file and MySQL
       await fullTwoWaySync();
