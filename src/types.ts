@@ -164,6 +164,7 @@ export interface BackupConfig {
   nextBackupDate: string;
   status: 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED';
   storagePath?: string;
+  storageLimitGB?: number;
 }
 
 export interface NotificationConfig {

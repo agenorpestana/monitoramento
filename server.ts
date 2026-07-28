@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
+import initSqlJs from 'sql.js';
 import { spawn, ChildProcess, execSync } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 
@@ -277,6 +278,295 @@ async function startServer() {
       console.error('[ITL Storage] Erro ao carregar arquivo JSON local:', err);
     }
     return false;
+  };
+
+  // SQLite Database Engine Integration (WebAssembly SQL)
+  const SQLITE_DB_FILE = path.join(process.cwd(), 'itl_database.sqlite');
+  let sqliteDb: any = null;
+
+  const saveSqliteFile = () => {
+    if (!sqliteDb) return;
+    try {
+      const data = sqliteDb.export();
+      const buffer = Buffer.from(data);
+      fs.writeFileSync(SQLITE_DB_FILE, buffer);
+      saveToLocalFile();
+    } catch (err) {
+      console.error('[SQLite ITL Error] Erro ao gravar itl_database.sqlite:', err);
+    }
+  };
+
+  const loadDataFromSqlite = () => {
+    if (!sqliteDb) return;
+    try {
+      // Load storage config
+      const storageRes = sqliteDb.exec("SELECT storage_limit_gb FROM storage_config WHERE id = 'default'");
+      if (storageRes && storageRes.length > 0 && storageRes[0].values.length > 0) {
+        const val = Number(storageRes[0].values[0][0]);
+        if (!isNaN(val) && val >= 10) backupConfig.storageLimitGB = val;
+      }
+
+      // Load cameras
+      const camRes = sqliteDb.exec('SELECT * FROM cameras ORDER BY created_at DESC');
+      if (camRes && camRes.length > 0 && camRes[0].values.length > 0) {
+        const cols = camRes[0].columns;
+        const getVal = (row: any[], name: string) => row[cols.indexOf(name)];
+
+        const loadedCams: Camera[] = camRes[0].values.map((row: any[]) => ({
+          id: String(getVal(row, 'id')),
+          name: String(getVal(row, 'name')),
+          location: String(getVal(row, 'location') || ''),
+          protocol: (getVal(row, 'protocol') || 'RTSP') as any,
+          rtspUrl: String(getVal(row, 'rtsp_url') || ''),
+          rtmpUrl: String(getVal(row, 'rtmp_url') || ''),
+          streamKey: String(getVal(row, 'stream_key') || ''),
+          rtmpServerUrl: String(getVal(row, 'rtmp_server_url') || ''),
+          fullRtmpUrl: String(getVal(row, 'full_rtmp_url') || ''),
+          stateUf: String(getVal(row, 'state_uf') || ''),
+          city: String(getVal(row, 'city') || ''),
+          status: (getVal(row, 'status') || 'ONLINE') as any,
+          isE2EEEncrypted: Boolean(getVal(row, 'is_e2ee_encrypted')),
+          encryptionKeyHash: String(getVal(row, 'encryption_key_hash') || ''),
+          fps: Number(getVal(row, 'fps') || 30),
+          resolution: String(getVal(row, 'resolution') || '1080p'),
+          storageUsedGB: parseFloat(getVal(row, 'storage_used_gb') || '0.1'),
+          cloudRecordingsActive: Boolean(getVal(row, 'cloud_recordings_active')),
+          motionSensitivity: Number(getVal(row, 'motion_sensitivity') || 7),
+          aiDetectionEnabled: Boolean(getVal(row, 'ai_detection_enabled')),
+          twoWayAudioEnabled: Boolean(getVal(row, 'two_way_audio_enabled')),
+          lat: parseFloat(getVal(row, 'lat') || '-17.0397'),
+          lng: parseFloat(getVal(row, 'lng') || '-39.5312'),
+          thumbnailUrl: String(getVal(row, 'thumbnail_url') || ''),
+          createdAt: String(getVal(row, 'created_at') || '2026-01-01'),
+        }));
+        if (loadedCams.length > 0) cameras = loadedCams;
+        console.log(`[SQLite ITL] ${cameras.length} câmeras carregadas do banco de dados SQL.`);
+      }
+
+      // Load users
+      const userRes = sqliteDb.exec('SELECT * FROM users');
+      if (userRes && userRes.length > 0 && userRes[0].values.length > 0) {
+        const cols = userRes[0].columns;
+        const getVal = (row: any[], name: string) => row[cols.indexOf(name)];
+
+        const loadedUsers: User[] = userRes[0].values.map((row: any[]) => {
+          let perms = {};
+          let allowedCams = ['ALL'];
+          try {
+            const rawP = getVal(row, 'custom_permissions');
+            if (rawP) perms = typeof rawP === 'string' ? JSON.parse(rawP) : rawP;
+          } catch (e) {}
+          try {
+            const rawA = getVal(row, 'allowed_camera_ids');
+            if (rawA) allowedCams = typeof rawA === 'string' ? JSON.parse(rawA) : rawA;
+          } catch (e) {}
+
+          return {
+            id: String(getVal(row, 'id')),
+            name: String(getVal(row, 'name')),
+            email: String(getVal(row, 'email')),
+            role: (getVal(row, 'role') || 'RESIDENT') as any,
+            phone: String(getVal(row, 'phone') || ''),
+            stateUf: String(getVal(row, 'state_uf') || ''),
+            city: String(getVal(row, 'city') || ''),
+            status: (getVal(row, 'status') || 'ACTIVE') as any,
+            customPermissions: perms as any,
+            allowedCameraIds: allowedCams,
+            lastActive: String(getVal(row, 'last_active') || 'Agora'),
+            createdAt: String(getVal(row, 'created_at') || '2026-01-01'),
+          };
+        });
+        if (loadedUsers.length > 0) users = loadedUsers;
+        console.log(`[SQLite ITL] ${users.length} usuários carregados do banco de dados SQL.`);
+      }
+    } catch (e: any) {
+      console.error('[SQLite ITL Error] Erro ao ler dados do SQLite:', e.message);
+    }
+  };
+
+  const initSqliteEngine = async () => {
+    try {
+      const SQL = await initSqlJs();
+      if (fs.existsSync(SQLITE_DB_FILE)) {
+        const fileBuffer = fs.readFileSync(SQLITE_DB_FILE);
+        sqliteDb = new SQL.Database(fileBuffer);
+        console.log('[SQLite ITL] Banco de dados SQL (itl_database.sqlite) CARREGADO com SUCESSO!');
+      } else {
+        sqliteDb = new SQL.Database();
+        console.log('[SQLite ITL] Novo Banco de Dados SQL (itl_database.sqlite) INICIALIZADO com sucesso.');
+      }
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS cameras (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          location TEXT,
+          protocol TEXT DEFAULT 'RTSP',
+          rtsp_url TEXT,
+          rtmp_url TEXT,
+          stream_key TEXT,
+          rtmp_server_url TEXT,
+          full_rtmp_url TEXT,
+          state_uf TEXT,
+          city TEXT,
+          status TEXT DEFAULT 'ONLINE',
+          is_e2ee_encrypted INTEGER DEFAULT 1,
+          encryption_key_hash TEXT,
+          fps INTEGER DEFAULT 30,
+          resolution TEXT DEFAULT '1080p',
+          storage_used_gb REAL DEFAULT 0,
+          cloud_recordings_active INTEGER DEFAULT 1,
+          motion_sensitivity INTEGER DEFAULT 7,
+          ai_detection_enabled INTEGER DEFAULT 1,
+          two_way_audio_enabled INTEGER DEFAULT 1,
+          lat REAL,
+          lng REAL,
+          thumbnail_url TEXT,
+          created_at TEXT
+        );
+      `);
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          role TEXT DEFAULT 'RESIDENT',
+          phone TEXT,
+          state_uf TEXT,
+          city TEXT,
+          status TEXT DEFAULT 'ACTIVE',
+          custom_permissions TEXT,
+          allowed_camera_ids TEXT,
+          last_active TEXT,
+          created_at TEXT
+        );
+      `);
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS storage_config (
+          id TEXT PRIMARY KEY,
+          storage_limit_gb REAL DEFAULT 100,
+          updated_at TEXT
+        );
+      `);
+
+      loadDataFromSqlite();
+
+      // Seed current cameras/users into SQLite if table is empty
+      if (cameras.length > 0) {
+        cameras.forEach((c) => syncCameraToSqlite(c));
+      }
+      if (users.length > 0) {
+        users.forEach((u) => syncUserToSqlite(u));
+      }
+
+      saveSqliteFile();
+    } catch (err: any) {
+      console.error('[SQLite ITL Error] Falha ao inicializar SQLite Engine:', err.message || err);
+      loadFromLocalFile();
+    }
+  };
+
+  const syncCameraToSqlite = (cam: Camera) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO cameras (
+          id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          cam.id,
+          cam.name,
+          cam.location || '',
+          cam.protocol || 'RTSP',
+          cam.rtspUrl || '',
+          cam.rtmpUrl || '',
+          cam.streamKey || '',
+          cam.rtmpServerUrl || '',
+          cam.fullRtmpUrl || '',
+          cam.stateUf || '',
+          cam.city || '',
+          cam.status || 'ONLINE',
+          cam.isE2EEEncrypted ? 1 : 0,
+          cam.encryptionKeyHash || '',
+          cam.fps || 30,
+          cam.resolution || '1080p',
+          cam.storageUsedGB || 0,
+          cam.cloudRecordingsActive ? 1 : 0,
+          cam.motionSensitivity || 7,
+          cam.aiDetectionEnabled ? 1 : 0,
+          cam.twoWayAudioEnabled ? 1 : 0,
+          cam.lat || -17.0397,
+          cam.lng || -39.5312,
+          cam.thumbnailUrl || '',
+          cam.createdAt || new Date().toISOString().split('T')[0],
+        ]
+      );
+      saveSqliteFile();
+      console.log(`[SQLite ITL Sync] Câmera '${cam.name}' (${cam.id}) GRAVADA no banco SQL!`);
+    } catch (e: any) {
+      console.error('[SQLite Sync Error]', e.message);
+    }
+  };
+
+  const deleteCameraFromSqlite = (id: string) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM cameras WHERE id = ?', [id]);
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const syncUserToSqlite = (u: User) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO users (
+          id, name, email, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, last_active, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          u.id,
+          u.name,
+          u.email,
+          u.role || 'RESIDENT',
+          u.phone || '',
+          u.stateUf || '',
+          u.city || '',
+          u.status || 'ACTIVE',
+          JSON.stringify(u.customPermissions || {}),
+          JSON.stringify(u.allowedCameraIds || ['ALL']),
+          u.lastActive || 'Agora',
+          u.createdAt || new Date().toISOString().split('T')[0],
+        ]
+      );
+      saveSqliteFile();
+      console.log(`[SQLite ITL Sync] Usuário '${u.name}' (${u.id}) GRAVADO no banco SQL!`);
+    } catch (e: any) {
+      console.error('[SQLite Sync Error]', e.message);
+    }
+  };
+
+  const deleteUserFromSqlite = (id: string) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM users WHERE id = ?', [id]);
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const saveStorageLimitToSqlite = (limitGB: number) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO storage_config (id, storage_limit_gb, updated_at) VALUES ('default', ?, ?)`,
+        [limitGB, new Date().toISOString()]
+      );
+      saveSqliteFile();
+      console.log(`[SQLite ITL Sync] Limite de Armazenamento de ${limitGB} GB SALVO no Banco SQL!`);
+    } catch (e: any) {
+      console.error('[SQLite Storage Sync Error]', e.message);
+    }
   };
 
   // Attempt MySQL Pool initialization & Sync
@@ -568,6 +858,9 @@ async function startServer() {
   // Helper to sync user to MySQL
   const syncUserToMysql = async (u: User) => {
     saveToLocalFile();
+    if (!isMysqlActive || !pool) {
+      await initMysqlAndSync();
+    }
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -606,7 +899,8 @@ async function startServer() {
     }
   };
 
-  // Initialize DB data on startup
+  // Initialize DB engines on startup
+  await initSqliteEngine();
   await initMysqlAndSync();
 
   // Start FFmpeg streams for RTSP cameras
@@ -1284,6 +1578,7 @@ async function startServer() {
     };
 
     cameras.unshift(newCamera);
+    syncCameraToSqlite(newCamera);
     saveToLocalFile();
 
     await syncCameraToMysql(newCamera);
@@ -1298,6 +1593,7 @@ async function startServer() {
     if (index === -1) return res.status(404).json({ error: 'Câmera não encontrada' });
 
     cameras[index] = { ...cameras[index], ...req.body };
+    syncCameraToSqlite(cameras[index]);
     saveToLocalFile();
     await syncCameraToMysql(cameras[index]);
     startCameraRtspStream(cameras[index]);
@@ -1312,6 +1608,7 @@ async function startServer() {
       stopCameraRtspStream(cam.streamKey);
     }
     cameras = cameras.filter((c) => c.id !== id);
+    deleteCameraFromSqlite(id);
     saveToLocalFile();
     await deleteCameraFromMysql(id);
     if (cam) addLog('ITL Admin', `Câmera removida: ${cam.name}`, 'SYSTEM');
@@ -1586,6 +1883,8 @@ async function startServer() {
     };
 
     users.push(newUser);
+    syncUserToSqlite(newUser);
+    saveToLocalFile();
     await syncUserToMysql(newUser);
     addLog('ITL Admin', `Novo usuário cadastrado: ${newUser.name} (${newUser.role})`, 'AUTH');
     res.status(201).json(newUser);
@@ -1597,6 +1896,8 @@ async function startServer() {
     if (index === -1) return res.status(404).json({ error: 'Usuário não encontrado' });
 
     users[index] = { ...users[index], ...req.body };
+    syncUserToSqlite(users[index]);
+    saveToLocalFile();
     await syncUserToMysql(users[index]);
     addLog('ITL Admin', `Permissões/dados do usuário ${users[index].name} atualizados`, 'AUTH');
     res.json(users[index]);
@@ -1605,9 +1906,40 @@ async function startServer() {
   app.delete('/api/users/:id', async (req, res) => {
     const { id } = req.params;
     users = users.filter((u) => u.id !== id);
+    deleteUserFromSqlite(id);
+    saveToLocalFile();
     await deleteUserFromMysql(id);
     addLog('ITL Admin', `Usuário removido: ${id}`, 'AUTH');
     res.json({ success: true });
+  });
+
+  // Storage Limit Configuration Endpoints
+  app.get('/api/storage-config', (req, res) => {
+    let limit = backupConfig.storageLimitGB || 100;
+    if (sqliteDb) {
+      try {
+        const storageRes = sqliteDb.exec("SELECT storage_limit_gb FROM storage_config WHERE id = 'default'");
+        if (storageRes && storageRes.length > 0 && storageRes[0].values.length > 0) {
+          const val = Number(storageRes[0].values[0][0]);
+          if (!isNaN(val) && val >= 10) limit = val;
+        }
+      } catch (e) {}
+    }
+    res.json({ storageLimitGB: limit });
+  });
+
+  app.put('/api/storage-config', (req, res) => {
+    const { storageLimitGB } = req.body;
+    const newLimit = Math.max(10, parseInt(storageLimitGB, 10) || 100);
+    backupConfig.storageLimitGB = newLimit;
+    saveStorageLimitToSqlite(newLimit);
+    saveToLocalFile();
+    addLog('ITL Admin', `Limite de armazenamento de gravações alterado para ${newLimit} GB`, 'SYSTEM');
+    res.json({
+      success: true,
+      storageLimitGB: newLimit,
+      message: `Limite de ${newLimit} GB salvo no Banco de Dados com sucesso.`,
+    });
   });
 
   // Logs

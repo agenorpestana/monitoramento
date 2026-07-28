@@ -56,6 +56,7 @@ export const INITIAL_BACKUP_CONFIG: BackupConfig = {
   nextBackupDate: '2026-07-27 02:00:00',
   status: 'IDLE',
   storagePath: '/var/www/itl-backups/',
+  storageLimitGB: 100,
 };
 
 export const INITIAL_NOTIFICATION_CONFIG: NotificationConfig = {

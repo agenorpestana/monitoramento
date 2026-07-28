@@ -21,7 +21,9 @@ import {
   Shield,
   Radio,
   Square,
-  Video
+  Video,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { CloudRecording, User, Camera } from '../types';
 
@@ -55,8 +57,19 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [selectedStartTime, setSelectedStartTime] = useState<string>('');
   const [selectedEndTime, setSelectedEndTime] = useState<string>('');
   const [selectedCameraId, setSelectedCameraId] = useState<string>('ALL');
-  const [storageLimitGB, setStorageLimitGB] = useState<number>(100);
+  const [storageLimitGB, setStorageLimitGB] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('itl_storage_limit_gb');
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 10) return parsed;
+      }
+    } catch {}
+    return 100;
+  });
   const [showStorageModal, setShowStorageModal] = useState<boolean>(false);
+  const [storageSaving, setStorageSaving] = useState<boolean>(false);
+  const [storageSaveSuccess, setStorageSaveSuccess] = useState<boolean>(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -71,6 +84,48 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [recordingError, setRecordingError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Fetch storage limit from backend on mount
+  useEffect(() => {
+    fetch('/api/storage-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.storageLimitGB === 'number') {
+          setStorageLimitGB(data.storageLimitGB);
+          localStorage.setItem('itl_storage_limit_gb', data.storageLimitGB.toString());
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveStorageConfig = async () => {
+    setStorageSaving(true);
+    setStorageSaveSuccess(false);
+    try {
+      const res = await fetch('/api/storage-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storageLimitGB }),
+      });
+      const data = await res.json();
+      if (data && data.success) {
+        localStorage.setItem('itl_storage_limit_gb', storageLimitGB.toString());
+        setStorageSaveSuccess(true);
+        setTimeout(() => {
+          setStorageSaveSuccess(false);
+          setShowStorageModal(false);
+        }, 1200);
+      } else {
+        localStorage.setItem('itl_storage_limit_gb', storageLimitGB.toString());
+        setShowStorageModal(false);
+      }
+    } catch (e) {
+      localStorage.setItem('itl_storage_limit_gb', storageLimitGB.toString());
+      setShowStorageModal(false);
+    } finally {
+      setStorageSaving(false);
+    }
+  };
 
   // Filter cameras accessible to the current user according to permissions
   const userAccessibleCameras = useMemo(() => {
@@ -560,6 +615,13 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                 </p>
               </div>
 
+              {storageSaveSuccess && (
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Limite de {storageLimitGB} GB salvo no Banco de Dados com sucesso!</span>
+                </div>
+              )}
+
               <div className="pt-2">
                 <button
                   type="button"
@@ -572,13 +634,22 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-2 gap-2">
               <button
                 type="button"
                 onClick={() => setShowStorageModal(false)}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl transition"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition"
               >
-                Salvar Configurações
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={storageSaving}
+                onClick={handleSaveStorageConfig}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              >
+                {storageSaving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{storageSaving ? 'Salvando...' : 'Salvar no Banco de Dados'}</span>
               </button>
             </div>
           </div>
