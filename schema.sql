@@ -168,21 +168,6 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
   `updated_at` VARCHAR(100) NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Safe Schema Alterations / Migrations for existing databases
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `state_uf` VARCHAR(20) NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `city` VARCHAR(100) NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan_id` VARCHAR(64) NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `plan_name` VARCHAR(255) NULL;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `monthly_fee` DOUBLE DEFAULT 0;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `chosen_due_day` INT DEFAULT 5;
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `financial_status` VARCHAR(50) DEFAULT 'OK';
-ALTER TABLE `users` ADD COLUMN IF NOT EXISTS `days_overdue` INT DEFAULT 0;
-
-ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `rtmp_server_url` TEXT NULL;
-ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `full_rtmp_url` TEXT NULL;
-ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `state_uf` VARCHAR(20) NULL;
-ALTER TABLE `cameras` ADD COLUMN IF NOT EXISTS `city` VARCHAR(100) NULL;
-
 -- Initial essential default data (Super Admin & System Configurations ONLY - NO dummy cameras)
 INSERT IGNORE INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `phone`, `state_uf`, `city`, `status`, `custom_permissions`, `allowed_camera_ids`, `plan_id`, `plan_name`, `monthly_fee`, `chosen_due_day`, `financial_status`, `days_overdue`, `last_active`, `created_at`)
 VALUES ('user-superadmin-01', 'Super Admin Unity', 'suporte@unityautomacoes.com.br', '$2b$10$itlpasswordhash2026', 'ADMIN', '+55 11 98765-4321', 'BA', 'Itamaraju', 'ACTIVE', '{"canViewLive":true,"canViewRecordings":true,"canControlPTZ":true,"canUseTwoWayAudio":true,"canManageCameras":true,"canDeleteRecordings":true,"canAccessAuditLogs":true,"canManageUsers":true,"canExportReports":true}', '["ALL"]', 'plan-vizinhanca-01', 'Plano Vizinhança Protegida ITL', 149.90, 5, 'OK', 0, 'Agora mesmo', '2026-01-01');
