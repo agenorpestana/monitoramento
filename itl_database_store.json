@@ -1,5 +1,33 @@
 {
-  "cameras": [],
+  "cameras": [
+    {
+      "id": "cam-6291",
+      "name": "Câmera Teste DB",
+      "location": "Portaria Principal",
+      "protocol": "RTSP",
+      "rtspUrl": "rtsp://admin:12345@192.168.1.100:554/stream1",
+      "rtmpUrl": "rtmp://localhost:1935/live/cam_886291",
+      "streamKey": "cam_886291",
+      "rtmpServerUrl": "rtmp://localhost:1935/live",
+      "fullRtmpUrl": "http://localhost/live/cam_886291.m3u8",
+      "stateUf": "BA",
+      "city": "Itamaraju",
+      "status": "ONLINE",
+      "isE2EEEncrypted": true,
+      "encryptionKeyHash": "e2ee-aes256-utf6bggs",
+      "fps": 30,
+      "resolution": "1080p Full HD",
+      "storageUsedGB": 0.1,
+      "cloudRecordingsActive": true,
+      "motionSensitivity": 7,
+      "aiDetectionEnabled": true,
+      "twoWayAudioEnabled": true,
+      "lat": -17.040921537243566,
+      "lng": -39.540225157326745,
+      "thumbnailUrl": "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80",
+      "createdAt": "2026-07-28"
+    }
+  ],
   "alerts": [],
   "recordings": [],
   "users": [
@@ -33,13 +61,13 @@
   ],
   "logs": [
     {
-      "id": "log-1785203986648",
+      "id": "log-1785238886429",
       "userName": "ITL Admin",
-      "action": "Limite de armazenamento de gravações alterado para 40 GB",
+      "action": "Nova câmera adicionada (RTSP): Câmera Teste DB",
       "category": "SYSTEM",
-      "details": "",
+      "details": "URL: http://localhost/live/cam_886291.m3u8",
       "ipAddress": "127.0.0.1",
-      "timestamp": "2026-07-28 01:59:46"
+      "timestamp": "2026-07-28 11:41:26"
     },
     {
       "id": "log-101",
@@ -61,7 +89,7 @@
     "nextBackupDate": "2026-07-27 02:00:00",
     "status": "IDLE",
     "storagePath": "/var/www/itl-backups/",
-    "storageLimitGB": 40
+    "storageLimitGB": 100
   },
   "notificationConfig": {
     "pushEnabled": true,

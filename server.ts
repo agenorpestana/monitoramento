@@ -288,7 +288,7 @@ async function startServer() {
     if (!sqliteDb) return;
     try {
       const data = sqliteDb.export();
-      const buffer = Buffer.from(data);
+      const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
       fs.writeFileSync(SQLITE_DB_FILE, buffer);
       saveToLocalFile();
     } catch (err) {
@@ -387,11 +387,23 @@ async function startServer() {
   const initSqliteEngine = async () => {
     try {
       const SQL = await initSqlJs();
+      let loadedSuccessfully = false;
+
       if (fs.existsSync(SQLITE_DB_FILE)) {
-        const fileBuffer = fs.readFileSync(SQLITE_DB_FILE);
-        sqliteDb = new SQL.Database(fileBuffer);
-        console.log('[SQLite ITL] Banco de dados SQL (itl_database.sqlite) CARREGADO com SUCESSO!');
-      } else {
+        try {
+          const fileBuffer = fs.readFileSync(SQLITE_DB_FILE);
+          if (fileBuffer.length > 0) {
+            sqliteDb = new SQL.Database(fileBuffer);
+            loadedSuccessfully = true;
+            console.log('[SQLite ITL] Banco de dados SQL (itl_database.sqlite) CARREGADO com SUCESSO!');
+          }
+        } catch (fileErr: any) {
+          console.warn('[SQLite ITL Warning] Arquivo itl_database.sqlite malformado/corrompido. Criando novo banco de dados SQL limpo:', fileErr.message);
+          sqliteDb = new SQL.Database();
+        }
+      }
+      
+      if (!loadedSuccessfully || !sqliteDb) {
         sqliteDb = new SQL.Database();
         console.log('[SQLite ITL] Novo Banco de Dados SQL (itl_database.sqlite) INICIALIZADO com sucesso.');
       }
@@ -453,15 +465,39 @@ async function startServer() {
 
       loadDataFromSqlite();
 
-      // Seed current cameras/users into SQLite if table is empty
+      // Ensure current in-memory cameras and users are seeded into SQLite tables
       if (cameras.length > 0) {
-        cameras.forEach((c) => syncCameraToSqlite(c));
+        cameras.forEach((c) => {
+          try {
+            sqliteDb.run(
+              `INSERT OR REPLACE INTO cameras (
+                id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                c.id, c.name, c.location || '', c.protocol || 'RTSP', c.rtspUrl || '', c.rtmpUrl || '', c.streamKey || '', c.rtmpServerUrl || '', c.fullRtmpUrl || '', c.stateUf || '', c.city || '', c.status || 'ONLINE', c.isE2EEEncrypted ? 1 : 0, c.encryptionKeyHash || '', c.fps || 30, c.resolution || '1080p', c.storageUsedGB || 0, c.cloudRecordingsActive ? 1 : 0, c.motionSensitivity || 7, c.aiDetectionEnabled ? 1 : 0, c.twoWayAudioEnabled ? 1 : 0, c.lat || -17.0397, c.lng || -39.5312, c.thumbnailUrl || '', c.createdAt || new Date().toISOString().split('T')[0]
+              ]
+            );
+          } catch (e) {}
+        });
       }
+
       if (users.length > 0) {
-        users.forEach((u) => syncUserToSqlite(u));
+        users.forEach((u) => {
+          try {
+            sqliteDb.run(
+              `INSERT OR REPLACE INTO users (
+                id, name, email, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, last_active, created_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                u.id, u.name, u.email, u.role || 'RESIDENT', u.phone || '', u.stateUf || '', u.city || '', u.status || 'ACTIVE', JSON.stringify(u.customPermissions || {}), JSON.stringify(u.allowedCameraIds || ['ALL']), u.lastActive || 'Agora', u.createdAt || new Date().toISOString().split('T')[0]
+              ]
+            );
+          } catch (e) {}
+        });
       }
 
       saveSqliteFile();
+      console.log(`[SQLite ITL Engine] Tabela 'cameras' (${cameras.length} registros) e 'users' (${users.length} registros) sincronizadas no SQLite!`);
     } catch (err: any) {
       console.error('[SQLite ITL Error] Falha ao inicializar SQLite Engine:', err.message || err);
       loadFromLocalFile();
@@ -755,8 +791,7 @@ async function startServer() {
         }));
         console.log(`[MySQL ITL] ${cameras.length} câmeras recuperadas do banco MySQL.`);
       } else {
-        // Seed MySQL with initial or stored cameras if table is empty
-        loadFromLocalFile();
+        // Seed MySQL with current cameras if table is empty
         console.log(`[MySQL ITL] Tabela MySQL vazia. Sincronizando ${cameras.length} câmeras para o MySQL...`);
         for (const c of cameras) {
           await syncCameraToMysql(c);
@@ -782,7 +817,6 @@ async function startServer() {
         }));
         console.log(`[MySQL ITL] ${users.length} usuários recuperados do banco MySQL.`);
       } else {
-        loadFromLocalFile();
         for (const u of users) {
           await syncUserToMysql(u);
         }
