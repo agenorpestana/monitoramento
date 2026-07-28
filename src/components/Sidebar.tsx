@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Grid,
+  Tv,
   Map,
   Bell,
   Film,
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const rawNavItems = [
     { id: 'live-grid', label: 'Câmeras ao Vivo', icon: Grid, badge: totalCameras },
+    { id: 'dvr-matrix', label: 'Monitoramento DVR', icon: Tv },
     { id: 'camera-map', label: 'Mapa Vizinhança', icon: Map },
     { id: 'motion-alerts', label: 'Alertas de Movimento', icon: Bell, badge: unreadAlertsCount, alert: unreadAlertsCount > 0 },
     { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },

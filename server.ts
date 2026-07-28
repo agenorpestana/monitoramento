@@ -1237,6 +1237,271 @@ async function startServer() {
     }
   }
 
+  // Automatic Schema Verification & Migration Strategy for MySQL
+  async function verifyAndMigrateSchema(activePool: any, databaseName: string) {
+    if (!activePool) return;
+    console.log(`[Schema Verifier] Verificando e migrando estrutura de tabelas e colunas no banco '${databaseName}'...`);
+
+    const requiredTables: Record<string, { createSql: string; columns: Record<string, string> }> = {
+      cameras: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`cameras\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          name: 'VARCHAR(255) NOT NULL',
+          location: 'TEXT NULL',
+          protocol: 'VARCHAR(50) DEFAULT "RTSP"',
+          rtsp_url: 'TEXT NULL',
+          rtmp_url: 'TEXT NULL',
+          stream_key: 'VARCHAR(100) NULL',
+          rtmp_server_url: 'TEXT NULL',
+          full_rtmp_url: 'TEXT NULL',
+          state_uf: 'VARCHAR(20) NULL',
+          city: 'VARCHAR(100) NULL',
+          status: 'VARCHAR(50) DEFAULT "ONLINE"',
+          is_e2ee_encrypted: 'TINYINT(1) DEFAULT 1',
+          encryption_key_hash: 'TEXT NULL',
+          fps: 'INT DEFAULT 30',
+          resolution: 'VARCHAR(50) DEFAULT "1080p"',
+          storage_used_gb: 'DOUBLE DEFAULT 0.1',
+          cloud_recordings_active: 'TINYINT(1) DEFAULT 1',
+          motion_sensitivity: 'INT DEFAULT 7',
+          ai_detection_enabled: 'TINYINT(1) DEFAULT 1',
+          two_way_audio_enabled: 'TINYINT(1) DEFAULT 1',
+          lat: 'DOUBLE NULL',
+          lng: 'DOUBLE NULL',
+          thumbnail_url: 'TEXT NULL',
+          created_at: 'VARCHAR(100) NULL',
+        }
+      },
+      users: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`users\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`email\` VARCHAR(255) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          name: 'VARCHAR(255) NOT NULL',
+          email: 'VARCHAR(255) NOT NULL',
+          password_hash: 'VARCHAR(255) NULL',
+          role: 'VARCHAR(50) DEFAULT "RESIDENT"',
+          phone: 'VARCHAR(50) NULL',
+          state_uf: 'VARCHAR(20) NULL',
+          city: 'VARCHAR(100) NULL',
+          status: 'VARCHAR(50) DEFAULT "ACTIVE"',
+          custom_permissions: 'JSON NULL',
+          allowed_camera_ids: 'JSON NULL',
+          plan_id: 'VARCHAR(64) NULL',
+          plan_name: 'VARCHAR(255) NULL',
+          monthly_fee: 'DOUBLE DEFAULT 0',
+          chosen_due_day: 'INT DEFAULT 5',
+          financial_status: 'VARCHAR(50) DEFAULT "OK"',
+          days_overdue: 'INT DEFAULT 0',
+          last_active: 'VARCHAR(100) DEFAULT "Agora"',
+          created_at: 'VARCHAR(100) DEFAULT "2026-01-01"',
+        }
+      },
+      cloud_recordings: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          camera_id: 'VARCHAR(64) NULL',
+          camera_name: 'VARCHAR(255) NULL',
+          start_time: 'VARCHAR(100) NULL',
+          end_time: 'VARCHAR(100) NULL',
+          duration_sec: 'INT DEFAULT 0',
+          file_size_mb: 'DOUBLE DEFAULT 0',
+          stream_url: 'TEXT NULL',
+          thumbnail_url: 'TEXT NULL',
+          created_at: 'VARCHAR(100) NULL',
+        }
+      },
+      motion_alerts: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          camera_id: 'VARCHAR(64) NULL',
+          camera_name: 'VARCHAR(255) NULL',
+          event_type: 'VARCHAR(50) DEFAULT "HUMAN"',
+          confidence: 'INT DEFAULT 90',
+          snapshot_url: 'TEXT NULL',
+          video_clip_url: 'TEXT NULL',
+          timestamp: 'VARCHAR(100) NULL',
+          severity: 'VARCHAR(50) DEFAULT "HIGH"',
+          read_status: 'TINYINT(1) DEFAULT 0',
+          pushed_to_mobile: 'TINYINT(1) DEFAULT 1',
+          created_at: 'VARCHAR(100) NULL',
+        }
+      },
+      activity_logs: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`activity_logs\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          user_id: 'VARCHAR(64) NULL',
+          user_name: 'VARCHAR(255) NULL',
+          action: 'TEXT NULL',
+          category: 'VARCHAR(50) DEFAULT "SYSTEM"',
+          details: 'TEXT NULL',
+          ip_address: 'VARCHAR(50) NULL',
+          timestamp: 'VARCHAR(100) NULL',
+        }
+      },
+      financial_plans: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`financial_plans\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          name: 'VARCHAR(255) NOT NULL',
+          monthly_price: 'DOUBLE DEFAULT 0',
+          cameras_included: 'INT DEFAULT 4',
+          cloud_retention_days: 'INT DEFAULT 7',
+          description: 'TEXT NULL',
+          popular: 'TINYINT(1) DEFAULT 0',
+          created_at: 'VARCHAR(100) NULL',
+        }
+      },
+      financial_invoices: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          user_id: 'VARCHAR(64) NULL',
+          user_name: 'VARCHAR(255) NULL',
+          user_email: 'VARCHAR(255) NULL',
+          plan_name: 'VARCHAR(255) NULL',
+          amount: 'DOUBLE DEFAULT 0',
+          original_amount: 'DOUBLE DEFAULT 0',
+          due_date: 'VARCHAR(100) NULL',
+          payment_date: 'VARCHAR(100) NULL',
+          status: 'VARCHAR(50) DEFAULT "PENDING"',
+          is_pro_rata: 'TINYINT(1) DEFAULT 0',
+          pro_rata_days: 'INT DEFAULT 0',
+          pix_code: 'TEXT NULL',
+          pix_qr_code_url: 'TEXT NULL',
+          mercado_pago_payment_id: 'VARCHAR(100) NULL',
+          created_at: 'VARCHAR(100) NULL',
+        }
+      },
+      mercado_pago_config: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          access_token: 'TEXT NULL',
+          public_key: 'TEXT NULL',
+          webhook_secret: 'TEXT NULL',
+          is_sandbox: 'TINYINT(1) DEFAULT 1',
+          auto_approve_simulated: 'TINYINT(1) DEFAULT 1',
+          updated_at: 'VARCHAR(100) NULL',
+        }
+      },
+      backup_settings: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`backup_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          schedule: 'VARCHAR(50) NULL',
+          destination: 'VARCHAR(50) NULL',
+          retention_days: 'INT DEFAULT 30',
+          encrypt_backups: 'TINYINT(1) DEFAULT 1',
+          auto_backup_enabled: 'TINYINT(1) DEFAULT 1',
+          last_backup_date: 'VARCHAR(100) NULL',
+          next_backup_date: 'VARCHAR(100) NULL',
+          status: 'VARCHAR(50) NULL',
+          storage_path: 'VARCHAR(255) NULL',
+          storage_limit_gb: 'INT DEFAULT 100',
+        }
+      },
+      notification_settings: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`notification_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          push_enabled: 'TINYINT(1) DEFAULT 1',
+          fcm_server_key: 'TEXT NULL',
+          telegram_bot_token: 'TEXT NULL',
+          telegram_chat_id: 'VARCHAR(100) NULL',
+          whatsapp_webhook_url: 'TEXT NULL',
+          sound_alerts: 'TINYINT(1) DEFAULT 1',
+          quiet_hours_enabled: 'TINYINT(1) DEFAULT 0',
+          quiet_hours_start: 'VARCHAR(20) NULL',
+          quiet_hours_end: 'VARCHAR(20) NULL',
+          alert_severities: 'JSON NULL',
+        }
+      },
+      system_settings: {
+        createSql: `CREATE TABLE IF NOT EXISTS \`system_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        columns: {
+          id: 'VARCHAR(64) NOT NULL',
+          storage_limit_gb: 'DOUBLE DEFAULT 100',
+          vault_unlocked: 'TINYINT(1) DEFAULT 1',
+          passphrase_hash: 'TEXT NULL',
+          algorithm: 'VARCHAR(50) DEFAULT "AES-256-GCM"',
+          updated_at: 'VARCHAR(100) NULL',
+        }
+      },
+    };
+
+    for (const [tableName, schema] of Object.entries(requiredTables)) {
+      try {
+        await activePool.query(schema.createSql);
+        const [existingCols]: any = await activePool.query(
+          'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
+          [databaseName, tableName]
+        );
+
+        const existingColNames = new Set<string>();
+        if (Array.isArray(existingCols)) {
+          for (const row of existingCols) {
+            existingColNames.add(row.COLUMN_NAME.toLowerCase());
+          }
+        }
+
+        for (const [colName, colDef] of Object.entries(schema.columns)) {
+          if (!existingColNames.has(colName.toLowerCase())) {
+            try {
+              await activePool.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${colName}\` ${colDef}`);
+              console.log(`[Schema Verifier] Coluna '${colName}' adicionada na tabela '${tableName}'!`);
+            } catch (colErr: any) {
+              console.error(`[Schema Verifier Warning] Erro ao adicionar coluna '${colName}' na tabela '${tableName}':`, colErr.message);
+            }
+          }
+        }
+      } catch (tblErr: any) {
+        console.error(`[Schema Verifier Error] Falha ao verificar/migrar tabela '${tableName}':`, tblErr.message);
+      }
+    }
+    console.log(`[Schema Verifier] Todas as 11 tabelas e suas colunas foram VERIFICADAS E VALIDADAS no MySQL '${databaseName}'!`);
+  }
+
   // Attempt MySQL Pool initialization & Sync
   const initMysqlAndSync = async () => {
     // Load local JSON state first
@@ -1345,302 +1610,10 @@ async function startServer() {
     }
 
     try {
-    // Create each table in isolated try-catch blocks so one failure won't prevent creating others
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`cameras\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`location\` TEXT,
-          \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
-          \`rtsp_url\` TEXT,
-          \`rtmp_url\` TEXT,
-          \`stream_key\` VARCHAR(100),
-          \`rtmp_server_url\` TEXT,
-          \`full_rtmp_url\` TEXT,
-          \`state_uf\` VARCHAR(20),
-          \`city\` VARCHAR(100),
-          \`status\` VARCHAR(50) DEFAULT 'ONLINE',
-          \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
-          \`encryption_key_hash\` TEXT,
-          \`fps\` INT DEFAULT 30,
-          \`resolution\` VARCHAR(50) DEFAULT '1080p',
-          \`storage_used_gb\` DOUBLE DEFAULT 0.1,
-          \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
-          \`motion_sensitivity\` INT DEFAULT 7,
-          \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
-          \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
-          \`lat\` DOUBLE NULL,
-          \`lng\` DOUBLE NULL,
-          \`thumbnail_url\` TEXT,
-          \`created_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] cameras:', e.message); }
+      // 1. Verify Database Tables & Migrate Missing Columns Automatically
+      await verifyAndMigrateSchema(pool, dbName);
 
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`users\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`email\` VARCHAR(255) NOT NULL,
-          \`password_hash\` VARCHAR(255) NULL,
-          \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
-          \`phone\` VARCHAR(50),
-          \`state_uf\` VARCHAR(20) NULL,
-          \`city\` VARCHAR(100) NULL,
-          \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
-          \`custom_permissions\` JSON,
-          \`allowed_camera_ids\` JSON,
-          \`plan_id\` VARCHAR(64) NULL,
-          \`plan_name\` VARCHAR(255) NULL,
-          \`monthly_fee\` DOUBLE DEFAULT 0,
-          \`chosen_due_day\` INT DEFAULT 5,
-          \`financial_status\` VARCHAR(50) DEFAULT 'OK',
-          \`days_overdue\` INT DEFAULT 0,
-          \`last_active\` VARCHAR(100) DEFAULT 'Agora',
-          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] users:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`camera_id\` VARCHAR(64),
-          \`camera_name\` VARCHAR(255),
-          \`start_time\` VARCHAR(100),
-          \`end_time\` VARCHAR(100),
-          \`duration_sec\` INT DEFAULT 0,
-          \`file_size_mb\` DOUBLE DEFAULT 0,
-          \`stream_url\` TEXT,
-          \`thumbnail_url\` TEXT,
-          \`created_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] cloud_recordings:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`camera_id\` VARCHAR(64),
-          \`camera_name\` VARCHAR(255),
-          \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
-          \`confidence\` INT DEFAULT 90,
-          \`snapshot_url\` TEXT,
-          \`video_clip_url\` TEXT,
-          \`timestamp\` VARCHAR(100),
-          \`severity\` VARCHAR(50) DEFAULT 'HIGH',
-          \`read_status\` TINYINT(1) DEFAULT 0,
-          \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
-          \`created_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] motion_alerts:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`activity_logs\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`user_id\` VARCHAR(64),
-          \`user_name\` VARCHAR(255),
-          \`action\` TEXT,
-          \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
-          \`details\` TEXT,
-          \`ip_address\` VARCHAR(50),
-          \`timestamp\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] activity_logs:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`financial_plans\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`monthly_price\` DOUBLE DEFAULT 0,
-          \`cameras_included\` INT DEFAULT 4,
-          \`cloud_retention_days\` INT DEFAULT 7,
-          \`description\` TEXT,
-          \`popular\` TINYINT(1) DEFAULT 0,
-          \`created_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] financial_plans:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`user_id\` VARCHAR(64),
-          \`user_name\` VARCHAR(255),
-          \`user_email\` VARCHAR(255),
-          \`plan_name\` VARCHAR(255),
-          \`amount\` DOUBLE DEFAULT 0,
-          \`original_amount\` DOUBLE DEFAULT 0,
-          \`due_date\` VARCHAR(50),
-          \`payment_date\` VARCHAR(50) NULL,
-          \`status\` VARCHAR(50) DEFAULT 'PENDING',
-          \`is_pro_rata\` TINYINT(1) DEFAULT 0,
-          \`pro_rata_days\` INT DEFAULT 0,
-          \`pix_code\` TEXT NULL,
-          \`pix_qr_code_url\` TEXT NULL,
-          \`mercado_pago_payment_id\` VARCHAR(100) NULL,
-          \`created_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] financial_invoices:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`access_token\` TEXT,
-          \`public_key\` TEXT,
-          \`webhook_secret\` TEXT,
-          \`is_sandbox\` TINYINT(1) DEFAULT 1,
-          \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
-          \`updated_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] mercado_pago_config:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`backup_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`schedule\` VARCHAR(50),
-          \`destination\` VARCHAR(50),
-          \`retention_days\` INT DEFAULT 30,
-          \`encrypt_backups\` TINYINT(1) DEFAULT 1,
-          \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
-          \`last_backup_date\` VARCHAR(100),
-          \`next_backup_date\` VARCHAR(100),
-          \`status\` VARCHAR(50),
-          \`storage_path\` VARCHAR(255),
-          \`storage_limit_gb\` INT DEFAULT 100,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] backup_settings:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`notification_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`push_enabled\` TINYINT(1) DEFAULT 1,
-          \`fcm_server_key\` TEXT,
-          \`telegram_bot_token\` TEXT,
-          \`telegram_chat_id\` VARCHAR(100),
-          \`whatsapp_webhook_url\` TEXT,
-          \`sound_alerts\` TINYINT(1) DEFAULT 1,
-          \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
-          \`quiet_hours_start\` VARCHAR(20),
-          \`quiet_hours_end\` VARCHAR(20),
-          \`alert_severities\` JSON,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] notification_settings:', e.message); }
-
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS \`system_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`storage_limit_gb\` DOUBLE DEFAULT 100,
-          \`vault_unlocked\` TINYINT(1) DEFAULT 1,
-          \`passphrase_hash\` TEXT,
-          \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
-          \`updated_at\` VARCHAR(100),
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-      `);
-    } catch (e: any) { console.error('[MySQL Table Error] system_settings:', e.message); }
-
-      // Relax constraints & add columns dynamically if user had earlier schema versions
-      const alterQueries = [
-        // Users
-        'ALTER TABLE `users` ADD COLUMN `phone` VARCHAR(50) NULL',
-        'ALTER TABLE `users` ADD COLUMN `state_uf` VARCHAR(20) NULL',
-        'ALTER TABLE `users` ADD COLUMN `city` VARCHAR(100) NULL',
-        'ALTER TABLE `users` ADD COLUMN `status` VARCHAR(50) DEFAULT "ACTIVE"',
-        'ALTER TABLE `users` ADD COLUMN `custom_permissions` JSON NULL',
-        'ALTER TABLE `users` ADD COLUMN `allowed_camera_ids` JSON NULL',
-        'ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL',
-        'ALTER TABLE `users` ADD COLUMN `plan_name` VARCHAR(255) NULL',
-        'ALTER TABLE `users` ADD COLUMN `monthly_fee` DOUBLE DEFAULT 0',
-        'ALTER TABLE `users` ADD COLUMN `chosen_due_day` INT DEFAULT 5',
-        'ALTER TABLE `users` ADD COLUMN `financial_status` VARCHAR(50) DEFAULT "OK"',
-        'ALTER TABLE `users` ADD COLUMN `days_overdue` INT DEFAULT 0',
-        'ALTER TABLE `users` ADD COLUMN `last_active` VARCHAR(100) NULL',
-        'ALTER TABLE `users` ADD COLUMN `created_at` VARCHAR(100) NULL',
-
-        // Cameras
-        'ALTER TABLE `cameras` ADD COLUMN `location` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `protocol` VARCHAR(50) DEFAULT "RTSP"',
-        'ALTER TABLE `cameras` ADD COLUMN `rtsp_url` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `rtmp_url` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `stream_key` VARCHAR(100) NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `status` VARCHAR(50) DEFAULT "ONLINE"',
-        'ALTER TABLE `cameras` ADD COLUMN `is_e2ee_encrypted` TINYINT(1) DEFAULT 1',
-        'ALTER TABLE `cameras` ADD COLUMN `encryption_key_hash` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `fps` INT DEFAULT 30',
-        'ALTER TABLE `cameras` ADD COLUMN `resolution` VARCHAR(50) DEFAULT "1080p"',
-        'ALTER TABLE `cameras` ADD COLUMN `storage_used_gb` DOUBLE DEFAULT 0.1',
-        'ALTER TABLE `cameras` ADD COLUMN `cloud_recordings_active` TINYINT(1) DEFAULT 1',
-        'ALTER TABLE `cameras` ADD COLUMN `motion_sensitivity` INT DEFAULT 7',
-        'ALTER TABLE `cameras` ADD COLUMN `ai_detection_enabled` TINYINT(1) DEFAULT 1',
-        'ALTER TABLE `cameras` ADD COLUMN `two_way_audio_enabled` TINYINT(1) DEFAULT 1',
-        'ALTER TABLE `cameras` ADD COLUMN `lat` DOUBLE NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `lng` DOUBLE NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL',
-        'ALTER TABLE `cameras` ADD COLUMN `created_at` VARCHAR(100) NULL',
-
-        // Financial Plans
-        'ALTER TABLE `financial_plans` ADD COLUMN `monthly_price` DOUBLE DEFAULT 0',
-        'ALTER TABLE `financial_plans` ADD COLUMN `cameras_included` INT DEFAULT 4',
-        'ALTER TABLE `financial_plans` ADD COLUMN `cloud_retention_days` INT DEFAULT 7',
-        'ALTER TABLE `financial_plans` ADD COLUMN `description` TEXT NULL',
-        'ALTER TABLE `financial_plans` ADD COLUMN `popular` TINYINT(1) DEFAULT 0',
-        'ALTER TABLE `financial_plans` ADD COLUMN `created_at` VARCHAR(100) NULL',
-
-        // Financial Invoices
-        'ALTER TABLE `financial_invoices` ADD COLUMN `user_id` VARCHAR(64) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `user_name` VARCHAR(255) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `user_email` VARCHAR(255) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `plan_name` VARCHAR(255) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `amount` DOUBLE DEFAULT 0',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `original_amount` DOUBLE DEFAULT 0',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `due_date` VARCHAR(100) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `payment_date` VARCHAR(100) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `status` VARCHAR(50) DEFAULT "PENDING"',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `is_pro_rata` TINYINT(1) DEFAULT 0',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `pro_rata_days` INT DEFAULT 0',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `pix_code` TEXT NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `pix_qr_code_url` TEXT NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `mercado_pago_payment_id` VARCHAR(100) NULL',
-        'ALTER TABLE `financial_invoices` ADD COLUMN `created_at` VARCHAR(100) NULL'
-      ];
-
-      for (const q of alterQueries) {
-        try { await pool.query(q); } catch (e) {}
-      }
-
-      // Execute complete initial two-way synchronization between JSON file and MySQL
+      // 2. Execute complete two-way synchronization between JSON file/memory and MySQL
       await fullTwoWaySync();
 
       console.log(`[MySQL ITL Complete Sync] Conectado e Sincronizado com SUCESSO! (${cameras.length} câmeras, ${users.length} usuários, ${plans.length} planos, ${invoices.length} faturas em '${dbName}')`);

@@ -18,6 +18,7 @@ import { FinancialManagement } from './components/FinancialManagement';
 import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
 import { FinancialAlertBanner } from './components/FinancialAlertBanner';
 import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
+import { DvrMatrixView } from './components/DvrMatrixView';
 
 import {
   Camera,
@@ -516,6 +517,9 @@ export default function App() {
           <button onClick={() => setActiveTab('live-grid')} className={`p-1.5 flex flex-col items-center ${activeTab === 'live-grid' ? 'text-emerald-400 font-bold' : ''}`}>
             Câmeras
           </button>
+          <button onClick={() => setActiveTab('dvr-matrix')} className={`p-1.5 flex flex-col items-center ${activeTab === 'dvr-matrix' ? 'text-emerald-400 font-bold' : ''}`}>
+            DVR
+          </button>
           <button onClick={() => setActiveTab('camera-map')} className={`p-1.5 flex flex-col items-center ${activeTab === 'camera-map' ? 'text-emerald-400 font-bold' : ''}`}>
             Mapa
           </button>
@@ -542,6 +546,15 @@ export default function App() {
               onSelectCamera={setInspectingCamera}
               onTriggerTestAlert={triggerMotionAlert}
               onUpdateCamera={handleUpdateCamera}
+            />
+          )}
+
+          {activeTab === 'dvr-matrix' && (
+            <DvrMatrixView
+              cameras={cameras}
+              activeUser={activeUser}
+              onSelectCamera={setInspectingCamera}
+              onTriggerTestAlert={triggerMotionAlert}
             />
           )}
 
