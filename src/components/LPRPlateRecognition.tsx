@@ -32,6 +32,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Camera, LPRDetection, StolenVehicle, LPRSettings, User } from '../types';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface LPRPlateRecognitionProps {
   cameras: Camera[];
@@ -71,6 +72,9 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
   const [isThrottledBanner, setIsThrottledBanner] = useState<boolean>(false);
   const [throttledMessage, setThrottledMessage] = useState<string>('');
   const [stolenAlertModal, setStolenAlertModal] = useState<LPRDetection | null>(null);
+
+  const [manualPlateInput, setManualPlateInput] = useState<string>('');
+  const [scanErrorMessage, setScanErrorMessage] = useState<string>('');
 
   // Form state for Stolen Vehicle registration
   const [showAddStolenModal, setShowAddStolenModal] = useState<boolean>(false);
@@ -135,6 +139,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
   const handleRunDetection = async (testPlateHint?: string, imageBase64Data?: string) => {
     setIsScanning(true);
     setIsThrottledBanner(false);
+    setScanErrorMessage('');
 
     try {
       let imagePayload = imageBase64Data;
@@ -159,23 +164,29 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
         latitude: selectedCam.lat,
         longitude: selectedCam.lng,
         address: selectedCam.location || 'Localização da Câmera',
-        testPlateHint,
+        testPlateHint: testPlateHint || (manualPlateInput.trim() ? manualPlateInput.trim().toUpperCase() : undefined),
       });
 
-      if (res && res.success) {
-        if (res.isThrottled) {
-          setIsThrottledBanner(true);
-          setThrottledMessage(res.message);
-        } else if (res.detection) {
-          setLatestDetection(res.detection);
-          if (res.isStolenAlert) {
-            playSiren();
-            setStolenAlertModal(res.detection);
+      if (res) {
+        if (res.success) {
+          setManualPlateInput('');
+          if (res.isThrottled) {
+            setIsThrottledBanner(true);
+            setThrottledMessage(res.message);
+          } else if (res.detection) {
+            setLatestDetection(res.detection);
+            if (res.isStolenAlert) {
+              playSiren();
+              setStolenAlertModal(res.detection);
+            }
           }
+        } else {
+          setScanErrorMessage(res.message || 'Nenhuma placa legível foi identificada na imagem.');
         }
       }
     } catch (err) {
       console.error('[LPR Scan Error]:', err);
+      setScanErrorMessage('Erro ao comunicar com o servidor LPR.');
     } finally {
       setIsScanning(false);
     }
@@ -459,63 +470,76 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <CameraIcon className="w-4 h-4 text-emerald-400" />
-                  <select
-                    value={selectedCameraId}
-                    onChange={(e) => setSelectedCameraId(e.target.value)}
-                    className="bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-emerald-500"
-                  >
-                    {cameras.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.location || 'Localização Geral'})
-                      </option>
-                    ))}
-                  </select>
+                  {cameras.length > 0 ? (
+                    <select
+                      value={selectedCameraId}
+                      onChange={(e) => setSelectedCameraId(e.target.value)}
+                      className="bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-emerald-500"
+                    >
+                      {cameras.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.location || 'Localização Geral'})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-xs font-semibold text-slate-400">Nenhuma câmera cadastrada</span>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-2 text-[11px] text-slate-400">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Fluxo LPR On-Line</span>
+                  <span>Fluxo LPR Produção</span>
                 </div>
               </div>
 
               {/* Video / Canvas Stage */}
               <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
-                {/* Simulated live camera frame background */}
-                <img
-                  src={
-                    latestDetection?.carImageUrl ||
-                    'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=1200&auto=format&fit=crop&q=80'
-                  }
-                  alt="Live Camera Stream"
-                  className="w-full h-full object-cover"
-                />
+                {cameras.length > 0 && selectedCam ? (
+                  <div className="w-full h-full relative">
+                    <LiveStreamPlayer
+                      key={selectedCam.id}
+                      camera={selectedCam}
+                      isMuted={true}
+                      showOverlayControls={false}
+                    />
 
-                {/* YOLO Bounding Box Overlay Simulation */}
-                <div className="absolute inset-0 pointer-events-none p-8 flex items-center justify-center">
-                  {/* Vehicle Box */}
-                  <div className="relative border-2 border-emerald-400/90 rounded-lg w-3/4 h-2/3 flex items-start justify-start p-2 shadow-[0_0_15px_rgba(52,211,153,0.3)]">
-                    <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded shadow uppercase tracking-wide">
-                      Carro (YOLOv8 98%)
-                    </span>
+                    {/* YOLO Bounding Box Overlay */}
+                    <div className="absolute inset-0 pointer-events-none p-8 flex items-center justify-center">
+                      <div className="relative border-2 border-emerald-400/80 rounded-lg w-3/4 h-2/3 flex items-start justify-start p-2 shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                        <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded shadow uppercase tracking-wide">
+                          LPR OCR Produção ({selectedCam.name})
+                        </span>
 
-                    {/* License Plate Box */}
-                    <div className="absolute bottom-4 right-1/4 border-2 border-yellow-400 rounded bg-black/40 px-3 py-1.5 flex items-center space-x-2 shadow-[0_0_12px_rgba(250,204,21,0.5)]">
-                      <span className="bg-yellow-400 text-slate-950 text-[9px] font-bold px-1 rounded">
-                        PLACA
-                      </span>
-                      <span className="font-mono font-black text-white text-sm tracking-widest">
-                        {latestDetection ? latestDetection.plate : 'BRA2E19'}
-                      </span>
+                        {latestDetection && (
+                          <div className="absolute bottom-4 right-1/4 border-2 border-yellow-400 rounded bg-black/70 px-3 py-1.5 flex items-center space-x-2 shadow-[0_0_12px_rgba(250,204,21,0.5)]">
+                            <span className="bg-yellow-400 text-slate-950 text-[9px] font-bold px-1 rounded">
+                              ÚLTIMA PLACA
+                            </span>
+                            <span className="font-mono font-black text-white text-sm tracking-widest">
+                              {latestDetection.plate}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="p-8 text-center space-y-3">
+                    <CameraIcon className="w-12 h-12 mx-auto text-slate-600" />
+                    <h3 className="text-sm font-bold text-white">Nenhuma Câmera Cadastrada</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      Cadastre suas câmeras na aba &quot;Câmeras ao Vivo&quot; para habilitar o escaneamento de placas em tempo real.
+                    </p>
+                  </div>
+                )}
 
                 {/* Scanning Spinner Overlay */}
                 {isScanning && (
-                  <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3">
+                  <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 z-20">
                     <RefreshCw className="w-10 h-10 text-emerald-400 animate-spin" />
                     <span className="text-xs font-bold text-emerald-300 tracking-wider uppercase animate-pulse">
-                      Executando OCR & YOLO Bounding Box...
+                      Processando Visão Computacional / OCR...
                     </span>
                   </div>
                 )}
@@ -526,7 +550,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => handleRunDetection()}
-                    disabled={isScanning}
+                    disabled={isScanning || cameras.length === 0}
                     className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -535,6 +559,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
 
                   <button
                     onClick={() => setAutoScanLoop(!autoScanLoop)}
+                    disabled={cameras.length === 0}
                     className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-2 border transition-all ${
                       autoScanLoop
                         ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
@@ -562,10 +587,18 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                 </div>
 
                 <div className="text-[11px] text-slate-400">
-                  📍 GPS Câmera: <span className="text-slate-200 font-mono">{selectedCam.lat}, {selectedCam.lng}</span>
+                  📍 GPS Câmera: <span className="text-slate-200 font-mono">{selectedCam.lat || -17.0397}, {selectedCam.lng || -39.5312}</span>
                 </div>
               </div>
             </div>
+
+            {/* Error Message Banner */}
+            {scanErrorMessage && (
+              <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-4 flex items-center space-x-3 text-rose-300 animate-fade-in">
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                <span className="text-xs font-medium">{scanErrorMessage}</span>
+              </div>
+            )}
 
             {/* Parked Vehicle Throttled / Deduplicated Warning Banner */}
             {isThrottledBanner && (
@@ -586,47 +619,38 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               </div>
             )}
 
-            {/* Quick Test Preset Buttons */}
+            {/* Manual Plate Scan / Query Control */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
               <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                <span>Simulações de Leitura LPR em Tempo Real</span>
-                <span className="text-[10px] text-slate-500 font-normal">Clique para testar sem webcam</span>
+                <span>Entrada / Escaneamento Manual de Placa</span>
+                <span className="text-[10px] text-emerald-400 font-semibold">Modo Produção</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (manualPlateInput.trim()) {
+                    handleRunDetection(manualPlateInput.trim().toUpperCase());
+                  }
+                }}
+                className="flex items-center space-x-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Digitar placa para consultar ou escanear (ex: BRA2E19)..."
+                  value={manualPlateInput}
+                  onChange={(e) => setManualPlateInput(e.target.value)}
+                  className="flex-1 bg-slate-950 text-white font-mono uppercase text-xs px-3.5 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-emerald-500 tracking-wider"
+                />
                 <button
-                  onClick={() => handleRunDetection('BRA2E19')}
-                  className="p-3 bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 rounded-xl text-left space-y-1 transition-all group"
+                  type="submit"
+                  disabled={isScanning || !manualPlateInput.trim()}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all flex items-center space-x-1.5 shrink-0"
                 >
-                  <div className="text-xs font-bold text-rose-300 flex items-center justify-between">
-                    <span>BRA2E19 (Roubado)</span>
-                    <ShieldAlert className="w-3.5 h-3.5 text-rose-400 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <div className="text-[10px] text-rose-400/80">Simular Alerta de Roubo</div>
+                  <Search className="w-4 h-4" />
+                  <span>Consultar Placa</span>
                 </button>
-
-                <button
-                  onClick={() => handleRunDetection('RTA8F92')}
-                  className="p-3 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 rounded-xl text-left space-y-1 transition-all group"
-                >
-                  <div className="text-xs font-bold text-amber-300 flex items-center justify-between">
-                    <span>RTA8F92 (Carro Parado)</span>
-                    <Clock className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <div className="text-[10px] text-amber-400/80">Testar Filtro Deduplicação</div>
-                </button>
-
-                <button
-                  onClick={() => handleRunDetection('MER7C31')}
-                  className="p-3 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded-xl text-left space-y-1 transition-all group"
-                >
-                  <div className="text-xs font-bold text-emerald-300 flex items-center justify-between">
-                    <span>MER7C31 (Comum)</span>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                  </div>
-                  <div className="text-[10px] text-emerald-400/80">Simular Carro Normal</div>
-                </button>
-              </div>
+              </form>
             </div>
           </div>
 

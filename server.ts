@@ -3093,10 +3093,12 @@ async function startServer() {
         testPlateHint,
       } = req.body || {};
 
-      let rawPlate = testPlateHint || 'BRA2E19';
+      let rawPlate = testPlateHint || '';
+      let detectedType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido' = 'Carro';
+      let detectedColor = 'Prata';
 
-      // If user uploaded image and Gemini AI is active, try OCR reading
-      if (!testPlateHint && imageBase64 && aiClient) {
+      // If user uploaded image or frame and Gemini AI is active, try OCR and vehicle analysis
+      if (imageBase64 && aiClient) {
         try {
           const response = await aiClient.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -3104,19 +3106,46 @@ async function startServer() {
               {
                 role: 'user',
                 parts: [
-                  { text: 'Extraia apenas a placa do veículo presente nesta imagem no padrão brasileiro (ex: BRA2E19 ou ABC1234). Responda estritamente apenas os caracteres da placa em maiúsculas.' },
+                  {
+                    text: `Analise esta imagem da câmera de segurança para LPR (Reconhecimento de Placas de Veículos).
+1. Identifique os caracteres da placa do veículo no padrão Mercosul (ex: BRA2E19) ou antigo do Brasil (ex: ABC1234). Se não houver veículo ou a placa não estiver legível, responda "NENHUMA".
+2. Identifique o tipo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário).
+3. Identifique a cor do veículo.
+
+Responda estritamente em formato JSON puro sem tags markdown:
+{"plate": "BRA2E19", "type": "Carro", "color": "Prata"}`
+                  },
                   { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
                 ],
               },
             ],
           });
-          const textRes = response.text ? response.text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
-          if (textRes && textRes.length >= 6) {
-            rawPlate = textRes;
+          const textRes = response.text ? response.text.trim() : '';
+          const cleanedJson = textRes.replace(/```json/g, '').replace(/```/g, '').trim();
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(cleanedJson);
+          } catch (e) {
+            const plateMatch = textRes.toUpperCase().match(/[A-Z]{3}[0-9][A-Z0-9][0-9]{2}/) || textRes.toUpperCase().match(/[A-Z]{3}[0-9]{4}/);
+            if (plateMatch) parsed.plate = plateMatch[0];
+          }
+
+          if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA' && parsed.plate.length >= 6) {
+            rawPlate = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (parsed.type) detectedType = parsed.type;
+            if (parsed.color) detectedColor = parsed.color;
           }
         } catch (e) {
           console.warn('[LPR OCR Gemini] Falha ao extrair OCR:', e);
         }
+      }
+
+      // In production mode, if no plate was extracted and no test hint provided, inform user cleanly
+      if (!rawPlate || rawPlate === 'NENHUMA' || rawPlate.length < 6) {
+        return res.json({
+          success: false,
+          message: 'Nenhuma placa veicular legível foi identificada no frame capturado. Verifique o enquadramento do veículo na câmera.',
+        });
       }
 
       const formattedPlate = rawPlate.toUpperCase().trim();
@@ -3158,8 +3187,8 @@ async function startServer() {
         normalizedPlate,
         carImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
         plateImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
-        vehicleType: 'Carro',
-        vehicleColor: matchedStolen ? matchedStolen.vehicleColor : 'Prata',
+        vehicleType: detectedType,
+        vehicleColor: matchedStolen ? matchedStolen.vehicleColor : detectedColor,
         cameraId,
         cameraName,
         address,
