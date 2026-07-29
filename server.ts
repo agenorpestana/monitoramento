@@ -381,8 +381,6 @@ async function startServer() {
       const targets = new Set([
         LOCAL_STORE_FILE,
         path.join(process.cwd(), 'itl_database_store.json'),
-        path.join(__dirname, 'itl_database_store.json'),
-        path.join(__dirname, '..', 'itl_database_store.json'),
         '/var/www/monitoramento.unityautomacoes.com.br/itl_database_store.json',
       ]);
       for (const target of targets) {
@@ -401,8 +399,6 @@ async function startServer() {
       const candidatePaths = [
         LOCAL_STORE_FILE,
         path.join(process.cwd(), 'itl_database_store.json'),
-        path.join(__dirname, 'itl_database_store.json'),
-        path.join(__dirname, '..', 'itl_database_store.json'),
         '/var/www/monitoramento.unityautomacoes.com.br/itl_database_store.json',
       ];
       const validPath = candidatePaths.find((p) => fs.existsSync(p));
@@ -896,6 +892,15 @@ async function startServer() {
       );
     } catch (e: any) {
       console.error('[MySQL Sync Error] Erro ao gravar gravação no MySQL:', e.message || e);
+    }
+  }
+
+  async function deleteRecordingFromMysql(id: string) {
+    if (!isMysqlActive || !pool) return;
+    try {
+      await pool.query('DELETE FROM cloud_recordings WHERE id = ?', [id]);
+    } catch (e: any) {
+      console.error('[MySQL Sync Error] Erro ao remover gravação do MySQL:', e.message || e);
     }
   }
 
@@ -1420,11 +1425,6 @@ async function startServer() {
       for (const p of INITIAL_PLANS) { try { await syncPlanToMysql(p); } catch (e) {} }
       for (const p of plans) { try { await syncPlanToMysql(p); } catch (e) {} }
 
-      // Clean obsolete/demo plans if they exist in MySQL
-      try {
-        await pool.query("DELETE FROM financial_plans WHERE id IN ('plan-comercial-02', 'plan-enterprise-03', 'plan-vizinhanca-01')");
-      } catch (e) {}
-
       const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
       if (planRows && Array.isArray(planRows)) {
         const planMap = new Map<string, FinancialPlan>();
@@ -1943,7 +1943,7 @@ async function startServer() {
         console.error(`[Schema Verifier Error] Falha ao verificar/migrar tabela '${tableName}':`, tblErr.message);
       }
     }
-    console.log(`[Schema Verifier] Todas as 11 tabelas e suas colunas foram VERIFICADAS E VALIDADAS no MySQL '${databaseName}'!`);
+    console.log(`[Schema Verifier] Todas as 12 tabelas e suas colunas foram VERIFICADAS E VALIDADAS no MySQL '${databaseName}'!`);
   }
 
   // Attempt MySQL Pool initialization & Sync
@@ -3009,7 +3009,7 @@ async function startServer() {
     res.json(alerts);
   });
 
-  app.post('/api/alerts/trigger', (req, res) => {
+  app.post('/api/alerts/trigger', async (req, res) => {
     const { cameraId, eventType, severity } = req.body;
     const targetCam = cameras.find((c) => c.id === cameraId) || cameras[0];
     if (!targetCam) return res.status(400).json({ error: 'Nenhuma câmera cadastrada para alerta' });
@@ -3036,15 +3036,19 @@ async function startServer() {
 
     alerts.unshift(newAlert);
     saveToLocalFile();
+    await syncAlertToMysql(newAlert);
     addLog('Sistema AI ITL', `Disparo de Alerta: ${newAlert.eventType} na ${targetCam.name}`, 'SYSTEM', `Push mobile: ${newAlert.pushedToMobile ? 'Sim' : 'Não'}`);
     res.status(201).json(newAlert);
   });
 
-  app.patch('/api/alerts/:id/read', (req, res) => {
+  app.patch('/api/alerts/:id/read', async (req, res) => {
     const { id } = req.params;
     const alert = alerts.find((a) => a.id === id);
-    if (alert) alert.readStatus = true;
-    saveToLocalFile();
+    if (alert) {
+      alert.readStatus = true;
+      saveToLocalFile();
+      await syncAlertToMysql(alert);
+    }
     res.json({ success: true, alert });
   });
 
@@ -3120,7 +3124,7 @@ async function startServer() {
       process: proc,
     };
 
-    const finalizeRecording = () => {
+    const finalizeRecording = async () => {
       if (!activeRecordings.has(cam.id)) return;
       activeRecordings.delete(cam.id);
 
@@ -3160,6 +3164,7 @@ async function startServer() {
 
       recordings.unshift(newRec);
       saveToLocalFile();
+      await syncRecordingToMysql(newRec);
       addLog('ITL System', `Gravação real concluída para câmera ${cam.name} (${durationSec}s)`, 'RECORDING');
     };
 
@@ -3203,7 +3208,7 @@ async function startServer() {
     res.json({ success: true, message: `Gravação ao vivo interrompida e finalizada para ${session.cameraName}` });
   });
 
-  app.delete('/api/recordings/:id', (req, res) => {
+  app.delete('/api/recordings/:id', async (req, res) => {
     const { id } = req.params;
     deletedRecordingIds.add(id);
     const target = recordings.find((r) => r.id === id);
@@ -3221,15 +3226,16 @@ async function startServer() {
     }
     recordings = recordings.filter((r) => r.id !== id);
     saveToLocalFile();
+    await deleteRecordingFromMysql(id);
     addLog('ITL Admin', `Gravação em nuvem excluída: ${id}`, 'RECORDING');
     res.json({ success: true });
   });
 
-  app.post('/api/recordings/batch-delete', (req, res) => {
+  app.post('/api/recordings/batch-delete', async (req, res) => {
     const { ids } = req.body;
     if (Array.isArray(ids) && ids.length > 0) {
       const idSet = new Set(ids);
-      ids.forEach((id: string) => {
+      for (const id of ids) {
         deletedRecordingIds.add(id);
         const target = recordings.find((r) => r.id === id);
         if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
@@ -3244,7 +3250,8 @@ async function startServer() {
             }
           }
         }
-      });
+        await deleteRecordingFromMysql(id);
+      }
       recordings = recordings.filter((r) => !idSet.has(r.id));
       saveToLocalFile();
       addLog('ITL Admin', `${ids.length} gravações em nuvem excluídas em lote`, 'RECORDING');
@@ -3449,24 +3456,30 @@ async function startServer() {
     res.json(stolenPlatesWatchlist);
   });
 
-  app.post('/api/license-plates/stolen-watchlist', (req, res) => {
+  app.post('/api/license-plates/stolen-watchlist', async (req, res) => {
     const { plateNumber, action } = req.body;
     if (!plateNumber) return res.status(400).json({ error: 'Placa obrigatória' });
     const cleanPlate = plateNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
 
     if (action === 'REMOVE') {
       stolenPlatesWatchlist = stolenPlatesWatchlist.filter((p) => p !== cleanPlate);
-      licensePlates.forEach((p) => {
-        if (p.plateNumber === cleanPlate) p.isStolenOrWanted = false;
-      });
+      for (const p of licensePlates) {
+        if (p.plateNumber === cleanPlate) {
+          p.isStolenOrWanted = false;
+          await syncLicensePlateToMysql(p);
+        }
+      }
       addLog('ITL Admin', `Placa ${cleanPlate} removida da lista de veículos roubados/restritos`, 'SYSTEM');
     } else {
       if (!stolenPlatesWatchlist.includes(cleanPlate)) {
         stolenPlatesWatchlist.push(cleanPlate);
       }
-      licensePlates.forEach((p) => {
-        if (p.plateNumber === cleanPlate) p.isStolenOrWanted = true;
-      });
+      for (const p of licensePlates) {
+        if (p.plateNumber === cleanPlate) {
+          p.isStolenOrWanted = true;
+          await syncLicensePlateToMysql(p);
+        }
+      }
       addLog('ITL Admin', `🚨 Placa ${cleanPlate} ADICIONADA à lista de VEÍCULOS ROUBADOS/RESTRITOS`, 'SYSTEM');
     }
 
@@ -3595,7 +3608,7 @@ async function startServer() {
     res.json({ storageLimitGB: limit });
   });
 
-  app.put('/api/storage-config', (req, res) => {
+  app.put('/api/storage-config', async (req, res) => {
     const { storageLimitGB } = req.body;
     const newLimit = Math.max(10, parseInt(storageLimitGB, 10) || 100);
     backupConfig.storageLimitGB = newLimit;
@@ -3605,6 +3618,8 @@ async function startServer() {
     const pruneResult = pruneRecordingsFIFO(newLimit);
 
     saveToLocalFile();
+    await syncSystemSettingsToMysql(newLimit);
+    await syncBackupConfigToMysql(backupConfig);
     addLog('ITL Admin', `Limite de armazenamento de gravações alterado para ${newLimit} GB (${pruneResult.prunedCount} fatias removidas)`, 'SYSTEM');
     res.json({
       success: true,
@@ -4046,23 +4061,26 @@ CREATE TABLE IF NOT EXISTS \`system_settings\` (
     res.json(backupConfig);
   });
 
-  app.post('/api/backup/trigger', (req, res) => {
+  app.post('/api/backup/trigger', async (req, res) => {
     backupConfig.status = 'RUNNING';
 
-    setTimeout(() => {
+    setTimeout(async () => {
       backupConfig.status = 'COMPLETED';
       backupConfig.lastBackupDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
       saveToLocalFile();
+      await syncBackupConfigToMysql(backupConfig);
       addLog('ITL Admin', 'Backup Manual em Nuvem/VPS executado com sucesso', 'BACKUP', 'Arquivo .tar.gz de imagens e banco SQL gerado');
     }, 2000);
 
     saveToLocalFile();
+    await syncBackupConfigToMysql(backupConfig);
     res.json({ message: 'Backup manual iniciado em segundo plano', config: backupConfig });
   });
 
-  app.put('/api/backup', (req, res) => {
+  app.put('/api/backup', async (req, res) => {
     backupConfig = { ...backupConfig, ...req.body };
     saveToLocalFile();
+    await syncBackupConfigToMysql(backupConfig);
     addLog('ITL Admin', 'Configurações de backup semanal alteradas', 'BACKUP');
     res.json(backupConfig);
   });
@@ -4072,9 +4090,10 @@ CREATE TABLE IF NOT EXISTS \`system_settings\` (
     res.json(notificationConfig);
   });
 
-  app.put('/api/notifications', (req, res) => {
+  app.put('/api/notifications', async (req, res) => {
     notificationConfig = { ...notificationConfig, ...req.body };
     saveToLocalFile();
+    await syncNotificationConfigToMysql(notificationConfig);
     addLog('ITL Admin', 'Configurações de Notificações Push Inteligentes atualizadas', 'SYSTEM');
     res.json(notificationConfig);
   });
