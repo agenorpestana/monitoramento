@@ -160,14 +160,26 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={handleSeedDatabase}
-            disabled={isSeeding}
-            className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow-lg shadow-cyan-600/20"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />
-            <span>{isSeeding ? 'Verificando & Populando...' : 'Verificar e Popular Tabelas MySQL'}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/api/database/export-sql"
+              download="itl_cameras_setup.sql"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20"
+              title="Baixar Script SQL (.sql) com a estrutura completa e dados para importar diretamente no MySQL"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Baixar Script SQL (.sql)</span>
+            </a>
+
+            <button
+              onClick={handleSeedDatabase}
+              disabled={isSeeding}
+              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow-lg shadow-cyan-600/20"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />
+              <span>{isSeeding ? 'Verificando & Populando...' : 'Verificar e Popular Tabelas MySQL'}</span>
+            </button>
+          </div>
         </div>
 
         {seedMessage && (

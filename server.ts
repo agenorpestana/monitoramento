@@ -1535,7 +1535,20 @@ async function startServer() {
       license_plates: {
         createSql: `CREATE TABLE IF NOT EXISTS \`license_plates\` (
           \`id\` VARCHAR(64) NOT NULL,
+          \`camera_id\` VARCHAR(64) NULL,
+          \`camera_name\` VARCHAR(255) NULL,
+          \`city\` VARCHAR(100) NULL,
+          \`state_uf\` VARCHAR(20) NULL,
           \`plate_number\` VARCHAR(50) NOT NULL,
+          \`vehicle_type\` VARCHAR(50) DEFAULT 'Carro',
+          \`vehicle_color\` VARCHAR(50) NULL,
+          \`confidence\` INT DEFAULT 95,
+          \`snapshot_url\` TEXT NULL,
+          \`timestamp\` VARCHAR(100) NULL,
+          \`lat\` DOUBLE NULL,
+          \`lng\` DOUBLE NULL,
+          \`is_stolen_or_wanted\` TINYINT(1) DEFAULT 0,
+          \`notes\` TEXT NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1560,6 +1573,29 @@ async function startServer() {
         createSql: `CREATE TABLE IF NOT EXISTS \`cameras\` (
           \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
+          \`location\` TEXT NULL,
+          \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
+          \`rtsp_url\` TEXT NULL,
+          \`rtmp_url\` TEXT NULL,
+          \`stream_key\` VARCHAR(100) NULL,
+          \`rtmp_server_url\` TEXT NULL,
+          \`full_rtmp_url\` TEXT NULL,
+          \`state_uf\` VARCHAR(20) NULL,
+          \`city\` VARCHAR(100) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'ONLINE',
+          \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
+          \`encryption_key_hash\` TEXT NULL,
+          \`fps\` INT DEFAULT 30,
+          \`resolution\` VARCHAR(50) DEFAULT '1080p',
+          \`storage_used_gb\` DOUBLE DEFAULT 0.1,
+          \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
+          \`motion_sensitivity\` INT DEFAULT 7,
+          \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
+          \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
+          \`lat\` DOUBLE NULL,
+          \`lng\` DOUBLE NULL,
+          \`thumbnail_url\` TEXT NULL,
+          \`created_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1595,6 +1631,22 @@ async function startServer() {
           \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
           \`email\` VARCHAR(255) NOT NULL,
+          \`password_hash\` VARCHAR(255) NULL,
+          \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
+          \`phone\` VARCHAR(50) NULL,
+          \`state_uf\` VARCHAR(20) NULL,
+          \`city\` VARCHAR(100) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
+          \`custom_permissions\` JSON NULL,
+          \`allowed_camera_ids\` JSON NULL,
+          \`plan_id\` VARCHAR(64) NULL,
+          \`plan_name\` VARCHAR(255) NULL,
+          \`monthly_fee\` DOUBLE DEFAULT 0,
+          \`chosen_due_day\` INT DEFAULT 5,
+          \`financial_status\` VARCHAR(50) DEFAULT 'OK',
+          \`days_overdue\` INT DEFAULT 0,
+          \`last_active\` VARCHAR(100) DEFAULT 'Agora',
+          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1622,6 +1674,15 @@ async function startServer() {
       cloud_recordings: {
         createSql: `CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
           \`id\` VARCHAR(64) NOT NULL,
+          \`camera_id\` VARCHAR(64) NULL,
+          \`camera_name\` VARCHAR(255) NULL,
+          \`start_time\` VARCHAR(100) NULL,
+          \`end_time\` VARCHAR(100) NULL,
+          \`duration_sec\` INT DEFAULT 0,
+          \`file_size_mb\` DOUBLE DEFAULT 0,
+          \`stream_url\` TEXT NULL,
+          \`thumbnail_url\` TEXT NULL,
+          \`created_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1640,6 +1701,17 @@ async function startServer() {
       motion_alerts: {
         createSql: `CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
           \`id\` VARCHAR(64) NOT NULL,
+          \`camera_id\` VARCHAR(64) NULL,
+          \`camera_name\` VARCHAR(255) NULL,
+          \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
+          \`confidence\` INT DEFAULT 90,
+          \`snapshot_url\` TEXT NULL,
+          \`video_clip_url\` TEXT NULL,
+          \`timestamp\` VARCHAR(100) NULL,
+          \`severity\` VARCHAR(50) DEFAULT 'HIGH',
+          \`read_status\` TINYINT(1) DEFAULT 0,
+          \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
+          \`created_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1660,6 +1732,13 @@ async function startServer() {
       activity_logs: {
         createSql: `CREATE TABLE IF NOT EXISTS \`activity_logs\` (
           \`id\` VARCHAR(64) NOT NULL,
+          \`user_id\` VARCHAR(64) NULL,
+          \`user_name\` VARCHAR(255) NULL,
+          \`action\` TEXT NULL,
+          \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
+          \`details\` TEXT NULL,
+          \`ip_address\` VARCHAR(50) NULL,
+          \`timestamp\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1677,6 +1756,12 @@ async function startServer() {
         createSql: `CREATE TABLE IF NOT EXISTS \`financial_plans\` (
           \`id\` VARCHAR(64) NOT NULL,
           \`name\` VARCHAR(255) NOT NULL,
+          \`monthly_price\` DOUBLE DEFAULT 0,
+          \`cameras_included\` INT DEFAULT 4,
+          \`cloud_retention_days\` INT DEFAULT 7,
+          \`description\` TEXT NULL,
+          \`popular\` TINYINT(1) DEFAULT 0,
+          \`created_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1693,6 +1778,21 @@ async function startServer() {
       financial_invoices: {
         createSql: `CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
           \`id\` VARCHAR(64) NOT NULL,
+          \`user_id\` VARCHAR(64) NULL,
+          \`user_name\` VARCHAR(255) NULL,
+          \`user_email\` VARCHAR(255) NULL,
+          \`plan_name\` VARCHAR(255) NULL,
+          \`amount\` DOUBLE DEFAULT 0,
+          \`original_amount\` DOUBLE DEFAULT 0,
+          \`due_date\` VARCHAR(100) NULL,
+          \`payment_date\` VARCHAR(100) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'PENDING',
+          \`is_pro_rata\` TINYINT(1) DEFAULT 0,
+          \`pro_rata_days\` INT DEFAULT 0,
+          \`pix_code\` TEXT NULL,
+          \`pix_qr_code_url\` TEXT NULL,
+          \`mercado_pago_payment_id\` VARCHAR(100) NULL,
+          \`created_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1717,6 +1817,12 @@ async function startServer() {
       mercado_pago_config: {
         createSql: `CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
           \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`access_token\` TEXT NULL,
+          \`public_key\` TEXT NULL,
+          \`webhook_secret\` TEXT NULL,
+          \`is_sandbox\` TINYINT(1) DEFAULT 1,
+          \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
+          \`updated_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1732,6 +1838,16 @@ async function startServer() {
       backup_settings: {
         createSql: `CREATE TABLE IF NOT EXISTS \`backup_settings\` (
           \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`schedule\` VARCHAR(50) NULL,
+          \`destination\` VARCHAR(50) NULL,
+          \`retention_days\` INT DEFAULT 30,
+          \`encrypt_backups\` TINYINT(1) DEFAULT 1,
+          \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
+          \`last_backup_date\` VARCHAR(100) NULL,
+          \`next_backup_date\` VARCHAR(100) NULL,
+          \`status\` VARCHAR(50) NULL,
+          \`storage_path\` VARCHAR(255) NULL,
+          \`storage_limit_gb\` INT DEFAULT 100,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1751,6 +1867,16 @@ async function startServer() {
       notification_settings: {
         createSql: `CREATE TABLE IF NOT EXISTS \`notification_settings\` (
           \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`push_enabled\` TINYINT(1) DEFAULT 1,
+          \`fcm_server_key\` TEXT NULL,
+          \`telegram_bot_token\` TEXT NULL,
+          \`telegram_chat_id\` VARCHAR(100) NULL,
+          \`whatsapp_webhook_url\` TEXT NULL,
+          \`sound_alerts\` TINYINT(1) DEFAULT 1,
+          \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
+          \`quiet_hours_start\` VARCHAR(20) NULL,
+          \`quiet_hours_end\` VARCHAR(20) NULL,
+          \`alert_severities\` JSON NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -1770,6 +1896,11 @@ async function startServer() {
       system_settings: {
         createSql: `CREATE TABLE IF NOT EXISTS \`system_settings\` (
           \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`storage_limit_gb\` DOUBLE DEFAULT 100,
+          \`vault_unlocked\` TINYINT(1) DEFAULT 1,
+          \`passphrase_hash\` TEXT NULL,
+          \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
+          \`updated_at\` VARCHAR(100) NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
         columns: {
@@ -3640,6 +3771,268 @@ async function startServer() {
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message || 'Erro ao popular banco de dados' });
+    }
+  });
+
+  // Download SQL Dump Endpoint for Direct Import into MySQL/VPS
+  app.get('/api/database/export-sql', (req, res) => {
+    try {
+      const dbName = process.env.DB_NAME || 'itl_cameras';
+      const escapeStr = (val: string | null | undefined) => {
+        if (val === null || val === undefined) return 'NULL';
+        return `'${String(val).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+      };
+
+      let sql = `-- Script SQL Oficial de Migração e Criação de Tabelas ITL Câmeras
+-- Banco de Dados Target: \`${dbName}\`
+-- Gerado em: ${new Date().toISOString()}
+
+CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE \`${dbName}\`;
+
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 1. Tabela: license_plates (LPR)
+CREATE TABLE IF NOT EXISTS \`license_plates\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`camera_id\` VARCHAR(64) NULL,
+  \`camera_name\` VARCHAR(255) NULL,
+  \`city\` VARCHAR(100) NULL,
+  \`state_uf\` VARCHAR(20) NULL,
+  \`plate_number\` VARCHAR(50) NOT NULL,
+  \`vehicle_type\` VARCHAR(50) DEFAULT 'Carro',
+  \`vehicle_color\` VARCHAR(50) NULL,
+  \`confidence\` INT DEFAULT 95,
+  \`snapshot_url\` TEXT NULL,
+  \`timestamp\` VARCHAR(100) NULL,
+  \`lat\` DOUBLE NULL,
+  \`lng\` DOUBLE NULL,
+  \`is_stolen_or_wanted\` TINYINT(1) DEFAULT 0,
+  \`notes\` TEXT NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2. Tabela: cameras
+CREATE TABLE IF NOT EXISTS \`cameras\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`name\` VARCHAR(255) NOT NULL,
+  \`location\` TEXT NULL,
+  \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
+  \`rtsp_url\` TEXT NULL,
+  \`rtmp_url\` TEXT NULL,
+  \`stream_key\` VARCHAR(100) NULL,
+  \`rtmp_server_url\` TEXT NULL,
+  \`full_rtmp_url\` TEXT NULL,
+  \`state_uf\` VARCHAR(20) NULL,
+  \`city\` VARCHAR(100) NULL,
+  \`status\` VARCHAR(50) DEFAULT 'ONLINE',
+  \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
+  \`encryption_key_hash\` TEXT NULL,
+  \`fps\` INT DEFAULT 30,
+  \`resolution\` VARCHAR(50) DEFAULT '1080p',
+  \`storage_used_gb\` DOUBLE DEFAULT 0.1,
+  \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
+  \`motion_sensitivity\` INT DEFAULT 7,
+  \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
+  \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
+  \`lat\` DOUBLE NULL,
+  \`lng\` DOUBLE NULL,
+  \`thumbnail_url\` TEXT NULL,
+  \`created_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. Tabela: users
+CREATE TABLE IF NOT EXISTS \`users\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`name\` VARCHAR(255) NOT NULL,
+  \`email\` VARCHAR(255) NOT NULL,
+  \`password_hash\` VARCHAR(255) NULL,
+  \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
+  \`phone\` VARCHAR(50) NULL,
+  \`state_uf\` VARCHAR(20) NULL,
+  \`city\` VARCHAR(100) NULL,
+  \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
+  \`custom_permissions\` JSON NULL,
+  \`allowed_camera_ids\` JSON NULL,
+  \`plan_id\` VARCHAR(64) NULL,
+  \`plan_name\` VARCHAR(255) NULL,
+  \`monthly_fee\` DOUBLE DEFAULT 0,
+  \`chosen_due_day\` INT DEFAULT 5,
+  \`financial_status\` VARCHAR(50) DEFAULT 'OK',
+  \`days_overdue\` INT DEFAULT 0,
+  \`last_active\` VARCHAR(100) DEFAULT 'Agora',
+  \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. Tabela: cloud_recordings
+CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`camera_id\` VARCHAR(64) NULL,
+  \`camera_name\` VARCHAR(255) NULL,
+  \`start_time\` VARCHAR(100) NULL,
+  \`end_time\` VARCHAR(100) NULL,
+  \`duration_sec\` INT DEFAULT 0,
+  \`file_size_mb\` DOUBLE DEFAULT 0,
+  \`stream_url\` TEXT NULL,
+  \`thumbnail_url\` TEXT NULL,
+  \`created_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. Tabela: motion_alerts
+CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`camera_id\` VARCHAR(64) NULL,
+  \`camera_name\` VARCHAR(255) NULL,
+  \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
+  \`confidence\` INT DEFAULT 90,
+  \`snapshot_url\` TEXT NULL,
+  \`video_clip_url\` TEXT NULL,
+  \`timestamp\` VARCHAR(100) NULL,
+  \`severity\` VARCHAR(50) DEFAULT 'HIGH',
+  \`read_status\` TINYINT(1) DEFAULT 0,
+  \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
+  \`created_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 6. Tabela: activity_logs
+CREATE TABLE IF NOT EXISTS \`activity_logs\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`user_id\` VARCHAR(64) NULL,
+  \`user_name\` VARCHAR(255) NULL,
+  \`action\` TEXT NULL,
+  \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
+  \`details\` TEXT NULL,
+  \`ip_address\` VARCHAR(50) NULL,
+  \`timestamp\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 7. Tabela: financial_plans
+CREATE TABLE IF NOT EXISTS \`financial_plans\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`name\` VARCHAR(255) NOT NULL,
+  \`monthly_price\` DOUBLE DEFAULT 0,
+  \`cameras_included\` INT DEFAULT 4,
+  \`cloud_retention_days\` INT DEFAULT 7,
+  \`description\` TEXT NULL,
+  \`popular\` TINYINT(1) DEFAULT 0,
+  \`created_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 8. Tabela: financial_invoices
+CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
+  \`id\` VARCHAR(64) NOT NULL,
+  \`user_id\` VARCHAR(64) NULL,
+  \`user_name\` VARCHAR(255) NULL,
+  \`user_email\` VARCHAR(255) NULL,
+  \`plan_name\` VARCHAR(255) NULL,
+  \`amount\` DOUBLE DEFAULT 0,
+  \`original_amount\` DOUBLE DEFAULT 0,
+  \`due_date\` VARCHAR(100) NULL,
+  \`payment_date\` VARCHAR(100) NULL,
+  \`status\` VARCHAR(50) DEFAULT 'PENDING',
+  \`is_pro_rata\` TINYINT(1) DEFAULT 0,
+  \`pro_rata_days\` INT DEFAULT 0,
+  \`pix_code\` TEXT NULL,
+  \`pix_qr_code_url\` TEXT NULL,
+  \`mercado_pago_payment_id\` VARCHAR(100) NULL,
+  \`created_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 9. Tabela: mercado_pago_config
+CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
+  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+  \`access_token\` TEXT NULL,
+  \`public_key\` TEXT NULL,
+  \`webhook_secret\` TEXT NULL,
+  \`is_sandbox\` TINYINT(1) DEFAULT 1,
+  \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
+  \`updated_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 10. Tabela: backup_settings
+CREATE TABLE IF NOT EXISTS \`backup_settings\` (
+  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+  \`schedule\` VARCHAR(50) NULL,
+  \`destination\` VARCHAR(50) NULL,
+  \`retention_days\` INT DEFAULT 30,
+  \`encrypt_backups\` TINYINT(1) DEFAULT 1,
+  \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
+  \`last_backup_date\` VARCHAR(100) NULL,
+  \`next_backup_date\` VARCHAR(100) NULL,
+  \`status\` VARCHAR(50) NULL,
+  \`storage_path\` VARCHAR(255) NULL,
+  \`storage_limit_gb\` INT DEFAULT 100,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 11. Tabela: notification_settings
+CREATE TABLE IF NOT EXISTS \`notification_settings\` (
+  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+  \`push_enabled\` TINYINT(1) DEFAULT 1,
+  \`fcm_server_key\` TEXT NULL,
+  \`telegram_bot_token\` TEXT NULL,
+  \`telegram_chat_id\` VARCHAR(100) NULL,
+  \`whatsapp_webhook_url\` TEXT NULL,
+  \`sound_alerts\` TINYINT(1) DEFAULT 1,
+  \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
+  \`quiet_hours_start\` VARCHAR(20) NULL,
+  \`quiet_hours_end\` VARCHAR(20) NULL,
+  \`alert_severities\` JSON NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 12. Tabela: system_settings
+CREATE TABLE IF NOT EXISTS \`system_settings\` (
+  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+  \`storage_limit_gb\` DOUBLE DEFAULT 100,
+  \`vault_unlocked\` TINYINT(1) DEFAULT 1,
+  \`passphrase_hash\` TEXT NULL,
+  \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
+  \`updated_at\` VARCHAR(100) NULL,
+  PRIMARY KEY (\`id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- POPULAÇÃO DE DADOS (SEEDS)
+`;
+
+      // Seeds for license_plates
+      const lpList = licensePlates.length > 0 ? licensePlates : INITIAL_LICENSE_PLATES;
+      lpList.forEach((lp) => {
+        sql += `INSERT INTO \`license_plates\` (\`id\`,\`camera_id\`,\`camera_name\`,\`city\`,\`state_uf\`,\`plate_number\`,\`vehicle_type\`,\`vehicle_color\`,\`confidence\`,\`snapshot_url\`,\`timestamp\`,\`lat\`,\`lng\`,\`is_stolen_or_wanted\`,\`notes\`) VALUES (${escapeStr(lp.id)},${escapeStr(lp.cameraId)},${escapeStr(lp.cameraName)},${escapeStr(lp.city)},${escapeStr(lp.stateUf)},${escapeStr(lp.plateNumber)},${escapeStr(lp.vehicleType || 'Carro')},${escapeStr(lp.vehicleColor)},${lp.confidence || 95},${escapeStr(lp.snapshotUrl)},${escapeStr(lp.timestamp)},${lp.lat !== undefined ? lp.lat : 'NULL'},${lp.lng !== undefined ? lp.lng : 'NULL'},${lp.isStolenOrWanted ? 1 : 0},${escapeStr(lp.notes)}) ON DUPLICATE KEY UPDATE \`plate_number\`=VALUES(\`plate_number\`);\n`;
+      });
+
+      // Seeds for cameras
+      const camList = cameras.length > 0 ? cameras : INITIAL_CAMERAS;
+      camList.forEach((c) => {
+        sql += `INSERT INTO \`cameras\` (\`id\`,\`name\`,\`location\`,\`protocol\`,\`rtsp_url\`,\`rtmp_url\`,\`stream_key\`,\`rtmp_server_url\`,\`full_rtmp_url\`,\`state_uf\`,\`city\`,\`status\`,\`is_e2ee_encrypted\`,\`encryption_key_hash\`,\`fps\`,\`resolution\`,\`storage_used_gb\`,\`cloud_recordings_active\`,\`motion_sensitivity\`,\`ai_detection_enabled\`,\`two_way_audio_enabled\`,\`lat\`,\`lng\`,\`thumbnail_url\`,\`created_at\`) VALUES (${escapeStr(c.id)},${escapeStr(c.name)},${escapeStr(c.location)},${escapeStr(c.protocol || 'RTSP')},${escapeStr(c.rtspUrl)},${escapeStr(c.rtmpUrl)},${escapeStr(c.streamKey)},${escapeStr(c.rtmpServerUrl)},${escapeStr(c.fullRtmpUrl)},${escapeStr(c.stateUf)},${escapeStr(c.city)},${escapeStr(c.status || 'ONLINE')},${c.isE2EEEncrypted ? 1 : 0},${escapeStr(c.encryptionKeyHash)},${c.fps || 30},${escapeStr(c.resolution || '1080p')},${c.storageUsedGB || 0.1},${c.cloudRecordingsActive ? 1 : 0},${c.motionSensitivity || 7},${c.aiDetectionEnabled ? 1 : 0},${c.twoWayAudioEnabled ? 1 : 0},${c.lat || -17.0397},${c.lng || -39.5312},${escapeStr(c.thumbnailUrl)},${escapeStr(c.createdAt || '2026-01-01')}) ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`), \`rtsp_url\`=VALUES(\`rtsp_url\`), \`location\`=VALUES(\`location\`);\n`;
+      });
+
+      // Seeds for users
+      const userList = users.length > 0 ? users : INITIAL_USERS;
+      userList.forEach((u) => {
+        sql += `INSERT INTO \`users\` (\`id\`,\`name\`,\`email\`,\`password_hash\`,\`role\`,\`phone\`,\`state_uf\`,\`city\`,\`status\`,\`custom_permissions\`,\`allowed_camera_ids\`,\`plan_id\`,\`plan_name\`,\`monthly_fee\`,\`chosen_due_day\`,\`financial_status\`,\`days_overdue\`,\`last_active\`,\`created_at\`) VALUES (${escapeStr(u.id)},${escapeStr(u.name)},${escapeStr(u.email)},'$2b$10$itlpasswordhash2026',${escapeStr(u.role || 'RESIDENT')},${escapeStr(u.phone)},${escapeStr(u.stateUf)},${escapeStr(u.city)},${escapeStr(u.status || 'ACTIVE')},${escapeStr(JSON.stringify(u.customPermissions || {}))},${escapeStr(JSON.stringify(u.allowedCameraIds || ['ALL']))},${escapeStr(u.planId)},${escapeStr(u.planName)},${u.monthlyFee || 0},${u.chosenDueDay || 5},${escapeStr(u.financialStatus || 'OK')},${u.daysOverdue || 0},${escapeStr(u.lastActive || 'Agora')},${escapeStr(u.createdAt || '2026-01-01')}) ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`);\n`;
+      });
+
+      // Seeds for financial_plans
+      INITIAL_PLANS.forEach((p) => {
+        sql += `INSERT INTO \`financial_plans\` (\`id\`,\`name\`,\`monthly_price\`,\`cameras_included\`,\`cloud_retention_days\`,\`description\`,\`popular\`,\`created_at\`) VALUES (${escapeStr(p.id)},${escapeStr(p.name)},${p.monthlyPrice || 0},${p.camerasIncluded || 4},${p.cloudRetentionDays || 7},${escapeStr(p.description)},${p.popular ? 1 : 0},'2026-01-01') ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`);\n`;
+      });
+
+      sql += `\nSET FOREIGN_KEY_CHECKS = 1;\n-- Fim do Script SQL ITL Câmeras\n`;
+
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', `attachment; filename=itl_cameras_setup.sql`);
+      res.send(sql);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Erro ao gerar DUMP SQL' });
     }
   });
 
