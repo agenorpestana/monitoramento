@@ -479,9 +479,8 @@ export default function App() {
       return res;
     } catch (err) {
       console.error('[LPR Detect Error]:', err);
-      const hint = payload.testPlateHint || (payload.cameraName?.toLowerCase().includes('corumbau') || payload.imageBase64 ? 'PKO4A53' : null);
-      if (hint) {
-        const plate = hint.toUpperCase();
+      if (payload.testPlateHint) {
+        const plate = payload.testPlateHint.toUpperCase();
         const isStolen = stolenVehicles.some(
           (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === plate.replace(/[^A-Z0-9]/g, '')
         );
@@ -491,8 +490,8 @@ export default function App() {
           normalizedPlate: plate.replace(/[^A-Z0-9]/g, ''),
           carImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
           plateImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
-          vehicleType: 'Utilitário',
-          vehicleColor: 'Bege',
+          vehicleType: 'Carro',
+          vehicleColor: 'Prata',
           cameraId: payload.cameraId || 'cam-01',
           cameraName: payload.cameraName || 'Câmera Principal LPR',
           address: payload.address || 'Av. Liberdade, 1200',
@@ -506,7 +505,7 @@ export default function App() {
         setLprDetections((prev) => [simDet, ...prev]);
         return { success: true, isThrottled: false, isStolenAlert: isStolen, detection: simDet };
       }
-      return { success: false, message: 'Não foi possível capturar a imagem da câmera. Tente enviar uma foto do veículo.' };
+      return { success: false, message: 'Não foi possível se conectar ao servidor de processamento LPR.' };
     }
   };
 

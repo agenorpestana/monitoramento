@@ -3094,57 +3094,42 @@ async function startServer() {
       } = req.body || {};
 
       let rawPlate = testPlateHint || '';
-      let detectedType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido' = 'Utilitário';
-      let detectedColor = 'Bege';
+      let detectedType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido' = 'Carro';
+      let detectedColor = 'Prata';
       let activeImageBase64 = imageBase64;
 
       // Helper function to extract and normalize Brazilian License Plates (Mercosul & Traditional)
       const extractPlateFromText = (inputStr: string): { plate: string; type?: string; color?: string } | null => {
         if (!inputStr) return null;
-        const upper = inputStr.toUpperCase();
+        const upper = inputStr.toUpperCase().trim();
 
-        // 1. Direct match for PKO4A53 variations
-        if (upper.includes('PKO4A53') || upper.includes('PK04A53') || upper.includes('PKO-4A53') || upper.includes('PK0-4A53')) {
-          return { plate: 'PKO4A53', type: 'Utilitário', color: 'Bege' };
-        }
-
-        // 2. Regex for Mercosul pattern (ABC1D23) or Traditional (ABC1234)
-        const match = upper.match(/[A-Z]{3}\s*[-–]?\s*[0-9]\s*[A-Z0-9]\s*[0-9]{2}/) || upper.match(/[A-Z]{3}\s*[-–]?\s*[0-9]{4}/);
+        // 1. Mercosul pattern (ABC1D23 or O0LDG81) or Traditional pattern (ABC1234)
+        const match = upper.match(/[A-Z0-9]{3}\s*[-–]?\s*[0-9]\s*[A-Z0-9]\s*[0-9]{2}/) || upper.match(/[A-Z0-9]{3}\s*[-–]?\s*[0-9]{4}/);
         if (match) {
           const raw = match[0].replace(/[^A-Z0-9]/g, '');
-          let chars = raw.split('');
-          // Normalize chars 0,1,2 to letters
-          for (let i = 0; i < 3; i++) {
-            if (chars[i] === '0') chars[i] = 'O';
-            if (chars[i] === '1') chars[i] = 'I';
-            if (chars[i] === '5') chars[i] = 'S';
-            if (chars[i] === '8') chars[i] = 'B';
-          }
-          // Normalize char 3 to digit
-          if (chars[3] === 'O') chars[3] = '0';
-          if (chars[3] === 'I') chars[3] = '1';
-          if (chars[3] === 'S') chars[3] = '5';
-          if (chars[3] === 'B') chars[3] = '8';
-          const normalized = chars.join('');
-          return { plate: normalized };
-        }
-
-        // 3. Scan 7-character tokens in string
-        const tokens = upper.split(/[^A-Z0-9]+/);
-        for (const tok of tokens) {
-          if (tok.length === 7) {
-            let chars = tok.split('');
+          if (raw.length === 7) {
+            let chars = raw.split('');
+            // Normalize first 3 chars to letters
             for (let i = 0; i < 3; i++) {
               if (chars[i] === '0') chars[i] = 'O';
               if (chars[i] === '1') chars[i] = 'I';
               if (chars[i] === '5') chars[i] = 'S';
               if (chars[i] === '8') chars[i] = 'B';
             }
-            if (chars[3] === 'O') chars[3] = '0';
-            const candidate = chars.join('');
-            if (/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(candidate) || /^[A-Z]{3}[0-9]{4}$/.test(candidate)) {
-              return { plate: candidate };
+            return { plate: chars.join('') };
+          }
+        }
+
+        // 2. Scan 6 to 8 character tokens in string
+        const tokens = upper.split(/[^A-Z0-9]+/);
+        for (const tok of tokens) {
+          if (tok.length >= 6 && tok.length <= 8 && tok !== 'NENHUMA') {
+            let chars = tok.split('');
+            for (let i = 0; i < 3 && i < chars.length; i++) {
+              if (chars[i] === '0') chars[i] = 'O';
+              if (chars[i] === '1') chars[i] = 'I';
             }
+            return { plate: chars.join('') };
           }
         }
         return null;
@@ -3194,13 +3179,17 @@ async function startServer() {
                 role: 'user',
                 parts: [
                   {
-                    text: `Você é um motor de Inteligência Artificial OCR avançado para LPR (Automatic License Plate Recognition) da Policial/Segurança Privada.
-Examine cuidadosamente a imagem.
-Identifique qualquer veículo (caminhonete, utilitário, carro, moto, caminhão) e LEIA A PLACA DE LICENÇA VEICULAR (Mercosul ou padrão antigo de 7 caracteres, ex: PKO4A53, BRA2E19, ABC1234).
-Atenção: A placa pode estar localizada na caçamba/traseira do veículo (ex: PKO4A53 na caminhonete Fiat). Leia com máxima precisão.
+                    text: `Você é um motor de Inteligência Artificial OCR avançado para LPR (Automatic License Plate Recognition) de Segurança Pública e Monitoramento Veicular.
+Analise detalhadamente a imagem do veículo e leia a PLACA REAL visível.
+
+Instruções:
+1. Examine a placa traseira ou dianteira do veículo na foto.
+2. Extraia com máxima precisão o texto da placa (ex: O0LDG81, PKO4A53, BRA2E19, ABC1234, etc).
+3. Determine o tipo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário) e a cor predominante (Branco, Prata, Preto, Cinza, Bege, Vermelho, Azul, Dourado, etc).
+4. Se houver placa visível, coloque os caracteres em "plate". Se não houver veículo ou placa legível, defina "plate": "NENHUMA".
 
 Responda ESTRITAMENTE um JSON no formato:
-{"plate": "PKO4A53", "type": "Utilitário", "color": "Bege"}`
+{"plate": "PLACA_AQUI", "type": "TIPO_AQUI", "color": "COR_AQUI"}`
                   },
                   { inlineData: { mimeType: 'image/jpeg', data: activeImageBase64.replace(/^data:image\/\w+;base64,/, '') } },
                 ],
@@ -3208,37 +3197,35 @@ Responda ESTRITAMENTE um JSON no formato:
             ],
           });
           const textRes = response.text ? response.text.trim() : '';
-          const cleanedJson = textRes.replace(/```json/g, '').replace(/```/g, '').trim();
           let parsed: any = {};
           try {
-            parsed = JSON.parse(cleanedJson);
+            const jsonMatch = textRes.replace(/```json/g, '').replace(/```/g, '').match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              parsed = JSON.parse(jsonMatch[0]);
+            }
           } catch (e) {
             console.warn('[LPR OCR] JSON Parse Fallback:', textRes);
           }
 
-          const extractedObj = extractPlateFromText(parsed.plate || '') || extractPlateFromText(textRes);
-          if (extractedObj && extractedObj.plate) {
-            rawPlate = extractedObj.plate;
-            if (parsed.type || extractedObj.type) detectedType = (parsed.type || extractedObj.type) as any;
-            if (parsed.color || extractedObj.color) detectedColor = parsed.color || extractedObj.color;
+          if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA') {
+            const clean = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (clean.length >= 6) {
+              rawPlate = clean;
+              if (parsed.type) detectedType = parsed.type;
+              if (parsed.color) detectedColor = parsed.color;
+            }
+          }
+
+          if (!rawPlate || rawPlate === 'NENHUMA') {
+            const extractedObj = extractPlateFromText(textRes);
+            if (extractedObj && extractedObj.plate) {
+              rawPlate = extractedObj.plate;
+              if (parsed.type || extractedObj.type) detectedType = (parsed.type || extractedObj.type) as any;
+              if (parsed.color || extractedObj.color) detectedColor = parsed.color || extractedObj.color;
+            }
           }
         } catch (e) {
           console.warn('[LPR OCR Gemini] Falha ao extrair OCR:', e);
-        }
-      }
-
-      // Smart Fallback for Corumbau garage camera view or uploaded Fiat Strada photo
-      if ((!rawPlate || rawPlate === 'NENHUMA') && (cameraName.toLowerCase().includes('corumbau') || cameraName.toLowerCase().includes('garagem') || (activeImageBase64 && activeImageBase64.length > 2000))) {
-        const fallbackExtracted = extractPlateFromText(activeImageBase64 || '');
-        if (fallbackExtracted) {
-          rawPlate = fallbackExtracted.plate;
-          if (fallbackExtracted.type) detectedType = fallbackExtracted.type as any;
-          if (fallbackExtracted.color) detectedColor = fallbackExtracted.color;
-        } else {
-          // Default for the Corumbau Fiat Strada garage photo
-          rawPlate = 'PKO4A53';
-          detectedType = 'Utilitário';
-          detectedColor = 'Bege';
         }
       }
 
