@@ -3096,9 +3096,44 @@ async function startServer() {
       let rawPlate = testPlateHint || '';
       let detectedType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido' = 'Carro';
       let detectedColor = 'Prata';
+      let activeImageBase64 = imageBase64;
 
-      // If user uploaded image or frame and Gemini AI is active, try OCR and vehicle analysis
-      if (imageBase64 && aiClient) {
+      // If client didn't send imageBase64 or canvas was tainted, try fetching snapshot directly on server
+      if (!activeImageBase64 && cameraId) {
+        const cam = cameras.find((c) => c.id === cameraId);
+        if (cam) {
+          const streamUrl = typeof getValidStreamSource === 'function' ? getValidStreamSource(cam) : (cam.rtspUrl || cam.thumbnailUrl);
+          if (streamUrl) {
+            const tmpFramePath = path.join(os.tmpdir(), `lpr_snap_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.jpg`);
+            try {
+              if (streamUrl.startsWith('rtsp://') || streamUrl.startsWith('rtmp://') || streamUrl.includes('.m3u8')) {
+                execSync(`ffmpeg -y -rtsp_transport tcp -i "${streamUrl}" -vframes 1 -q:v 2 "${tmpFramePath}"`, { timeout: 6000, stdio: 'ignore' });
+                if (fs.existsSync(tmpFramePath)) {
+                  const buf = fs.readFileSync(tmpFramePath);
+                  activeImageBase64 = `data:image/jpeg;base64,${buf.toString('base64')}`;
+                  try { fs.unlinkSync(tmpFramePath); } catch (e) {}
+                }
+              } else if (streamUrl.startsWith('http://') || streamUrl.startsWith('https://')) {
+                try {
+                  const fetchRes = await fetch(streamUrl);
+                  if (fetchRes.ok) {
+                    const arrayBuf = await fetchRes.arrayBuffer();
+                    const buf = Buffer.from(arrayBuf);
+                    if (buf.length > 500) {
+                      activeImageBase64 = `data:image/jpeg;base64,${buf.toString('base64')}`;
+                    }
+                  }
+                } catch (fetchErr) {}
+              }
+            } catch (snapErr) {
+              console.warn('[LPR Server Snapshot] Falha ao capturar frame do stream:', snapErr);
+            }
+          }
+        }
+      }
+
+      // If image or frame is available and Gemini AI is active, run OCR & AI detection
+      if (activeImageBase64 && aiClient) {
         try {
           const response = await aiClient.models.generateContent({
             model: 'gemini-2.5-flash',
@@ -3108,14 +3143,14 @@ async function startServer() {
                 parts: [
                   {
                     text: `Você é um sistema de Inteligência Artificial especialista em LPR (Automatic License Plate Recognition) para Câmeras de Segurança.
-Examine cuidadosamente toda a imagem fornecida (inclusive veículos em garagens, estacionamentos, ruas, caminhonetes, carros, motos).
-Localize a placa de licença veicular (Mercosul ou padrão brasileiro tradicional de 7 caracteres, por exemplo PKO4A53, PKO-4A53, BRA2E19, ABC1234).
-Atenção: A placa pode estar localizada na traseira ou dianteira do veículo, logo abaixo do para-choque ou no suporte de placa. Leia com atenção todos os 7 caracteres legíveis.
+Examine cuidadosamente toda a imagem fornecida (veículos em garagens, ruas, caminhonetes, carros, motos).
+Localize a placa de licença veicular (Mercosul ou padrão brasileiro tradicional de 7 caracteres, ex: PKO4A53, BRA2E19, ABC1234).
+Atenção especial: Olhe com atenção para a parte traseira/dianteira de todos os veículos visíveis na imagem. Identifique os caracteres reais da placa.
 
 Responda ESTRITAMENTE em formato JSON puro sem formatação markdown:
 {"plate": "PKO4A53", "type": "Utilitário", "color": "Bege"}`
                   },
-                  { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+                  { inlineData: { mimeType: 'image/jpeg', data: activeImageBase64.replace(/^data:image\/\w+;base64,/, '') } },
                 ],
               },
             ],
@@ -3192,8 +3227,8 @@ Responda ESTRITAMENTE em formato JSON puro sem formatação markdown:
         id: `lpr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         plate: formattedPlate,
         normalizedPlate,
-        carImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
-        plateImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
+        carImageUrl: activeImageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+        plateImageUrl: activeImageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
         vehicleType: detectedType,
         vehicleColor: matchedStolen ? matchedStolen.vehicleColor : detectedColor,
         cameraId,

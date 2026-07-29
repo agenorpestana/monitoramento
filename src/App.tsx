@@ -479,30 +479,33 @@ export default function App() {
       return res;
     } catch (err) {
       console.error('[LPR Detect Error]:', err);
-      const plate = payload.testPlateHint || 'BRA2E19';
-      const isStolen = stolenVehicles.some(
-        (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === plate.replace(/[^A-Z0-9]/g, '')
-      );
-      const simDet: LPRDetection = {
-        id: `lpr-${Date.now()}`,
-        plate,
-        normalizedPlate: plate.replace(/[^A-Z0-9]/g, ''),
-        carImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
-        plateImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
-        vehicleType: 'Carro',
-        vehicleColor: 'Prata',
-        cameraId: payload.cameraId || 'cam-01',
-        cameraName: payload.cameraName || 'Câmera Principal LPR',
-        address: payload.address || 'Av. Liberdade, 1200',
-        latitude: payload.latitude || -17.0397,
-        longitude: payload.longitude || -39.5312,
-        timestamp: new Date().toISOString(),
-        confidence: 97.5,
-        isStolenAlert: isStolen,
-        ocrEngine: lprSettings.preferredOcrEngine || 'YOLO+PaddleOCR',
-      };
-      setLprDetections((prev) => [simDet, ...prev]);
-      return { success: true, isThrottled: false, isStolenAlert: isStolen, detection: simDet };
+      if (payload.testPlateHint) {
+        const plate = payload.testPlateHint.toUpperCase();
+        const isStolen = stolenVehicles.some(
+          (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === plate.replace(/[^A-Z0-9]/g, '')
+        );
+        const simDet: LPRDetection = {
+          id: `lpr-${Date.now()}`,
+          plate,
+          normalizedPlate: plate.replace(/[^A-Z0-9]/g, ''),
+          carImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+          plateImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
+          vehicleType: 'Carro',
+          vehicleColor: 'Prata',
+          cameraId: payload.cameraId || 'cam-01',
+          cameraName: payload.cameraName || 'Câmera Principal LPR',
+          address: payload.address || 'Av. Liberdade, 1200',
+          latitude: payload.latitude || -17.0397,
+          longitude: payload.longitude || -39.5312,
+          timestamp: new Date().toISOString(),
+          confidence: 97.5,
+          isStolenAlert: isStolen,
+          ocrEngine: lprSettings.preferredOcrEngine || 'YOLO+PaddleOCR',
+        };
+        setLprDetections((prev) => [simDet, ...prev]);
+        return { success: true, isThrottled: false, isStolenAlert: isStolen, detection: simDet };
+      }
+      return { success: false, message: 'Não foi possível capturar a imagem da câmera. Tente enviar uma foto do veículo.' };
     }
   };
 

@@ -231,6 +231,12 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
 
   // Auto scanner interval simulation loop
   useEffect(() => {
+    if (lprDetections && lprDetections.length > 0) {
+      setLatestDetection(lprDetections[0]);
+    }
+  }, [lprDetections]);
+
+  useEffect(() => {
     let interval: any = null;
     if (autoScanLoop) {
       interval = setInterval(() => {
