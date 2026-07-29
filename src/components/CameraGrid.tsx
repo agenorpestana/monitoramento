@@ -46,48 +46,6 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   const [liveTimestamps, setLiveTimestamps] = useState<Record<string, string>>({});
   const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
 
-  // Auto-Refresh Stream State (Default: 5 minutes / 300 seconds silent refresh)
-  const [autoRefreshIntervalSec, setAutoRefreshIntervalSec] = useState<number>(300);
-  const [countdownSec, setCountdownSec] = useState<number>(300);
-  const [gridRefreshKey, setGridRefreshKey] = useState<number>(0);
-
-  // Countdown timer for automatic silent stream refresh (Paused during Fullscreen or Modal)
-  useEffect(() => {
-    if (autoRefreshIntervalSec <= 0) return;
-    setCountdownSec(autoRefreshIntervalSec);
-
-    const timer = setInterval(() => {
-      // Pause auto-refresh if browser is in fullscreen or editing camera so stream never closes/resets
-      if (document.fullscreenElement || editingCamera) return;
-
-      setCountdownSec((prev) => {
-        if (prev <= 1) {
-          setGridRefreshKey((k) => k + 1);
-          return autoRefreshIntervalSec;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [autoRefreshIntervalSec, editingCamera]);
-
-  // Unfreeze streams whenever exiting full screen
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setGridRefreshKey((k) => k + 1);
-      }
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  const forceRefreshAllStreams = () => {
-    setGridRefreshKey((k) => k + 1);
-    if (autoRefreshIntervalSec > 0) setCountdownSec(autoRefreshIntervalSec);
-  };
-
   // Audio stream simulator state
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
@@ -152,30 +110,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Auto-Refresh Timer Badge & Controls (Hidden on page as requested) */}
-          <div className="hidden">
-            <select
-              value={autoRefreshIntervalSec}
-              onChange={(e) => setAutoRefreshIntervalSec(Number(e.target.value))}
-            >
-              <option value={300}>5 min (Padrão)</option>
-              <option value={600}>10 min</option>
-              <option value={60}>1 min</option>
-              <option value={120}>2 min</option>
-              <option value={0}>Desativado</option>
-            </select>
-          </div>
-
-          <button
-            onClick={forceRefreshAllStreams}
-            className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-bold flex items-center gap-1.5"
-            title="Sincronizar e Recarregar Transmissões Agora"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Recarregar</span>
-          </button>
-
+        <div className="flex items-center space-x-2">
           {/* Grid Layout Switcher */}
           <span className="text-xs text-slate-400 hidden sm:inline">Visualização:</span>
           <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
@@ -233,7 +168,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
 
           return (
             <div
-              key={`${camera.id}_${gridRefreshKey}`}
+              key={camera.id}
               className={`group relative bg-slate-900 border rounded-2xl overflow-hidden shadow-lg transition-all ${
                 camera.status === 'ALERT'
                   ? 'border-rose-500 ring-2 ring-rose-500/30'

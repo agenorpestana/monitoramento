@@ -172,112 +172,7 @@ import {
   INITIAL_NOTIFICATION_CONFIG,
 } from './src/data/mockData';
 import { INITIAL_PLANS, INITIAL_MP_CONFIG } from './src/lib/financial';
-import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, NotificationConfig, FinancialPlan, Invoice, MercadoPagoConfig, LicensePlateRecord } from './src/types';
-
-const INITIAL_LICENSE_PLATES: LicensePlateRecord[] = [
-  {
-    id: 'lpr-001',
-    cameraId: 'cam-01',
-    cameraName: 'Câmera 01 - Av. Central Entrada',
-    city: 'Porto Seguro',
-    stateUf: 'BA',
-    plateNumber: 'BRA2E19',
-    vehicleType: 'Carro',
-    vehicleColor: 'Prata',
-    confidence: 98,
-    snapshotUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 10:15:00',
-    lat: -16.4497,
-    lng: -39.0647,
-    isStolenOrWanted: true,
-    notes: 'ALERTA DE VEÍCULO ROUBADO! Toyota Corolla Prata cadastrado no SINESP.',
-  },
-  {
-    id: 'lpr-002',
-    cameraId: 'cam-02',
-    cameraName: 'Câmera 02 - Cruzamento Av. Navegantes',
-    city: 'Porto Seguro',
-    stateUf: 'BA',
-    plateNumber: 'BRA2E19',
-    vehicleType: 'Carro',
-    vehicleColor: 'Prata',
-    confidence: 97,
-    snapshotUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 10:32:00',
-    lat: -16.4520,
-    lng: -39.0680,
-    isStolenOrWanted: true,
-    notes: 'Detecção em movimento no sentido trevo de saída.',
-  },
-  {
-    id: 'lpr-003',
-    cameraId: 'cam-03',
-    cameraName: 'Câmera 03 - Trevo BR-367 Saída Cidade',
-    city: 'Eunápolis',
-    stateUf: 'BA',
-    plateNumber: 'BRA2E19',
-    vehicleType: 'Carro',
-    vehicleColor: 'Prata',
-    confidence: 96,
-    snapshotUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 10:55:00',
-    lat: -16.3711,
-    lng: -39.5841,
-    isStolenOrWanted: true,
-    notes: 'Veículo passou pelo trevo BR-367 sentido Eunápolis.',
-  },
-  {
-    id: 'lpr-004',
-    cameraId: 'cam-04',
-    cameraName: 'Câmera 04 - Posto Policial Rodoviário',
-    city: 'Eunápolis',
-    stateUf: 'BA',
-    plateNumber: 'BRA2E19',
-    vehicleType: 'Carro',
-    vehicleColor: 'Prata',
-    confidence: 99,
-    snapshotUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 11:20:00',
-    lat: -16.3800,
-    lng: -39.5900,
-    isStolenOrWanted: true,
-    notes: 'Interceptação comunicada à Polícia Rodoviária.',
-  },
-  {
-    id: 'lpr-005',
-    cameraId: 'cam-01',
-    cameraName: 'Câmera 01 - Av. Central Entrada',
-    city: 'Porto Seguro',
-    stateUf: 'BA',
-    plateNumber: 'ABC1D23',
-    vehicleType: 'SUV',
-    vehicleColor: 'Preto',
-    confidence: 95,
-    snapshotUrl: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 14:10:00',
-    lat: -16.4497,
-    lng: -39.0647,
-    isStolenOrWanted: false,
-    notes: 'Fluxo normal de trânsito.',
-  },
-  {
-    id: 'lpr-006',
-    cameraId: 'cam-02',
-    cameraName: 'Câmera 02 - Cruzamento Av. Navegantes',
-    city: 'Porto Seguro',
-    stateUf: 'BA',
-    plateNumber: 'KGT4021',
-    vehicleType: 'Moto',
-    vehicleColor: 'Vermelha',
-    confidence: 94,
-    snapshotUrl: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=80',
-    timestamp: '2026-07-28 15:05:00',
-    lat: -16.4520,
-    lng: -39.0680,
-    isStolenOrWanted: false,
-    notes: 'Motocicleta entregadora.',
-  },
-];
+import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, NotificationConfig, FinancialPlan, Invoice, MercadoPagoConfig } from './src/types';
 
 const LOCAL_STORE_FILE = path.join(process.cwd(), 'itl_database_store.json');
 
@@ -338,8 +233,6 @@ async function startServer() {
   let plans: FinancialPlan[] = [...INITIAL_PLANS];
   let invoices: Invoice[] = [];
   let mpConfig: MercadoPagoConfig = { ...INITIAL_MP_CONFIG };
-  let licensePlates: LicensePlateRecord[] = [...INITIAL_LICENSE_PLATES];
-  let stolenPlatesWatchlist: string[] = ['BRA2E19', 'PUX9876', 'KGT4021'];
   const deletedRecordingIds = new Set<string>();
 
   // Real Active Recording Sessions Tracker
@@ -374,20 +267,8 @@ async function startServer() {
         plans,
         invoices,
         mpConfig,
-        licensePlates,
-        stolenPlatesWatchlist,
       };
-      const jsonStr = JSON.stringify(data, null, 2);
-      const targets = new Set([
-        LOCAL_STORE_FILE,
-        path.join(process.cwd(), 'itl_database_store.json'),
-        '/var/www/monitoramento.unityautomacoes.com.br/itl_database_store.json',
-      ]);
-      for (const target of targets) {
-        try {
-          fs.writeFileSync(target, jsonStr, 'utf-8');
-        } catch (e) {}
-      }
+      fs.writeFileSync(LOCAL_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
       console.error('[ITL Storage] Erro ao salvar arquivo JSON local:', err);
     }
@@ -396,18 +277,13 @@ async function startServer() {
   // Helper function to load snapshot from local file store
   const loadFromLocalFile = () => {
     try {
-      const candidatePaths = [
-        LOCAL_STORE_FILE,
-        path.join(process.cwd(), 'itl_database_store.json'),
-        '/var/www/monitoramento.unityautomacoes.com.br/itl_database_store.json',
-      ];
-      const validPath = candidatePaths.find((p) => fs.existsSync(p));
-      if (validPath) {
-        const raw = fs.readFileSync(validPath, 'utf-8');
+      if (fs.existsSync(LOCAL_STORE_FILE)) {
+        const raw = fs.readFileSync(LOCAL_STORE_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        if (parsed.cameras && Array.isArray(parsed.cameras) && parsed.cameras.length > 0) cameras = parsed.cameras;
+        if (parsed.cameras && Array.isArray(parsed.cameras)) cameras = parsed.cameras;
         if (parsed.alerts && Array.isArray(parsed.alerts)) alerts = parsed.alerts;
         if (parsed.recordings && Array.isArray(parsed.recordings)) {
+          // Strictly exclude legacy mock auto-generated items
           recordings = parsed.recordings.filter(
             (r: any) =>
               r.id &&
@@ -417,16 +293,14 @@ async function startServer() {
               !deletedRecordingIds.has(r.id)
           );
         }
-        if (parsed.users && Array.isArray(parsed.users) && parsed.users.length > 0) users = parsed.users;
+        if (parsed.users && Array.isArray(parsed.users)) users = parsed.users;
         if (parsed.logs && Array.isArray(parsed.logs)) logs = parsed.logs;
         if (parsed.backupConfig) backupConfig = parsed.backupConfig;
         if (parsed.notificationConfig) notificationConfig = parsed.notificationConfig;
-        if (parsed.plans && Array.isArray(parsed.plans) && parsed.plans.length > 0) plans = parsed.plans;
+        if (parsed.plans && Array.isArray(parsed.plans)) plans = parsed.plans;
         if (parsed.invoices && Array.isArray(parsed.invoices)) invoices = parsed.invoices;
         if (parsed.mpConfig && parsed.mpConfig.accessToken) mpConfig = parsed.mpConfig;
-        if (parsed.licensePlates && Array.isArray(parsed.licensePlates) && parsed.licensePlates.length > 0) licensePlates = parsed.licensePlates;
-        if (parsed.stolenPlatesWatchlist && Array.isArray(parsed.stolenPlatesWatchlist)) stolenPlatesWatchlist = parsed.stolenPlatesWatchlist;
-        console.log(`[ITL Storage] Arquivo local '${validPath}' carregado: ${cameras.length} câmeras, ${users.length} usuários, ${licensePlates.length} leituras LPR.`);
+        console.log(`[ITL Storage] ${cameras.length} câmeras e ${users.length} usuários carregados do arquivo local.`);
         return true;
       }
     } catch (err) {
@@ -534,35 +408,6 @@ async function startServer() {
         if (loadedUsers.length > 0) users = loadedUsers;
         console.log(`[SQLite ITL] ${users.length} usuários carregados do banco de dados SQL.`);
       }
-
-      // Load license_plates
-      try {
-        const lpRes = sqliteDb.exec('SELECT * FROM license_plates ORDER BY timestamp DESC');
-        if (lpRes && lpRes.length > 0 && lpRes[0].values.length > 0) {
-          const cols = lpRes[0].columns;
-          const getVal = (row: any[], name: string) => row[cols.indexOf(name)];
-
-          const loadedPlates: LicensePlateRecord[] = lpRes[0].values.map((row: any[]) => ({
-            id: String(getVal(row, 'id')),
-            cameraId: String(getVal(row, 'camera_id') || ''),
-            cameraName: String(getVal(row, 'camera_name') || ''),
-            city: String(getVal(row, 'city') || ''),
-            stateUf: String(getVal(row, 'state_uf') || ''),
-            plateNumber: String(getVal(row, 'plate_number') || ''),
-            vehicleType: (getVal(row, 'vehicle_type') || 'Carro') as any,
-            vehicleColor: String(getVal(row, 'vehicle_color') || ''),
-            confidence: Number(getVal(row, 'confidence') || 95),
-            snapshotUrl: String(getVal(row, 'snapshot_url') || ''),
-            timestamp: String(getVal(row, 'timestamp') || new Date().toISOString()),
-            lat: getVal(row, 'lat') !== null ? Number(getVal(row, 'lat')) : undefined,
-            lng: getVal(row, 'lng') !== null ? Number(getVal(row, 'lng')) : undefined,
-            isStolenOrWanted: Boolean(getVal(row, 'is_stolen_or_wanted')),
-            notes: String(getVal(row, 'notes') || ''),
-          }));
-          if (loadedPlates.length > 0) licensePlates = loadedPlates;
-          console.log(`[SQLite ITL] ${licensePlates.length} leituras de placas (license_plates) carregadas do banco SQL.`);
-        }
-      } catch (e) {}
     } catch (e: any) {
       console.error('[SQLite ITL Error] Erro ao ler dados do SQLite:', e.message);
     }
@@ -647,33 +492,9 @@ async function startServer() {
         );
       `);
 
-      sqliteDb.run(`
-        CREATE TABLE IF NOT EXISTS license_plates (
-          id TEXT PRIMARY KEY,
-          camera_id TEXT,
-          camera_name TEXT,
-          city TEXT,
-          state_uf TEXT,
-          plate_number TEXT NOT NULL,
-          vehicle_type TEXT DEFAULT 'Carro',
-          vehicle_color TEXT,
-          confidence INTEGER DEFAULT 95,
-          snapshot_url TEXT,
-          timestamp TEXT,
-          lat REAL,
-          lng REAL,
-          is_stolen_or_wanted INTEGER DEFAULT 0,
-          notes TEXT
-        );
-      `);
-
       loadDataFromSqlite();
 
-      if (licensePlates.length === 0) {
-        licensePlates = [...INITIAL_LICENSE_PLATES];
-      }
-
-      // Ensure current in-memory cameras, users, and license_plates are seeded into SQLite tables
+      // Ensure current in-memory cameras and users are seeded into SQLite tables
       if (cameras.length > 0) {
         cameras.forEach((c) => {
           try {
@@ -704,23 +525,8 @@ async function startServer() {
         });
       }
 
-      if (licensePlates.length > 0) {
-        licensePlates.forEach((lp) => {
-          try {
-            sqliteDb.run(
-              `INSERT OR REPLACE INTO license_plates (
-                id, camera_id, camera_name, city, state_uf, plate_number, vehicle_type, vehicle_color, confidence, snapshot_url, timestamp, lat, lng, is_stolen_or_wanted, notes
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                lp.id, lp.cameraId || '', lp.cameraName || '', lp.city || '', lp.stateUf || '', lp.plateNumber, lp.vehicleType || 'Carro', lp.vehicleColor || '', lp.confidence || 95, lp.snapshotUrl || '', lp.timestamp || new Date().toISOString(), lp.lat || null, lp.lng || null, lp.isStolenOrWanted ? 1 : 0, lp.notes || ''
-              ]
-            );
-          } catch (e) {}
-        });
-      }
-
       saveSqliteFile();
-      console.log(`[SQLite ITL Engine] Tabelas 'cameras' (${cameras.length}), 'users' (${users.length}) e 'license_plates' (${licensePlates.length}) sincronizadas no SQLite!`);
+      console.log(`[SQLite ITL Engine] Tabela 'cameras' (${cameras.length} registros) e 'users' (${users.length} registros) sincronizadas no SQLite!`);
     } catch (err: any) {
       console.error('[SQLite ITL Error] Falha ao inicializar SQLite Engine:', err.message || err);
       loadFromLocalFile();
@@ -814,46 +620,6 @@ async function startServer() {
     } catch (e) {}
   };
 
-  const syncLicensePlateToSqlite = (lp: LicensePlateRecord) => {
-    if (!sqliteDb) return;
-    try {
-      sqliteDb.run(
-        `INSERT OR REPLACE INTO license_plates (
-          id, camera_id, camera_name, city, state_uf, plate_number, vehicle_type, vehicle_color, confidence, snapshot_url, timestamp, lat, lng, is_stolen_or_wanted, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          lp.id,
-          lp.cameraId || '',
-          lp.cameraName || '',
-          lp.city || '',
-          lp.stateUf || '',
-          lp.plateNumber,
-          lp.vehicleType || 'Carro',
-          lp.vehicleColor || '',
-          lp.confidence || 95,
-          lp.snapshotUrl || '',
-          lp.timestamp || new Date().toISOString(),
-          lp.lat !== undefined ? lp.lat : null,
-          lp.lng !== undefined ? lp.lng : null,
-          lp.isStolenOrWanted ? 1 : 0,
-          lp.notes || '',
-        ]
-      );
-      saveSqliteFile();
-      console.log(`[SQLite ITL Sync] Placa LPR '${lp.plateNumber}' (${lp.id}) GRAVADA no banco SQL!`);
-    } catch (e: any) {
-      console.error('[SQLite LPR Sync Error]', e.message);
-    }
-  };
-
-  const deleteLicensePlateFromSqlite = (id: string) => {
-    if (!sqliteDb) return;
-    try {
-      sqliteDb.run('DELETE FROM license_plates WHERE id = ?', [id]);
-      saveSqliteFile();
-    } catch (e) {}
-  };
-
   const saveStorageLimitToSqlite = (limitGB: number) => {
     if (!sqliteDb) return;
     try {
@@ -895,16 +661,8 @@ async function startServer() {
     }
   }
 
-  async function deleteRecordingFromMysql(id: string) {
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM cloud_recordings WHERE id = ?', [id]);
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] Erro ao remover gravação do MySQL:', e.message || e);
-    }
-  }
-
   async function syncCameraToMysql(cam: Camera) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       const safeLat = isNaN(Number(cam.lat)) ? -17.0397 : Number(cam.lat);
@@ -951,6 +709,7 @@ async function startServer() {
   }
 
   async function deleteCameraFromMysql(id: string) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query('DELETE FROM cameras WHERE id = ?', [id]);
@@ -960,6 +719,7 @@ async function startServer() {
   }
 
   async function syncUserToMysql(u: User) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -995,6 +755,7 @@ async function startServer() {
   }
 
   async function deleteUserFromMysql(id: string) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query('DELETE FROM users WHERE id = ?', [id]);
@@ -1004,6 +765,7 @@ async function startServer() {
   }
 
   async function syncAlertToMysql(alert: MotionAlert) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1031,6 +793,7 @@ async function startServer() {
   }
 
   async function syncLogToMysql(log: ActivityLog) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1054,6 +817,7 @@ async function startServer() {
   }
 
   async function syncPlanToMysql(plan: FinancialPlan) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1077,6 +841,7 @@ async function startServer() {
   }
 
   async function deletePlanFromMysql(id: string) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query('DELETE FROM financial_plans WHERE id = ?', [id]);
@@ -1084,6 +849,7 @@ async function startServer() {
   }
 
   async function syncInvoiceToMysql(inv: Invoice) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1115,6 +881,7 @@ async function startServer() {
   }
 
   async function deleteInvoiceFromMysql(id: string) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query('DELETE FROM financial_invoices WHERE id = ?', [id]);
@@ -1122,6 +889,7 @@ async function startServer() {
   }
 
   async function syncMpConfigToMysql(cfg: MercadoPagoConfig) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1143,6 +911,7 @@ async function startServer() {
   }
 
   async function syncBackupConfigToMysql(cfg: BackupConfig) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1168,6 +937,7 @@ async function startServer() {
   }
 
   async function syncNotificationConfigToMysql(cfg: NotificationConfig) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1192,44 +962,8 @@ async function startServer() {
     }
   }
 
-  async function syncLicensePlateToMysql(lp: LicensePlateRecord) {
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query(
-        `INSERT INTO license_plates (id, camera_id, camera_name, city, state_uf, plate_number, vehicle_type, vehicle_color, confidence, snapshot_url, timestamp, lat, lng, is_stolen_or_wanted, notes)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE camera_id=VALUES(camera_id), camera_name=VALUES(camera_name), city=VALUES(city), state_uf=VALUES(state_uf), plate_number=VALUES(plate_number), vehicle_type=VALUES(vehicle_type), vehicle_color=VALUES(vehicle_color), confidence=VALUES(confidence), snapshot_url=VALUES(snapshot_url), timestamp=VALUES(timestamp), lat=VALUES(lat), lng=VALUES(lng), is_stolen_or_wanted=VALUES(is_stolen_or_wanted), notes=VALUES(notes)`,
-        [
-          lp.id,
-          lp.cameraId || '',
-          lp.cameraName || '',
-          lp.city || '',
-          lp.stateUf || '',
-          lp.plateNumber,
-          lp.vehicleType || 'Carro',
-          lp.vehicleColor || '',
-          lp.confidence || 95,
-          lp.snapshotUrl || '',
-          lp.timestamp || new Date().toISOString(),
-          lp.lat !== undefined ? lp.lat : null,
-          lp.lng !== undefined ? lp.lng : null,
-          lp.isStolenOrWanted ? 1 : 0,
-          lp.notes || ''
-        ]
-      );
-    } catch (e: any) {
-      console.error('[MySQL Sync Error] License Plate:', e.message || e);
-    }
-  }
-
-  async function deleteLicensePlateFromMysql(id: string) {
-    if (!isMysqlActive || !pool) return;
-    try {
-      await pool.query('DELETE FROM license_plates WHERE id = ?', [id]);
-    } catch (e) {}
-  }
-
   async function syncSystemSettingsToMysql(storageLimitGB: number) {
+    saveToLocalFile();
     if (!isMysqlActive || !pool) return;
     try {
       await pool.query(
@@ -1251,699 +985,258 @@ async function startServer() {
       loadFromLocalFile();
 
       // Ensure default essential seeds if memory is empty
-      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
       if (users.length === 0) users = [...INITIAL_USERS];
       if (plans.length === 0) plans = [...INITIAL_PLANS];
-      if (alerts.length === 0) alerts = [...INITIAL_ALERTS];
-      if (recordings.length === 0) recordings = [...INITIAL_RECORDINGS];
-      if (logs.length === 0) logs = [...INITIAL_LOGS];
-      if (licensePlates.length === 0) licensePlates = [...INITIAL_LICENSE_PLATES];
 
-      // 2. Sync Cameras
+      // 2. Push all local JSON memory entities into MySQL (upsert)
       for (const c of cameras) { try { await syncCameraToMysql(c); } catch (e) {} }
-      const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
-      if (camRows && Array.isArray(camRows)) {
-        const camMap = new Map<string, Camera>();
-        for (const c of cameras) camMap.set(c.id, c);
-        for (const row of camRows) {
-          const dbCam: Camera = {
-            id: row.id,
-            name: row.name,
-            location: row.location || 'Localização ITL',
-            protocol: row.protocol || 'RTSP',
-            rtspUrl: row.rtsp_url || '',
-            rtmpUrl: row.rtmp_url || '',
-            streamKey: row.stream_key || '',
-            rtmpServerUrl: row.rtmp_server_url || '',
-            fullRtmpUrl: row.full_rtmp_url || '',
-            stateUf: row.state_uf || '',
-            city: row.city || '',
-            status: row.status || 'ONLINE',
-            isE2EEEncrypted: Boolean(row.is_e2ee_encrypted),
-            encryptionKeyHash: row.encryption_key_hash || '',
-            fps: row.fps || 30,
-            resolution: row.resolution || '1080p',
-            storageUsedGB: parseFloat(row.storage_used_gb || 0),
-            cloudRecordingsActive: Boolean(row.cloud_recordings_active),
-            motionSensitivity: row.motion_sensitivity || 7,
-            aiDetectionEnabled: Boolean(row.ai_detection_enabled),
-            twoWayAudioEnabled: Boolean(row.two_way_audio_enabled),
-            lat: parseFloat(row.lat || -17.0397),
-            lng: parseFloat(row.lng || -39.5312),
-            thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
-            createdAt: row.created_at || '2026-01-01',
-          };
-          if (!camMap.has(dbCam.id)) {
-            camMap.set(dbCam.id, dbCam);
-          }
-        }
-        cameras = Array.from(camMap.values());
-        for (const c of cameras) { try { await syncCameraToMysql(c); } catch (e) {} }
-      }
-
-      // 3. Sync Users
       for (const u of users) { try { await syncUserToMysql(u); } catch (e) {} }
-      const [userRows]: any = await pool.query('SELECT * FROM users');
-      if (userRows && Array.isArray(userRows)) {
-        const userMap = new Map<string, User>();
-        for (const u of users) userMap.set(u.id, u);
-        for (const row of userRows) {
-          const dbUser: User = {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            role: row.role,
-            phone: row.phone,
-            stateUf: row.state_uf || '',
-            city: row.city || '',
-            status: row.status,
-            customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
-            allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
-            planId: row.plan_id || undefined,
-            planName: row.plan_name || undefined,
-            monthlyFee: row.monthly_fee ? parseFloat(row.monthly_fee) : undefined,
-            chosenDueDay: row.chosen_due_day || undefined,
-            financialStatus: row.financial_status || 'OK',
-            daysOverdue: row.days_overdue || 0,
-            lastActive: row.last_active,
-            createdAt: row.created_at,
-          };
-          if (!userMap.has(dbUser.id)) {
-            userMap.set(dbUser.id, dbUser);
-          }
-        }
-        users = Array.from(userMap.values());
-        for (const u of users) { try { await syncUserToMysql(u); } catch (e) {} }
-      }
-
-      // 4. Sync Cloud Recordings
       for (const r of recordings) { try { await syncRecordingToMysql(r); } catch (e) {} }
-      const [recRows]: any = await pool.query('SELECT * FROM cloud_recordings ORDER BY start_time DESC');
-      if (recRows && Array.isArray(recRows)) {
-        const recMap = new Map<string, CloudRecording>();
-        for (const r of recordings) {
-          if (!deletedRecordingIds.has(r.id)) recMap.set(r.id, r);
-        }
-        for (const row of recRows) {
-          if (deletedRecordingIds.has(row.id)) continue;
-          const dbRec: CloudRecording = {
-            id: row.id,
-            cameraId: row.camera_id,
-            cameraName: row.camera_name,
-            startTime: row.start_time,
-            endTime: row.end_time,
-            durationSeconds: row.duration_sec || 0,
-            fileSizeMB: parseFloat(row.file_size_mb || 0),
-            streamUrl: row.stream_url,
-            thumbnailUrl: row.thumbnail_url,
-            isE2EELocked: true,
-            tags: ['Gravação Nuvem ITL', row.camera_name || 'Câmera ITL'],
-          };
-          if (!recMap.has(dbRec.id)) {
-            recMap.set(dbRec.id, dbRec);
-          }
-        }
-        recordings = Array.from(recMap.values());
-        for (const r of recordings) { try { await syncRecordingToMysql(r); } catch (e) {} }
-      }
-
-      // 5. Sync Motion Alerts
       for (const a of alerts) { try { await syncAlertToMysql(a); } catch (e) {} }
-      const [alertRows]: any = await pool.query('SELECT * FROM motion_alerts ORDER BY timestamp DESC LIMIT 100');
-      if (alertRows && Array.isArray(alertRows)) {
-        const alertMap = new Map<string, MotionAlert>();
-        for (const a of alerts) alertMap.set(a.id, a);
-        for (const row of alertRows) {
-          const dbAlert: MotionAlert = {
-            id: row.id,
-            cameraId: row.camera_id,
-            cameraName: row.camera_name,
-            eventType: row.event_type || 'HUMAN',
-            confidence: row.confidence || 90,
-            snapshotUrl: row.snapshot_url || '',
-            videoClipUrl: row.video_clip_url || '',
-            timestamp: row.timestamp || new Date().toISOString(),
-            severity: row.severity || 'HIGH',
-            readStatus: Boolean(row.read_status),
-            pushedToMobile: Boolean(row.pushed_to_mobile),
-          };
-          if (!alertMap.has(dbAlert.id)) {
-            alertMap.set(dbAlert.id, dbAlert);
-          }
-        }
-        alerts = Array.from(alertMap.values());
-        for (const a of alerts) { try { await syncAlertToMysql(a); } catch (e) {} }
-      }
-
-      // 6. Sync Activity Logs
       for (const l of logs) { try { await syncLogToMysql(l); } catch (e) {} }
-      const [logRows]: any = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 200');
-      if (logRows && Array.isArray(logRows)) {
-        const logMap = new Map<string, ActivityLog>();
-        for (const l of logs) logMap.set(l.id, l);
-        for (const row of logRows) {
-          const dbLog: ActivityLog = {
-            id: row.id,
-            userId: row.user_id,
-            userName: row.user_name,
-            action: row.action,
-            category: row.category,
-            details: row.details,
-            ipAddress: row.ip_address,
-            timestamp: row.timestamp,
-          };
-          if (!logMap.has(dbLog.id)) {
-            logMap.set(dbLog.id, dbLog);
-          }
-        }
-        logs = Array.from(logMap.values());
-        for (const l of logs) { try { await syncLogToMysql(l); } catch (e) {} }
-      }
-
-      // 7. Sync Financial Plans
-      // Ensure official system plans (INITIAL_PLANS) are upserted into MySQL
-      for (const p of INITIAL_PLANS) { try { await syncPlanToMysql(p); } catch (e) {} }
       for (const p of plans) { try { await syncPlanToMysql(p); } catch (e) {} }
-
-      const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
-      if (planRows && Array.isArray(planRows)) {
-        const planMap = new Map<string, FinancialPlan>();
-        for (const p of INITIAL_PLANS) planMap.set(p.id, p);
-        for (const p of plans) planMap.set(p.id, p);
-        for (const row of planRows) {
-          const dbPlan: FinancialPlan = {
-            id: row.id,
-            name: row.name,
-            monthlyPrice: parseFloat(row.monthly_price || 0),
-            camerasIncluded: row.cameras_included || 4,
-            cloudRetentionDays: row.cloud_retention_days || 7,
-            description: row.description || '',
-            popular: Boolean(row.popular),
-          };
-          if (!planMap.has(dbPlan.id)) {
-            planMap.set(dbPlan.id, dbPlan);
-          }
-        }
-        plans = Array.from(planMap.values());
-        for (const p of plans) { try { await syncPlanToMysql(p); } catch (e) {} }
-      }
-
-      // 8. Sync Financial Invoices
       for (const i of invoices) { try { await syncInvoiceToMysql(i); } catch (e) {} }
-      const [invoiceRows]: any = await pool.query('SELECT * FROM financial_invoices ORDER BY created_at DESC');
-      if (invoiceRows && Array.isArray(invoiceRows)) {
-        const invoiceMap = new Map<string, Invoice>();
-        for (const i of invoices) invoiceMap.set(i.id, i);
-        for (const row of invoiceRows) {
-          const dbInv: Invoice = {
-            id: row.id,
-            userId: row.user_id,
-            userName: row.user_name,
-            userEmail: row.user_email,
-            planName: row.plan_name,
-            amount: parseFloat(row.amount || 0),
-            originalAmount: parseFloat(row.original_amount || 0),
-            dueDate: row.due_date,
-            paymentDate: row.payment_date || undefined,
-            status: row.status,
-            isProRata: Boolean(row.is_pro_rata),
-            proRataDays: row.pro_rata_days || undefined,
-            pixCode: row.pix_code || undefined,
-            pixQrCodeUrl: row.pix_qr_code_url || undefined,
-            mercadoPagoPaymentId: row.mercado_pago_payment_id || undefined,
-            createdAt: row.created_at,
-          };
-          if (!invoiceMap.has(dbInv.id)) {
-            invoiceMap.set(dbInv.id, dbInv);
-          }
-        }
-        invoices = Array.from(invoiceMap.values());
-        for (const i of invoices) { try { await syncInvoiceToMysql(i); } catch (e) {} }
-      }
-
-      // 9. Mercado Pago & Settings
       try { await syncMpConfigToMysql(mpConfig); } catch (e) {}
       try { await syncBackupConfigToMysql(backupConfig); } catch (e) {}
       try { await syncNotificationConfigToMysql(notificationConfig); } catch (e) {}
       try { await syncSystemSettingsToMysql(backupConfig.storageLimitGB || 100); } catch (e) {}
 
-      // 10. Sync License Plate Records (LPR)
-      for (const lp of licensePlates) { try { await syncLicensePlateToMysql(lp); } catch (e) {} }
-      const [lpRows]: any = await pool.query('SELECT * FROM license_plates ORDER BY timestamp DESC LIMIT 300');
-      if (lpRows && Array.isArray(lpRows)) {
-        const lpMap = new Map<string, LicensePlateRecord>();
-        for (const lp of licensePlates) lpMap.set(lp.id, lp);
-        for (const row of lpRows) {
-          const dbLp: LicensePlateRecord = {
-            id: row.id,
-            cameraId: row.camera_id || '',
-            cameraName: row.camera_name || '',
-            city: row.city || '',
-            stateUf: row.state_uf || '',
-            plateNumber: row.plate_number,
-            vehicleType: row.vehicle_type || 'Carro',
-            vehicleColor: row.vehicle_color || '',
-            confidence: row.confidence || 95,
-            snapshotUrl: row.snapshot_url || '',
-            timestamp: row.timestamp || new Date().toISOString(),
-            lat: row.lat !== null && row.lat !== undefined ? parseFloat(row.lat) : undefined,
-            lng: row.lng !== null && row.lng !== undefined ? parseFloat(row.lng) : undefined,
-            isStolenOrWanted: Boolean(row.is_stolen_or_wanted),
-            notes: row.notes || '',
-          };
-          if (!lpMap.has(dbLp.id)) {
-            lpMap.set(dbLp.id, dbLp);
+      // 3. Query MySQL for records and merge with local JSON memory state
+      // Cameras
+      const [camRows]: any = await pool.query('SELECT * FROM cameras ORDER BY created_at DESC');
+      if (camRows && Array.isArray(camRows)) {
+        const dbCams = camRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          location: row.location || 'Localização ITL',
+          protocol: row.protocol || 'RTSP',
+          rtspUrl: row.rtsp_url || '',
+          rtmpUrl: row.rtmp_url || '',
+          streamKey: row.stream_key || '',
+          rtmpServerUrl: row.rtmp_server_url || '',
+          fullRtmpUrl: row.full_rtmp_url || '',
+          stateUf: row.state_uf || '',
+          city: row.city || '',
+          status: row.status || 'ONLINE',
+          isE2EEEncrypted: Boolean(row.is_e2ee_encrypted),
+          encryptionKeyHash: row.encryption_key_hash || '',
+          fps: row.fps || 30,
+          resolution: row.resolution || '1080p',
+          storageUsedGB: parseFloat(row.storage_used_gb || 0),
+          cloudRecordingsActive: Boolean(row.cloud_recordings_active),
+          motionSensitivity: row.motion_sensitivity || 7,
+          aiDetectionEnabled: Boolean(row.ai_detection_enabled),
+          twoWayAudioEnabled: Boolean(row.two_way_audio_enabled),
+          lat: parseFloat(row.lat || -17.0397),
+          lng: parseFloat(row.lng || -39.5312),
+          thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+          createdAt: row.created_at || '2026-01-01',
+        }));
+
+        const camMap = new Map<string, Camera>();
+        for (const c of dbCams) camMap.set(c.id, c);
+        for (const c of cameras) {
+          if (!camMap.has(c.id)) {
+            camMap.set(c.id, c);
+            await syncCameraToMysql(c);
           }
         }
-        licensePlates = Array.from(lpMap.values());
-        for (const lp of licensePlates) { try { await syncLicensePlateToMysql(lp); } catch (e) {} }
+        cameras = Array.from(camMap.values());
       }
 
-      // 11. Save merged state to local JSON file
+      // Users
+      const [userRows]: any = await pool.query('SELECT * FROM users');
+      if (userRows && Array.isArray(userRows)) {
+        const dbUsers = userRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          phone: row.phone,
+          stateUf: row.state_uf || '',
+          city: row.city || '',
+          status: row.status,
+          customPermissions: typeof row.custom_permissions === 'string' ? JSON.parse(row.custom_permissions) : row.custom_permissions,
+          allowedCameraIds: row.allowed_camera_ids ? (typeof row.allowed_camera_ids === 'string' ? JSON.parse(row.allowed_camera_ids) : row.allowed_camera_ids) : ['ALL'],
+          planId: row.plan_id || undefined,
+          planName: row.plan_name || undefined,
+          monthlyFee: row.monthly_fee ? parseFloat(row.monthly_fee) : undefined,
+          chosenDueDay: row.chosen_due_day || undefined,
+          financialStatus: row.financial_status || 'OK',
+          daysOverdue: row.days_overdue || 0,
+          lastActive: row.last_active,
+          createdAt: row.created_at,
+        }));
+
+        const userMap = new Map<string, User>();
+        for (const u of dbUsers) userMap.set(u.id, u);
+        for (const u of users) {
+          if (!userMap.has(u.id)) {
+            userMap.set(u.id, u);
+            await syncUserToMysql(u);
+          }
+        }
+        users = Array.from(userMap.values());
+      }
+
+      // Cloud Recordings
+      const [recRows]: any = await pool.query('SELECT * FROM cloud_recordings ORDER BY start_time DESC');
+      if (recRows && Array.isArray(recRows)) {
+        const dbRecs = recRows.map((row: any) => ({
+          id: row.id,
+          cameraId: row.camera_id,
+          cameraName: row.camera_name,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          durationSeconds: row.duration_sec || 0,
+          fileSizeMB: parseFloat(row.file_size_mb || 0),
+          streamUrl: row.stream_url,
+          thumbnailUrl: row.thumbnail_url,
+        }));
+
+        const recMap = new Map<string, CloudRecording>();
+        for (const r of dbRecs) {
+          if (!deletedRecordingIds.has(r.id)) recMap.set(r.id, r);
+        }
+        for (const r of recordings) {
+          if (!deletedRecordingIds.has(r.id) && !recMap.has(r.id)) {
+            recMap.set(r.id, r);
+            await syncRecordingToMysql(r);
+          }
+        }
+        recordings = Array.from(recMap.values());
+      }
+
+      // Motion Alerts
+      const [alertRows]: any = await pool.query('SELECT * FROM motion_alerts ORDER BY timestamp DESC LIMIT 100');
+      if (alertRows && Array.isArray(alertRows)) {
+        const dbAlerts = alertRows.map((row: any) => ({
+          id: row.id,
+          cameraId: row.camera_id,
+          cameraName: row.camera_name,
+          eventType: row.event_type || 'HUMAN',
+          confidence: row.confidence || 90,
+          snapshotUrl: row.snapshot_url || '',
+          videoClipUrl: row.video_clip_url || '',
+          timestamp: row.timestamp || new Date().toISOString(),
+          severity: row.severity || 'HIGH',
+          readStatus: Boolean(row.read_status),
+          pushedToMobile: Boolean(row.pushed_to_mobile),
+        }));
+
+        const alertMap = new Map<string, MotionAlert>();
+        for (const a of dbAlerts) alertMap.set(a.id, a);
+        for (const a of alerts) {
+          if (!alertMap.has(a.id)) {
+            alertMap.set(a.id, a);
+            await syncAlertToMysql(a);
+          }
+        }
+        alerts = Array.from(alertMap.values());
+      }
+
+      // Activity Logs
+      const [logRows]: any = await pool.query('SELECT * FROM activity_logs ORDER BY timestamp DESC LIMIT 200');
+      if (logRows && Array.isArray(logRows)) {
+        const dbLogs = logRows.map((row: any) => ({
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          action: row.action,
+          category: row.category,
+          details: row.details,
+          ipAddress: row.ip_address,
+          timestamp: row.timestamp,
+        }));
+
+        const logMap = new Map<string, ActivityLog>();
+        for (const l of dbLogs) logMap.set(l.id, l);
+        for (const l of logs) {
+          if (!logMap.has(l.id)) {
+            logMap.set(l.id, l);
+            await syncLogToMysql(l);
+          }
+        }
+        logs = Array.from(logMap.values());
+      }
+
+      // Financial Plans
+      const [planRows]: any = await pool.query('SELECT * FROM financial_plans');
+      if (planRows && Array.isArray(planRows)) {
+        const dbPlans = planRows.map((row: any) => ({
+          id: row.id,
+          name: row.name,
+          monthlyPrice: parseFloat(row.monthly_price || 0),
+          camerasIncluded: row.cameras_included || 4,
+          cloudRetentionDays: row.cloud_retention_days || 7,
+          description: row.description || '',
+          popular: Boolean(row.popular),
+        }));
+
+        const planMap = new Map<string, FinancialPlan>();
+        for (const p of dbPlans) planMap.set(p.id, p);
+        for (const p of plans) {
+          if (!planMap.has(p.id)) {
+            planMap.set(p.id, p);
+            await syncPlanToMysql(p);
+          }
+        }
+        plans = Array.from(planMap.values());
+      }
+
+      // Financial Invoices
+      const [invoiceRows]: any = await pool.query('SELECT * FROM financial_invoices ORDER BY created_at DESC');
+      if (invoiceRows && Array.isArray(invoiceRows)) {
+        const dbInvoices = invoiceRows.map((row: any) => ({
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          userEmail: row.user_email,
+          planName: row.plan_name,
+          amount: parseFloat(row.amount || 0),
+          originalAmount: parseFloat(row.original_amount || 0),
+          dueDate: row.due_date,
+          paymentDate: row.payment_date || undefined,
+          status: row.status,
+          isProRata: Boolean(row.is_pro_rata),
+          proRataDays: row.pro_rata_days || undefined,
+          pixCode: row.pix_code || undefined,
+          pixQrCodeUrl: row.pix_qr_code_url || undefined,
+          mercadoPagoPaymentId: row.mercado_pago_payment_id || undefined,
+          createdAt: row.created_at,
+        }));
+
+        const invoiceMap = new Map<string, Invoice>();
+        for (const i of dbInvoices) invoiceMap.set(i.id, i);
+        for (const i of invoices) {
+          if (!invoiceMap.has(i.id)) {
+            invoiceMap.set(i.id, i);
+            await syncInvoiceToMysql(i);
+          }
+        }
+        invoices = Array.from(invoiceMap.values());
+      }
+
+      // Mercado Pago Config
+      const [mpRows]: any = await pool.query("SELECT * FROM mercado_pago_config WHERE id = 'default'");
+      if (mpRows && mpRows.length > 0) {
+        const row = mpRows[0];
+        if (row.access_token) {
+          mpConfig = {
+            accessToken: row.access_token || '',
+            publicKey: row.public_key || '',
+            webhookSecret: row.webhook_secret || '',
+            isSandbox: Boolean(row.is_sandbox),
+            autoApproveSimulated: Boolean(row.auto_approve_simulated),
+          };
+        }
+      }
+
+      // 4. Save consolidated merge back to local JSON file
       saveToLocalFile();
     } catch (err: any) {
       console.error('[MySQL Full Two-Way Sync Error]', err.message || err);
     }
-  }
-
-  // Automatic Schema Verification & Migration Strategy for MySQL
-  async function verifyAndMigrateSchema(activePool: any, databaseName: string) {
-    if (!activePool) return;
-    console.log(`[Schema Verifier] Verificando e migrando estrutura de tabelas e colunas no banco '${databaseName}'...`);
-
-    const requiredTables: Record<string, { createSql: string; columns: Record<string, string> }> = {
-      license_plates: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`license_plates\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`camera_id\` VARCHAR(64) NULL,
-          \`camera_name\` VARCHAR(255) NULL,
-          \`city\` VARCHAR(100) NULL,
-          \`state_uf\` VARCHAR(20) NULL,
-          \`plate_number\` VARCHAR(50) NOT NULL,
-          \`vehicle_type\` VARCHAR(50) DEFAULT 'Carro',
-          \`vehicle_color\` VARCHAR(50) NULL,
-          \`confidence\` INT DEFAULT 95,
-          \`snapshot_url\` TEXT NULL,
-          \`timestamp\` VARCHAR(100) NULL,
-          \`lat\` DOUBLE NULL,
-          \`lng\` DOUBLE NULL,
-          \`is_stolen_or_wanted\` TINYINT(1) DEFAULT 0,
-          \`notes\` TEXT NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          camera_id: 'VARCHAR(64) NULL',
-          camera_name: 'VARCHAR(255) NULL',
-          city: 'VARCHAR(100) NULL',
-          state_uf: 'VARCHAR(20) NULL',
-          plate_number: 'VARCHAR(50) NOT NULL',
-          vehicle_type: 'VARCHAR(50) DEFAULT "Carro"',
-          vehicle_color: 'VARCHAR(50) NULL',
-          confidence: 'INT DEFAULT 95',
-          snapshot_url: 'TEXT NULL',
-          timestamp: 'VARCHAR(100) NULL',
-          lat: 'DOUBLE NULL',
-          lng: 'DOUBLE NULL',
-          is_stolen_or_wanted: 'TINYINT(1) DEFAULT 0',
-          notes: 'TEXT NULL',
-        }
-      },
-      cameras: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`cameras\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`location\` TEXT NULL,
-          \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
-          \`rtsp_url\` TEXT NULL,
-          \`rtmp_url\` TEXT NULL,
-          \`stream_key\` VARCHAR(100) NULL,
-          \`rtmp_server_url\` TEXT NULL,
-          \`full_rtmp_url\` TEXT NULL,
-          \`state_uf\` VARCHAR(20) NULL,
-          \`city\` VARCHAR(100) NULL,
-          \`status\` VARCHAR(50) DEFAULT 'ONLINE',
-          \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
-          \`encryption_key_hash\` TEXT NULL,
-          \`fps\` INT DEFAULT 30,
-          \`resolution\` VARCHAR(50) DEFAULT '1080p',
-          \`storage_used_gb\` DOUBLE DEFAULT 0.1,
-          \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
-          \`motion_sensitivity\` INT DEFAULT 7,
-          \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
-          \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
-          \`lat\` DOUBLE NULL,
-          \`lng\` DOUBLE NULL,
-          \`thumbnail_url\` TEXT NULL,
-          \`created_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          name: 'VARCHAR(255) NOT NULL',
-          location: 'TEXT NULL',
-          protocol: 'VARCHAR(50) DEFAULT "RTSP"',
-          rtsp_url: 'TEXT NULL',
-          rtmp_url: 'TEXT NULL',
-          stream_key: 'VARCHAR(100) NULL',
-          rtmp_server_url: 'TEXT NULL',
-          full_rtmp_url: 'TEXT NULL',
-          state_uf: 'VARCHAR(20) NULL',
-          city: 'VARCHAR(100) NULL',
-          status: 'VARCHAR(50) DEFAULT "ONLINE"',
-          is_e2ee_encrypted: 'TINYINT(1) DEFAULT 1',
-          encryption_key_hash: 'TEXT NULL',
-          fps: 'INT DEFAULT 30',
-          resolution: 'VARCHAR(50) DEFAULT "1080p"',
-          storage_used_gb: 'DOUBLE DEFAULT 0.1',
-          cloud_recordings_active: 'TINYINT(1) DEFAULT 1',
-          motion_sensitivity: 'INT DEFAULT 7',
-          ai_detection_enabled: 'TINYINT(1) DEFAULT 1',
-          two_way_audio_enabled: 'TINYINT(1) DEFAULT 1',
-          lat: 'DOUBLE NULL',
-          lng: 'DOUBLE NULL',
-          thumbnail_url: 'TEXT NULL',
-          created_at: 'VARCHAR(100) NULL',
-        }
-      },
-      users: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`users\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`email\` VARCHAR(255) NOT NULL,
-          \`password_hash\` VARCHAR(255) NULL,
-          \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
-          \`phone\` VARCHAR(50) NULL,
-          \`state_uf\` VARCHAR(20) NULL,
-          \`city\` VARCHAR(100) NULL,
-          \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
-          \`custom_permissions\` JSON NULL,
-          \`allowed_camera_ids\` JSON NULL,
-          \`plan_id\` VARCHAR(64) NULL,
-          \`plan_name\` VARCHAR(255) NULL,
-          \`monthly_fee\` DOUBLE DEFAULT 0,
-          \`chosen_due_day\` INT DEFAULT 5,
-          \`financial_status\` VARCHAR(50) DEFAULT 'OK',
-          \`days_overdue\` INT DEFAULT 0,
-          \`last_active\` VARCHAR(100) DEFAULT 'Agora',
-          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          name: 'VARCHAR(255) NOT NULL',
-          email: 'VARCHAR(255) NOT NULL',
-          password_hash: 'VARCHAR(255) NULL',
-          role: 'VARCHAR(50) DEFAULT "RESIDENT"',
-          phone: 'VARCHAR(50) NULL',
-          state_uf: 'VARCHAR(20) NULL',
-          city: 'VARCHAR(100) NULL',
-          status: 'VARCHAR(50) DEFAULT "ACTIVE"',
-          custom_permissions: 'JSON NULL',
-          allowed_camera_ids: 'JSON NULL',
-          plan_id: 'VARCHAR(64) NULL',
-          plan_name: 'VARCHAR(255) NULL',
-          monthly_fee: 'DOUBLE DEFAULT 0',
-          chosen_due_day: 'INT DEFAULT 5',
-          financial_status: 'VARCHAR(50) DEFAULT "OK"',
-          days_overdue: 'INT DEFAULT 0',
-          last_active: 'VARCHAR(100) DEFAULT "Agora"',
-          created_at: 'VARCHAR(100) DEFAULT "2026-01-01"',
-        }
-      },
-      cloud_recordings: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`camera_id\` VARCHAR(64) NULL,
-          \`camera_name\` VARCHAR(255) NULL,
-          \`start_time\` VARCHAR(100) NULL,
-          \`end_time\` VARCHAR(100) NULL,
-          \`duration_sec\` INT DEFAULT 0,
-          \`file_size_mb\` DOUBLE DEFAULT 0,
-          \`stream_url\` TEXT NULL,
-          \`thumbnail_url\` TEXT NULL,
-          \`created_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          camera_id: 'VARCHAR(64) NULL',
-          camera_name: 'VARCHAR(255) NULL',
-          start_time: 'VARCHAR(100) NULL',
-          end_time: 'VARCHAR(100) NULL',
-          duration_sec: 'INT DEFAULT 0',
-          file_size_mb: 'DOUBLE DEFAULT 0',
-          stream_url: 'TEXT NULL',
-          thumbnail_url: 'TEXT NULL',
-          created_at: 'VARCHAR(100) NULL',
-        }
-      },
-      motion_alerts: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`camera_id\` VARCHAR(64) NULL,
-          \`camera_name\` VARCHAR(255) NULL,
-          \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
-          \`confidence\` INT DEFAULT 90,
-          \`snapshot_url\` TEXT NULL,
-          \`video_clip_url\` TEXT NULL,
-          \`timestamp\` VARCHAR(100) NULL,
-          \`severity\` VARCHAR(50) DEFAULT 'HIGH',
-          \`read_status\` TINYINT(1) DEFAULT 0,
-          \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
-          \`created_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          camera_id: 'VARCHAR(64) NULL',
-          camera_name: 'VARCHAR(255) NULL',
-          event_type: 'VARCHAR(50) DEFAULT "HUMAN"',
-          confidence: 'INT DEFAULT 90',
-          snapshot_url: 'TEXT NULL',
-          video_clip_url: 'TEXT NULL',
-          timestamp: 'VARCHAR(100) NULL',
-          severity: 'VARCHAR(50) DEFAULT "HIGH"',
-          read_status: 'TINYINT(1) DEFAULT 0',
-          pushed_to_mobile: 'TINYINT(1) DEFAULT 1',
-          created_at: 'VARCHAR(100) NULL',
-        }
-      },
-      activity_logs: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`activity_logs\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`user_id\` VARCHAR(64) NULL,
-          \`user_name\` VARCHAR(255) NULL,
-          \`action\` TEXT NULL,
-          \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
-          \`details\` TEXT NULL,
-          \`ip_address\` VARCHAR(50) NULL,
-          \`timestamp\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          user_id: 'VARCHAR(64) NULL',
-          user_name: 'VARCHAR(255) NULL',
-          action: 'TEXT NULL',
-          category: 'VARCHAR(50) DEFAULT "SYSTEM"',
-          details: 'TEXT NULL',
-          ip_address: 'VARCHAR(50) NULL',
-          timestamp: 'VARCHAR(100) NULL',
-        }
-      },
-      financial_plans: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`financial_plans\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`name\` VARCHAR(255) NOT NULL,
-          \`monthly_price\` DOUBLE DEFAULT 0,
-          \`cameras_included\` INT DEFAULT 4,
-          \`cloud_retention_days\` INT DEFAULT 7,
-          \`description\` TEXT NULL,
-          \`popular\` TINYINT(1) DEFAULT 0,
-          \`created_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          name: 'VARCHAR(255) NOT NULL',
-          monthly_price: 'DOUBLE DEFAULT 0',
-          cameras_included: 'INT DEFAULT 4',
-          cloud_retention_days: 'INT DEFAULT 7',
-          description: 'TEXT NULL',
-          popular: 'TINYINT(1) DEFAULT 0',
-          created_at: 'VARCHAR(100) NULL',
-        }
-      },
-      financial_invoices: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
-          \`id\` VARCHAR(64) NOT NULL,
-          \`user_id\` VARCHAR(64) NULL,
-          \`user_name\` VARCHAR(255) NULL,
-          \`user_email\` VARCHAR(255) NULL,
-          \`plan_name\` VARCHAR(255) NULL,
-          \`amount\` DOUBLE DEFAULT 0,
-          \`original_amount\` DOUBLE DEFAULT 0,
-          \`due_date\` VARCHAR(100) NULL,
-          \`payment_date\` VARCHAR(100) NULL,
-          \`status\` VARCHAR(50) DEFAULT 'PENDING',
-          \`is_pro_rata\` TINYINT(1) DEFAULT 0,
-          \`pro_rata_days\` INT DEFAULT 0,
-          \`pix_code\` TEXT NULL,
-          \`pix_qr_code_url\` TEXT NULL,
-          \`mercado_pago_payment_id\` VARCHAR(100) NULL,
-          \`created_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          user_id: 'VARCHAR(64) NULL',
-          user_name: 'VARCHAR(255) NULL',
-          user_email: 'VARCHAR(255) NULL',
-          plan_name: 'VARCHAR(255) NULL',
-          amount: 'DOUBLE DEFAULT 0',
-          original_amount: 'DOUBLE DEFAULT 0',
-          due_date: 'VARCHAR(100) NULL',
-          payment_date: 'VARCHAR(100) NULL',
-          status: 'VARCHAR(50) DEFAULT "PENDING"',
-          is_pro_rata: 'TINYINT(1) DEFAULT 0',
-          pro_rata_days: 'INT DEFAULT 0',
-          pix_code: 'TEXT NULL',
-          pix_qr_code_url: 'TEXT NULL',
-          mercado_pago_payment_id: 'VARCHAR(100) NULL',
-          created_at: 'VARCHAR(100) NULL',
-        }
-      },
-      mercado_pago_config: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`access_token\` TEXT NULL,
-          \`public_key\` TEXT NULL,
-          \`webhook_secret\` TEXT NULL,
-          \`is_sandbox\` TINYINT(1) DEFAULT 1,
-          \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
-          \`updated_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          access_token: 'TEXT NULL',
-          public_key: 'TEXT NULL',
-          webhook_secret: 'TEXT NULL',
-          is_sandbox: 'TINYINT(1) DEFAULT 1',
-          auto_approve_simulated: 'TINYINT(1) DEFAULT 1',
-          updated_at: 'VARCHAR(100) NULL',
-        }
-      },
-      backup_settings: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`backup_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`schedule\` VARCHAR(50) NULL,
-          \`destination\` VARCHAR(50) NULL,
-          \`retention_days\` INT DEFAULT 30,
-          \`encrypt_backups\` TINYINT(1) DEFAULT 1,
-          \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
-          \`last_backup_date\` VARCHAR(100) NULL,
-          \`next_backup_date\` VARCHAR(100) NULL,
-          \`status\` VARCHAR(50) NULL,
-          \`storage_path\` VARCHAR(255) NULL,
-          \`storage_limit_gb\` INT DEFAULT 100,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          schedule: 'VARCHAR(50) NULL',
-          destination: 'VARCHAR(50) NULL',
-          retention_days: 'INT DEFAULT 30',
-          encrypt_backups: 'TINYINT(1) DEFAULT 1',
-          auto_backup_enabled: 'TINYINT(1) DEFAULT 1',
-          last_backup_date: 'VARCHAR(100) NULL',
-          next_backup_date: 'VARCHAR(100) NULL',
-          status: 'VARCHAR(50) NULL',
-          storage_path: 'VARCHAR(255) NULL',
-          storage_limit_gb: 'INT DEFAULT 100',
-        }
-      },
-      notification_settings: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`notification_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`push_enabled\` TINYINT(1) DEFAULT 1,
-          \`fcm_server_key\` TEXT NULL,
-          \`telegram_bot_token\` TEXT NULL,
-          \`telegram_chat_id\` VARCHAR(100) NULL,
-          \`whatsapp_webhook_url\` TEXT NULL,
-          \`sound_alerts\` TINYINT(1) DEFAULT 1,
-          \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
-          \`quiet_hours_start\` VARCHAR(20) NULL,
-          \`quiet_hours_end\` VARCHAR(20) NULL,
-          \`alert_severities\` JSON NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          push_enabled: 'TINYINT(1) DEFAULT 1',
-          fcm_server_key: 'TEXT NULL',
-          telegram_bot_token: 'TEXT NULL',
-          telegram_chat_id: 'VARCHAR(100) NULL',
-          whatsapp_webhook_url: 'TEXT NULL',
-          sound_alerts: 'TINYINT(1) DEFAULT 1',
-          quiet_hours_enabled: 'TINYINT(1) DEFAULT 0',
-          quiet_hours_start: 'VARCHAR(20) NULL',
-          quiet_hours_end: 'VARCHAR(20) NULL',
-          alert_severities: 'JSON NULL',
-        }
-      },
-      system_settings: {
-        createSql: `CREATE TABLE IF NOT EXISTS \`system_settings\` (
-          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-          \`storage_limit_gb\` DOUBLE DEFAULT 100,
-          \`vault_unlocked\` TINYINT(1) DEFAULT 1,
-          \`passphrase_hash\` TEXT NULL,
-          \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
-          \`updated_at\` VARCHAR(100) NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
-        columns: {
-          id: 'VARCHAR(64) NOT NULL',
-          storage_limit_gb: 'DOUBLE DEFAULT 100',
-          vault_unlocked: 'TINYINT(1) DEFAULT 1',
-          passphrase_hash: 'TEXT NULL',
-          algorithm: 'VARCHAR(50) DEFAULT "AES-256-GCM"',
-          updated_at: 'VARCHAR(100) NULL',
-        }
-      },
-    };
-
-    for (const [tableName, schema] of Object.entries(requiredTables)) {
-      try {
-        await activePool.query(schema.createSql);
-        const [existingCols]: any = await activePool.query(
-          'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
-          [databaseName, tableName]
-        );
-
-        const existingColNames = new Set<string>();
-        if (Array.isArray(existingCols)) {
-          for (const row of existingCols) {
-            existingColNames.add(row.COLUMN_NAME.toLowerCase());
-          }
-        }
-
-        for (const [colName, colDef] of Object.entries(schema.columns)) {
-          if (!existingColNames.has(colName.toLowerCase())) {
-            try {
-              await activePool.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${colName}\` ${colDef}`);
-              console.log(`[Schema Verifier] Coluna '${colName}' adicionada na tabela '${tableName}'!`);
-            } catch (colErr: any) {
-              console.error(`[Schema Verifier Warning] Erro ao adicionar coluna '${colName}' na tabela '${tableName}':`, colErr.message);
-            }
-          }
-        }
-      } catch (tblErr: any) {
-        console.error(`[Schema Verifier Error] Falha ao verificar/migrar tabela '${tableName}':`, tblErr.message);
-      }
-    }
-    console.log(`[Schema Verifier] Todas as 12 tabelas e suas colunas foram VERIFICADAS E VALIDADAS no MySQL '${databaseName}'!`);
   }
 
   // Attempt MySQL Pool initialization & Sync
@@ -1954,7 +1247,6 @@ async function startServer() {
     const dbUser = process.env.DB_USER || 'itl_user';
     const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
     const dbName = process.env.DB_NAME || 'itl_cameras';
-    const dbPort = process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306;
 
     const hostsToTry = [dbHost, '127.0.0.1', 'localhost'];
     const credentials = [
@@ -1971,11 +1263,28 @@ async function startServer() {
     for (const hostCandidate of hostsToTry) {
       if (isMysqlActive) break;
       for (const cred of credentials) {
-        // Attempt 1: Direct connection to target database
         try {
+          // Step 1: Connect without database to ensure database exists
+          const rootPool = mysql.createPool({
+            host: hostCandidate,
+            user: cred.user,
+            password: cred.pass,
+            waitForConnections: true,
+            connectionLimit: 5,
+            queueLimit: 0,
+            connectTimeout: 3000,
+          });
+
+          const conn = await rootPool.getConnection();
+          await conn.ping();
+          // Create database if it does not exist
+          await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+          conn.release();
+          await rootPool.end();
+
+          // Step 2: Create pool connected to the target database
           const targetPool = mysql.createPool({
             host: hostCandidate,
-            port: dbPort,
             user: cred.user,
             password: cred.pass,
             database: dbName,
@@ -1992,57 +1301,10 @@ async function startServer() {
           pool = targetPool;
           isMysqlActive = true;
           connectedHost = hostCandidate;
-          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost}:${dbPort} (banco '${dbName}', usuário '${cred.user}')`);
+          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost} (banco '${dbName}', usuário '${cred.user}')`);
           break;
-        } catch (directErr: any) {
-          // Attempt 2: If direct connection failed, try connecting without database to create it
-          try {
-            const rootPool = mysql.createPool({
-              host: hostCandidate,
-              port: dbPort,
-              user: cred.user,
-              password: cred.pass,
-              waitForConnections: true,
-              connectionLimit: 5,
-              queueLimit: 0,
-              connectTimeout: 3000,
-            });
-
-            const conn = await rootPool.getConnection();
-            await conn.ping();
-            try {
-              await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-            } catch (createDbErr: any) {
-              console.log(`[MySQL ITL Info] Tentativa de criar banco '${dbName}': ${createDbErr.message}`);
-            }
-            conn.release();
-            await rootPool.end();
-
-            // Try targetPool once more after database creation attempt
-            const targetPool2 = mysql.createPool({
-              host: hostCandidate,
-              port: dbPort,
-              user: cred.user,
-              password: cred.pass,
-              database: dbName,
-              waitForConnections: true,
-              connectionLimit: 10,
-              queueLimit: 0,
-              connectTimeout: 3000,
-            });
-
-            const testConn2 = await targetPool2.getConnection();
-            await testConn2.ping();
-            testConn2.release();
-
-            pool = targetPool2;
-            isMysqlActive = true;
-            connectedHost = hostCandidate;
-            console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost}:${dbPort} (banco '${dbName}', usuário '${cred.user}')`);
-            break;
-          } catch (retryErr: any) {
-            // Continue trying host/credential candidates
-          }
+        } catch (err: any) {
+          // Continue trying host/credential candidates
         }
       }
     }
@@ -2054,10 +1316,242 @@ async function startServer() {
     }
 
     try {
-      // 1. Verify Database Tables & Migrate Missing Columns Automatically
-      await verifyAndMigrateSchema(pool, dbName);
+    // Create each table in isolated try-catch blocks so one failure won't prevent creating others
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`cameras\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`location\` TEXT,
+          \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
+          \`rtsp_url\` TEXT,
+          \`rtmp_url\` TEXT,
+          \`stream_key\` VARCHAR(100),
+          \`rtmp_server_url\` TEXT,
+          \`full_rtmp_url\` TEXT,
+          \`state_uf\` VARCHAR(20),
+          \`city\` VARCHAR(100),
+          \`status\` VARCHAR(50) DEFAULT 'ONLINE',
+          \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
+          \`encryption_key_hash\` TEXT,
+          \`fps\` INT DEFAULT 30,
+          \`resolution\` VARCHAR(50) DEFAULT '1080p',
+          \`storage_used_gb\` DOUBLE DEFAULT 0.1,
+          \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
+          \`motion_sensitivity\` INT DEFAULT 7,
+          \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
+          \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
+          \`lat\` DOUBLE NULL,
+          \`lng\` DOUBLE NULL,
+          \`thumbnail_url\` TEXT,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] cameras:', e.message); }
 
-      // 2. Execute complete two-way synchronization between JSON file/memory and MySQL
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`users\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`email\` VARCHAR(255) NOT NULL,
+          \`password_hash\` VARCHAR(255) NULL,
+          \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
+          \`phone\` VARCHAR(50),
+          \`state_uf\` VARCHAR(20) NULL,
+          \`city\` VARCHAR(100) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
+          \`custom_permissions\` JSON,
+          \`allowed_camera_ids\` JSON,
+          \`plan_id\` VARCHAR(64) NULL,
+          \`plan_name\` VARCHAR(255) NULL,
+          \`monthly_fee\` DOUBLE DEFAULT 0,
+          \`chosen_due_day\` INT DEFAULT 5,
+          \`financial_status\` VARCHAR(50) DEFAULT 'OK',
+          \`days_overdue\` INT DEFAULT 0,
+          \`last_active\` VARCHAR(100) DEFAULT 'Agora',
+          \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] users:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`camera_id\` VARCHAR(64),
+          \`camera_name\` VARCHAR(255),
+          \`start_time\` VARCHAR(100),
+          \`end_time\` VARCHAR(100),
+          \`duration_sec\` INT DEFAULT 0,
+          \`file_size_mb\` DOUBLE DEFAULT 0,
+          \`stream_url\` TEXT,
+          \`thumbnail_url\` TEXT,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] cloud_recordings:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`camera_id\` VARCHAR(64),
+          \`camera_name\` VARCHAR(255),
+          \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
+          \`confidence\` INT DEFAULT 90,
+          \`snapshot_url\` TEXT,
+          \`video_clip_url\` TEXT,
+          \`timestamp\` VARCHAR(100),
+          \`severity\` VARCHAR(50) DEFAULT 'HIGH',
+          \`read_status\` TINYINT(1) DEFAULT 0,
+          \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] motion_alerts:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`activity_logs\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`user_id\` VARCHAR(64),
+          \`user_name\` VARCHAR(255),
+          \`action\` TEXT,
+          \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
+          \`details\` TEXT,
+          \`ip_address\` VARCHAR(50),
+          \`timestamp\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] activity_logs:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`financial_plans\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`name\` VARCHAR(255) NOT NULL,
+          \`monthly_price\` DOUBLE DEFAULT 0,
+          \`cameras_included\` INT DEFAULT 4,
+          \`cloud_retention_days\` INT DEFAULT 7,
+          \`description\` TEXT,
+          \`popular\` TINYINT(1) DEFAULT 0,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] financial_plans:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
+          \`id\` VARCHAR(64) NOT NULL,
+          \`user_id\` VARCHAR(64),
+          \`user_name\` VARCHAR(255),
+          \`user_email\` VARCHAR(255),
+          \`plan_name\` VARCHAR(255),
+          \`amount\` DOUBLE DEFAULT 0,
+          \`original_amount\` DOUBLE DEFAULT 0,
+          \`due_date\` VARCHAR(50),
+          \`payment_date\` VARCHAR(50) NULL,
+          \`status\` VARCHAR(50) DEFAULT 'PENDING',
+          \`is_pro_rata\` TINYINT(1) DEFAULT 0,
+          \`pro_rata_days\` INT DEFAULT 0,
+          \`pix_code\` TEXT NULL,
+          \`pix_qr_code_url\` TEXT NULL,
+          \`mercado_pago_payment_id\` VARCHAR(100) NULL,
+          \`created_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] financial_invoices:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`access_token\` TEXT,
+          \`public_key\` TEXT,
+          \`webhook_secret\` TEXT,
+          \`is_sandbox\` TINYINT(1) DEFAULT 1,
+          \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
+          \`updated_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] mercado_pago_config:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`backup_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`schedule\` VARCHAR(50),
+          \`destination\` VARCHAR(50),
+          \`retention_days\` INT DEFAULT 30,
+          \`encrypt_backups\` TINYINT(1) DEFAULT 1,
+          \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
+          \`last_backup_date\` VARCHAR(100),
+          \`next_backup_date\` VARCHAR(100),
+          \`status\` VARCHAR(50),
+          \`storage_path\` VARCHAR(255),
+          \`storage_limit_gb\` INT DEFAULT 100,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] backup_settings:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`notification_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`push_enabled\` TINYINT(1) DEFAULT 1,
+          \`fcm_server_key\` TEXT,
+          \`telegram_bot_token\` TEXT,
+          \`telegram_chat_id\` VARCHAR(100),
+          \`whatsapp_webhook_url\` TEXT,
+          \`sound_alerts\` TINYINT(1) DEFAULT 1,
+          \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
+          \`quiet_hours_start\` VARCHAR(20),
+          \`quiet_hours_end\` VARCHAR(20),
+          \`alert_severities\` JSON,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] notification_settings:', e.message); }
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS \`system_settings\` (
+          \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
+          \`storage_limit_gb\` DOUBLE DEFAULT 100,
+          \`vault_unlocked\` TINYINT(1) DEFAULT 1,
+          \`passphrase_hash\` TEXT,
+          \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
+          \`updated_at\` VARCHAR(100),
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `);
+    } catch (e: any) { console.error('[MySQL Table Error] system_settings:', e.message); }
+
+      // Relax constraints & add columns dynamically if user had earlier schema versions
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_id` VARCHAR(64) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `plan_name` VARCHAR(255) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `monthly_fee` DOUBLE DEFAULT 0'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `chosen_due_day` INT DEFAULT 5'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `financial_status` VARCHAR(50) DEFAULT "OK"'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `users` ADD COLUMN `days_overdue` INT DEFAULT 0'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `thumbnail_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `rtmp_server_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `full_rtmp_url` TEXT NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `state_uf` VARCHAR(20) NULL'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `city` VARCHAR(100) NULL'); } catch (e) {}
+
+      // Execute complete initial two-way synchronization between JSON file and MySQL
       await fullTwoWaySync();
 
       console.log(`[MySQL ITL Complete Sync] Conectado e Sincronizado com SUCESSO! (${cameras.length} câmeras, ${users.length} usuários, ${plans.length} planos, ${invoices.length} faturas em '${dbName}')`);
@@ -2072,10 +1566,8 @@ async function startServer() {
   await initMysqlAndSync();
 
   // Background interval for continuous two-way sync every 10 seconds
-  setInterval(async () => {
-    if (!isMysqlActive || !pool) {
-      await initMysqlAndSync();
-    } else {
+  setInterval(() => {
+    if (isMysqlActive && pool) {
       fullTwoWaySync().catch((e) => console.error('[Background Sync Interval Warning]', e.message || e));
     }
   }, 10000);
@@ -3009,7 +2501,7 @@ async function startServer() {
     res.json(alerts);
   });
 
-  app.post('/api/alerts/trigger', async (req, res) => {
+  app.post('/api/alerts/trigger', (req, res) => {
     const { cameraId, eventType, severity } = req.body;
     const targetCam = cameras.find((c) => c.id === cameraId) || cameras[0];
     if (!targetCam) return res.status(400).json({ error: 'Nenhuma câmera cadastrada para alerta' });
@@ -3036,19 +2528,15 @@ async function startServer() {
 
     alerts.unshift(newAlert);
     saveToLocalFile();
-    await syncAlertToMysql(newAlert);
     addLog('Sistema AI ITL', `Disparo de Alerta: ${newAlert.eventType} na ${targetCam.name}`, 'SYSTEM', `Push mobile: ${newAlert.pushedToMobile ? 'Sim' : 'Não'}`);
     res.status(201).json(newAlert);
   });
 
-  app.patch('/api/alerts/:id/read', async (req, res) => {
+  app.patch('/api/alerts/:id/read', (req, res) => {
     const { id } = req.params;
     const alert = alerts.find((a) => a.id === id);
-    if (alert) {
-      alert.readStatus = true;
-      saveToLocalFile();
-      await syncAlertToMysql(alert);
-    }
+    if (alert) alert.readStatus = true;
+    saveToLocalFile();
     res.json({ success: true, alert });
   });
 
@@ -3124,7 +2612,7 @@ async function startServer() {
       process: proc,
     };
 
-    const finalizeRecording = async () => {
+    const finalizeRecording = () => {
       if (!activeRecordings.has(cam.id)) return;
       activeRecordings.delete(cam.id);
 
@@ -3164,7 +2652,6 @@ async function startServer() {
 
       recordings.unshift(newRec);
       saveToLocalFile();
-      await syncRecordingToMysql(newRec);
       addLog('ITL System', `Gravação real concluída para câmera ${cam.name} (${durationSec}s)`, 'RECORDING');
     };
 
@@ -3208,7 +2695,7 @@ async function startServer() {
     res.json({ success: true, message: `Gravação ao vivo interrompida e finalizada para ${session.cameraName}` });
   });
 
-  app.delete('/api/recordings/:id', async (req, res) => {
+  app.delete('/api/recordings/:id', (req, res) => {
     const { id } = req.params;
     deletedRecordingIds.add(id);
     const target = recordings.find((r) => r.id === id);
@@ -3226,16 +2713,15 @@ async function startServer() {
     }
     recordings = recordings.filter((r) => r.id !== id);
     saveToLocalFile();
-    await deleteRecordingFromMysql(id);
     addLog('ITL Admin', `Gravação em nuvem excluída: ${id}`, 'RECORDING');
     res.json({ success: true });
   });
 
-  app.post('/api/recordings/batch-delete', async (req, res) => {
+  app.post('/api/recordings/batch-delete', (req, res) => {
     const { ids } = req.body;
     if (Array.isArray(ids) && ids.length > 0) {
       const idSet = new Set(ids);
-      for (const id of ids) {
+      ids.forEach((id: string) => {
         deletedRecordingIds.add(id);
         const target = recordings.find((r) => r.id === id);
         if (target && target.streamUrl && target.streamUrl.startsWith('/recordings/')) {
@@ -3250,8 +2736,7 @@ async function startServer() {
             }
           }
         }
-        await deleteRecordingFromMysql(id);
-      }
+      });
       recordings = recordings.filter((r) => !idSet.has(r.id));
       saveToLocalFile();
       addLog('ITL Admin', `${ids.length} gravações em nuvem excluídas em lote`, 'RECORDING');
@@ -3321,278 +2806,6 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  // License Plate Recognition (LPR) Endpoints
-  app.get('/api/license-plates', (req, res) => {
-    let result = [...licensePlates];
-    const { plateNumber, startDate, endDate, city, stolenOnly } = req.query;
-
-    if (plateNumber && typeof plateNumber === 'string') {
-      const cleanSearch = plateNumber.trim().toUpperCase();
-      result = result.filter((p) => p.plateNumber.toUpperCase().includes(cleanSearch));
-    }
-
-    if (city && typeof city === 'string' && city !== 'ALL') {
-      result = result.filter((p) => p.city === city);
-    }
-
-    if (stolenOnly === 'true') {
-      result = result.filter((p) => p.isStolenOrWanted);
-    }
-
-    if (startDate && typeof startDate === 'string' && startDate.trim() !== '') {
-      result = result.filter((p) => p.timestamp >= startDate);
-    }
-
-    if (endDate && typeof endDate === 'string' && endDate.trim() !== '') {
-      result = result.filter((p) => p.timestamp <= endDate);
-    }
-
-    // Sort by timestamp descending
-    result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    res.json(result);
-  });
-
-  app.get('/api/license-plates/route/:plateNumber', (req, res) => {
-    const { plateNumber } = req.params;
-    const cleanPlate = plateNumber.trim().toUpperCase();
-
-    // Find all records for this vehicle ordered chronologically (oldest to newest)
-    const records = licensePlates
-      .filter((p) => p.plateNumber.toUpperCase() === cleanPlate)
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    res.json({
-      plateNumber: cleanPlate,
-      totalDetections: records.length,
-      isStolenOrWanted: stolenPlatesWatchlist.includes(cleanPlate) || records.some((r) => r.isStolenOrWanted),
-      routeSequence: records,
-    });
-  });
-
-  app.post('/api/license-plates', async (req, res) => {
-    const {
-      cameraId,
-      cameraName,
-      city,
-      stateUf,
-      plateNumber,
-      vehicleType,
-      vehicleColor,
-      confidence,
-      snapshotUrl,
-      timestamp,
-      lat,
-      lng,
-      notes,
-    } = req.body;
-
-    if (!plateNumber) {
-      return res.status(400).json({ error: 'A placa é obrigatória' });
-    }
-
-    const cleanPlate = plateNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const isStolen = stolenPlatesWatchlist.includes(cleanPlate) || req.body.isStolenOrWanted;
-
-    const matchedCam = cameras.find((c) => c.id === cameraId) || cameras[0];
-
-    const newRecord: LicensePlateRecord = {
-      id: `lpr-${Date.now()}`,
-      cameraId: matchedCam ? matchedCam.id : cameraId || 'cam-01',
-      cameraName: matchedCam ? matchedCam.name : cameraName || 'Câmera LPR',
-      city: city || (matchedCam ? matchedCam.city : 'Porto Seguro'),
-      stateUf: stateUf || (matchedCam ? matchedCam.stateUf : 'BA'),
-      plateNumber: cleanPlate,
-      vehicleType: vehicleType || 'Carro',
-      vehicleColor: vehicleColor || 'Prata',
-      confidence: confidence || Math.floor(Math.random() * 10) + 90,
-      snapshotUrl: snapshotUrl || (matchedCam ? matchedCam.thumbnailUrl : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'),
-      timestamp: timestamp || new Date().toISOString().replace('T', ' ').substring(0, 19),
-      lat: lat !== undefined ? parseFloat(lat) : (matchedCam ? matchedCam.lat : -16.4497),
-      lng: lng !== undefined ? parseFloat(lng) : (matchedCam ? matchedCam.lng : -39.0647),
-      isStolenOrWanted: isStolen,
-      notes: notes || (isStolen ? '🚨 ALERTA LPR: Veículo consta na lista de veículos roubados/restritos!' : 'Leitura LPR efetuada com sucesso.'),
-    };
-
-    licensePlates.unshift(newRecord);
-    syncLicensePlateToSqlite(newRecord);
-    saveToLocalFile();
-    await syncLicensePlateToMysql(newRecord);
-
-    if (isStolen) {
-      const alert: MotionAlert = {
-        id: `alert-lpr-${Date.now()}`,
-        cameraId: newRecord.cameraId,
-        cameraName: newRecord.cameraName,
-        eventType: 'VEHICLE',
-        confidence: newRecord.confidence,
-        snapshotUrl: newRecord.snapshotUrl,
-        timestamp: newRecord.timestamp,
-        severity: 'CRITICAL',
-        readStatus: false,
-        pushedToMobile: true,
-      };
-      alerts.unshift(alert);
-      await syncAlertToMysql(alert);
-      addLog('Sistema LPR ITL', `🚨 VEÍCULO ROUBADO DETECTADO! Placa ${cleanPlate} na ${newRecord.cameraName}`, 'SYSTEM', `Local: ${newRecord.city}/${newRecord.stateUf}`);
-    } else {
-      addLog('Sistema LPR ITL', `Leitura de placa registrada: ${cleanPlate}`, 'SYSTEM', `Câmera: ${newRecord.cameraName}`);
-    }
-
-    res.status(201).json(newRecord);
-  });
-
-  app.delete('/api/license-plates/:id', async (req, res) => {
-    const { id } = req.params;
-    licensePlates = licensePlates.filter((p) => p.id !== id);
-    deleteLicensePlateFromSqlite(id);
-    saveToLocalFile();
-    await deleteLicensePlateFromMysql(id);
-    addLog('ITL Admin', `Registro LPR excluído`, 'SYSTEM', `ID: ${id}`);
-    res.json({ success: true });
-  });
-
-  app.get('/api/license-plates/stolen-watchlist', (req, res) => {
-    res.json(stolenPlatesWatchlist);
-  });
-
-  app.post('/api/license-plates/stolen-watchlist', async (req, res) => {
-    const { plateNumber, action } = req.body;
-    if (!plateNumber) return res.status(400).json({ error: 'Placa obrigatória' });
-    const cleanPlate = plateNumber.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-    if (action === 'REMOVE') {
-      stolenPlatesWatchlist = stolenPlatesWatchlist.filter((p) => p !== cleanPlate);
-      for (const p of licensePlates) {
-        if (p.plateNumber === cleanPlate) {
-          p.isStolenOrWanted = false;
-          await syncLicensePlateToMysql(p);
-        }
-      }
-      addLog('ITL Admin', `Placa ${cleanPlate} removida da lista de veículos roubados/restritos`, 'SYSTEM');
-    } else {
-      if (!stolenPlatesWatchlist.includes(cleanPlate)) {
-        stolenPlatesWatchlist.push(cleanPlate);
-      }
-      for (const p of licensePlates) {
-        if (p.plateNumber === cleanPlate) {
-          p.isStolenOrWanted = true;
-          await syncLicensePlateToMysql(p);
-        }
-      }
-      addLog('ITL Admin', `🚨 Placa ${cleanPlate} ADICIONADA à lista de VEÍCULOS ROUBADOS/RESTRITOS`, 'SYSTEM');
-    }
-
-    saveToLocalFile();
-    res.json({ success: true, stolenPlatesWatchlist });
-  });
-
-  app.post('/api/license-plates/detect-vision', async (req, res) => {
-    const { imageBase64, imageUrl, cameraId } = req.body;
-    const matchedCam = cameras.find((c) => c.id === cameraId) || cameras[0];
-
-    let plateDetected = '';
-    let vehicleType: any = 'Carro';
-    let vehicleColor = 'Prata';
-    let confidence = 96;
-
-    // Check if Gemini API key exists for real Gemini Vision LPR
-    if (process.env.GEMINI_API_KEY && imageBase64) {
-      try {
-        const { GoogleGenAI } = await import('@google/genai');
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const cleanBase64 = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-
-        const prompt = `Analise esta imagem de câmera de trânsito/segurança e identifique a placa do veículo (padrão Mercosul ex: BRA2E19 ou antigo ex: ABC1234), tipo do veículo (Carro, Moto, Caminhão, SUV, Van, Ônibus) e a cor do veículo. Responda ESTRITAMENTE em formato JSON com as chaves: "plateNumber", "vehicleType", "vehicleColor", "confidence".`;
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } },
-                { text: prompt }
-              ]
-            }
-          ]
-        });
-
-        const textResp = response.text || '';
-        const jsonMatch = textResp.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.plateNumber) {
-            plateDetected = parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (parsed.vehicleType) vehicleType = parsed.vehicleType;
-            if (parsed.vehicleColor) vehicleColor = parsed.vehicleColor;
-            if (parsed.confidence) confidence = Number(parsed.confidence);
-          }
-        }
-      } catch (e: any) {
-        console.error('[LPR Gemini Vision Error]', e.message || e);
-      }
-    }
-
-    // High performance fallback algorithm if no vision key or image was not readable
-    if (!plateDetected) {
-      const samplePlates = ['BRA2E19', 'ABC1D23', 'KGT4021', 'PUX9876', 'MER2026', 'JHK1234'];
-      plateDetected = samplePlates[Math.floor(Math.random() * samplePlates.length)];
-      confidence = Math.floor(Math.random() * 8) + 92;
-      const colors = ['Prata', 'Preto', 'Branco', 'Cinza', 'Vermelho', 'Azul'];
-      vehicleColor = colors[Math.floor(Math.random() * colors.length)];
-    }
-
-    const isStolen = stolenPlatesWatchlist.includes(plateDetected);
-
-    const newRecord: LicensePlateRecord = {
-      id: `lpr-vision-${Date.now()}`,
-      cameraId: matchedCam ? matchedCam.id : 'cam-01',
-      cameraName: matchedCam ? matchedCam.name : 'Câmera LPR Ao Vivo',
-      city: matchedCam ? (matchedCam.city || 'Porto Seguro') : 'Porto Seguro',
-      stateUf: matchedCam ? (matchedCam.stateUf || 'BA') : 'BA',
-      plateNumber: plateDetected,
-      vehicleType,
-      vehicleColor,
-      confidence,
-      snapshotUrl: imageUrl || (matchedCam ? matchedCam.thumbnailUrl : 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800'),
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      lat: matchedCam ? matchedCam.lat : -16.4497,
-      lng: matchedCam ? matchedCam.lng : -39.0647,
-      isStolenOrWanted: isStolen,
-      notes: isStolen
-        ? '🚨 ALERTA CRÍTICO: Veículo detectado em tempo real consta como ROUBADO!'
-        : 'Reconhecimento LPR em tempo real concluído com alta precisão.',
-    };
-
-    licensePlates.unshift(newRecord);
-    syncLicensePlateToSqlite(newRecord);
-    saveToLocalFile();
-    await syncLicensePlateToMysql(newRecord);
-
-    if (isStolen) {
-      const alert: MotionAlert = {
-        id: `alert-lpr-${Date.now()}`,
-        cameraId: newRecord.cameraId,
-        cameraName: newRecord.cameraName,
-        eventType: 'VEHICLE',
-        confidence: newRecord.confidence,
-        snapshotUrl: newRecord.snapshotUrl,
-        timestamp: newRecord.timestamp,
-        severity: 'CRITICAL',
-        readStatus: false,
-        pushedToMobile: true,
-      };
-      alerts.unshift(alert);
-      await syncAlertToMysql(alert);
-      addLog('Sistema LPR Vision', `🚨 ALERTA DE VEÍCULO ROUBADO! Placa ${plateDetected} em ${newRecord.cameraName}`, 'SYSTEM');
-    } else {
-      addLog('Sistema LPR Vision', `Reconhecimento LPR: ${plateDetected} (${newRecord.vehicleType})`, 'SYSTEM');
-    }
-
-    res.json(newRecord);
-  });
-
   // Storage Limit Configuration Endpoints
   app.get('/api/storage-config', (req, res) => {
     let limit = backupConfig.storageLimitGB || 100;
@@ -3608,7 +2821,7 @@ async function startServer() {
     res.json({ storageLimitGB: limit });
   });
 
-  app.put('/api/storage-config', async (req, res) => {
+  app.put('/api/storage-config', (req, res) => {
     const { storageLimitGB } = req.body;
     const newLimit = Math.max(10, parseInt(storageLimitGB, 10) || 100);
     backupConfig.storageLimitGB = newLimit;
@@ -3618,8 +2831,6 @@ async function startServer() {
     const pruneResult = pruneRecordingsFIFO(newLimit);
 
     saveToLocalFile();
-    await syncSystemSettingsToMysql(newLimit);
-    await syncBackupConfigToMysql(backupConfig);
     addLog('ITL Admin', `Limite de armazenamento de gravações alterado para ${newLimit} GB (${pruneResult.prunedCount} fatias removidas)`, 'SYSTEM');
     res.json({
       success: true,
@@ -3717,340 +2928,6 @@ async function startServer() {
     });
   });
 
-  // Database Status & Seed Verification Endpoints
-  app.get('/api/database/status', async (req, res) => {
-    res.json({
-      isMysqlActive,
-      activeEngine: isMysqlActive ? 'MySQL 8.0 Engine' : 'SQLite 3 SQL Engine (WebAssembly)',
-      databaseName: process.env.DB_NAME || 'itl_cameras',
-      tables: {
-        license_plates: licensePlates.length,
-        cameras: cameras.length,
-        users: users.length,
-        cloud_recordings: recordings.length,
-        motion_alerts: alerts.length,
-        activity_logs: logs.length,
-        financial_plans: plans.length,
-        financial_invoices: invoices.length,
-      },
-      sampleLicensePlates: licensePlates.slice(0, 5),
-    });
-  });
-
-  app.post('/api/database/seed', async (req, res) => {
-    try {
-      if (licensePlates.length === 0) {
-        licensePlates = [...INITIAL_LICENSE_PLATES];
-      }
-      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
-      if (users.length === 0) users = [...INITIAL_USERS];
-
-      // Ensure SQLite has all tables and records
-      if (sqliteDb) {
-        licensePlates.forEach((lp) => syncLicensePlateToSqlite(lp));
-        cameras.forEach((c) => syncCameraToSqlite(c));
-        users.forEach((u) => syncUserToSqlite(u));
-      }
-
-      // If MySQL is active or can be initialized, run migration and sync
-      if (!isMysqlActive) {
-        await initMysqlAndSync();
-      }
-
-      if (isMysqlActive && pool) {
-        await verifyAndMigrateSchema(pool, process.env.DB_NAME || 'itl_cameras');
-        for (const lp of licensePlates) {
-          await syncLicensePlateToMysql(lp);
-        }
-        for (const c of cameras) {
-          await syncCameraToMysql(c);
-        }
-        for (const u of users) {
-          await syncUserToMysql(u);
-        }
-      }
-
-      saveToLocalFile();
-      addLog('ITL Admin', 'Banco de dados verificado, tabelas migradas e dados populados com sucesso', 'SYSTEM');
-
-      res.json({
-        success: true,
-        isMysqlActive,
-        activeEngine: isMysqlActive ? 'MySQL 8.0 Engine' : 'SQLite 3 SQL Engine',
-        message: `Banco de dados verificado com sucesso. Tabela 'license_plates' criada/verificada com ${licensePlates.length} registros populados.`,
-        tables: {
-          license_plates: licensePlates.length,
-          cameras: cameras.length,
-          users: users.length,
-        },
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message || 'Erro ao popular banco de dados' });
-    }
-  });
-
-  // Download SQL Dump Endpoint for Direct Import into MySQL/VPS
-  app.get('/api/database/export-sql', (req, res) => {
-    try {
-      const dbName = process.env.DB_NAME || 'itl_cameras';
-      const escapeStr = (val: string | null | undefined) => {
-        if (val === null || val === undefined) return 'NULL';
-        return `'${String(val).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-      };
-
-      let sql = `-- Script SQL Oficial de Migração e Criação de Tabelas ITL Câmeras
--- Banco de Dados Target: \`${dbName}\`
--- Gerado em: ${new Date().toISOString()}
-
-CREATE DATABASE IF NOT EXISTS \`${dbName}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE \`${dbName}\`;
-
-SET FOREIGN_KEY_CHECKS = 0;
-
--- 1. Tabela: license_plates (LPR)
-CREATE TABLE IF NOT EXISTS \`license_plates\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`camera_id\` VARCHAR(64) NULL,
-  \`camera_name\` VARCHAR(255) NULL,
-  \`city\` VARCHAR(100) NULL,
-  \`state_uf\` VARCHAR(20) NULL,
-  \`plate_number\` VARCHAR(50) NOT NULL,
-  \`vehicle_type\` VARCHAR(50) DEFAULT 'Carro',
-  \`vehicle_color\` VARCHAR(50) NULL,
-  \`confidence\` INT DEFAULT 95,
-  \`snapshot_url\` TEXT NULL,
-  \`timestamp\` VARCHAR(100) NULL,
-  \`lat\` DOUBLE NULL,
-  \`lng\` DOUBLE NULL,
-  \`is_stolen_or_wanted\` TINYINT(1) DEFAULT 0,
-  \`notes\` TEXT NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 2. Tabela: cameras
-CREATE TABLE IF NOT EXISTS \`cameras\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`name\` VARCHAR(255) NOT NULL,
-  \`location\` TEXT NULL,
-  \`protocol\` VARCHAR(50) DEFAULT 'RTSP',
-  \`rtsp_url\` TEXT NULL,
-  \`rtmp_url\` TEXT NULL,
-  \`stream_key\` VARCHAR(100) NULL,
-  \`rtmp_server_url\` TEXT NULL,
-  \`full_rtmp_url\` TEXT NULL,
-  \`state_uf\` VARCHAR(20) NULL,
-  \`city\` VARCHAR(100) NULL,
-  \`status\` VARCHAR(50) DEFAULT 'ONLINE',
-  \`is_e2ee_encrypted\` TINYINT(1) DEFAULT 1,
-  \`encryption_key_hash\` TEXT NULL,
-  \`fps\` INT DEFAULT 30,
-  \`resolution\` VARCHAR(50) DEFAULT '1080p',
-  \`storage_used_gb\` DOUBLE DEFAULT 0.1,
-  \`cloud_recordings_active\` TINYINT(1) DEFAULT 1,
-  \`motion_sensitivity\` INT DEFAULT 7,
-  \`ai_detection_enabled\` TINYINT(1) DEFAULT 1,
-  \`two_way_audio_enabled\` TINYINT(1) DEFAULT 1,
-  \`lat\` DOUBLE NULL,
-  \`lng\` DOUBLE NULL,
-  \`thumbnail_url\` TEXT NULL,
-  \`created_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 3. Tabela: users
-CREATE TABLE IF NOT EXISTS \`users\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`name\` VARCHAR(255) NOT NULL,
-  \`email\` VARCHAR(255) NOT NULL,
-  \`password_hash\` VARCHAR(255) NULL,
-  \`role\` VARCHAR(50) DEFAULT 'RESIDENT',
-  \`phone\` VARCHAR(50) NULL,
-  \`state_uf\` VARCHAR(20) NULL,
-  \`city\` VARCHAR(100) NULL,
-  \`status\` VARCHAR(50) DEFAULT 'ACTIVE',
-  \`custom_permissions\` JSON NULL,
-  \`allowed_camera_ids\` JSON NULL,
-  \`plan_id\` VARCHAR(64) NULL,
-  \`plan_name\` VARCHAR(255) NULL,
-  \`monthly_fee\` DOUBLE DEFAULT 0,
-  \`chosen_due_day\` INT DEFAULT 5,
-  \`financial_status\` VARCHAR(50) DEFAULT 'OK',
-  \`days_overdue\` INT DEFAULT 0,
-  \`last_active\` VARCHAR(100) DEFAULT 'Agora',
-  \`created_at\` VARCHAR(100) DEFAULT '2026-01-01',
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 4. Tabela: cloud_recordings
-CREATE TABLE IF NOT EXISTS \`cloud_recordings\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`camera_id\` VARCHAR(64) NULL,
-  \`camera_name\` VARCHAR(255) NULL,
-  \`start_time\` VARCHAR(100) NULL,
-  \`end_time\` VARCHAR(100) NULL,
-  \`duration_sec\` INT DEFAULT 0,
-  \`file_size_mb\` DOUBLE DEFAULT 0,
-  \`stream_url\` TEXT NULL,
-  \`thumbnail_url\` TEXT NULL,
-  \`created_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 5. Tabela: motion_alerts
-CREATE TABLE IF NOT EXISTS \`motion_alerts\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`camera_id\` VARCHAR(64) NULL,
-  \`camera_name\` VARCHAR(255) NULL,
-  \`event_type\` VARCHAR(50) DEFAULT 'HUMAN',
-  \`confidence\` INT DEFAULT 90,
-  \`snapshot_url\` TEXT NULL,
-  \`video_clip_url\` TEXT NULL,
-  \`timestamp\` VARCHAR(100) NULL,
-  \`severity\` VARCHAR(50) DEFAULT 'HIGH',
-  \`read_status\` TINYINT(1) DEFAULT 0,
-  \`pushed_to_mobile\` TINYINT(1) DEFAULT 1,
-  \`created_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 6. Tabela: activity_logs
-CREATE TABLE IF NOT EXISTS \`activity_logs\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`user_id\` VARCHAR(64) NULL,
-  \`user_name\` VARCHAR(255) NULL,
-  \`action\` TEXT NULL,
-  \`category\` VARCHAR(50) DEFAULT 'SYSTEM',
-  \`details\` TEXT NULL,
-  \`ip_address\` VARCHAR(50) NULL,
-  \`timestamp\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 7. Tabela: financial_plans
-CREATE TABLE IF NOT EXISTS \`financial_plans\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`name\` VARCHAR(255) NOT NULL,
-  \`monthly_price\` DOUBLE DEFAULT 0,
-  \`cameras_included\` INT DEFAULT 4,
-  \`cloud_retention_days\` INT DEFAULT 7,
-  \`description\` TEXT NULL,
-  \`popular\` TINYINT(1) DEFAULT 0,
-  \`created_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 8. Tabela: financial_invoices
-CREATE TABLE IF NOT EXISTS \`financial_invoices\` (
-  \`id\` VARCHAR(64) NOT NULL,
-  \`user_id\` VARCHAR(64) NULL,
-  \`user_name\` VARCHAR(255) NULL,
-  \`user_email\` VARCHAR(255) NULL,
-  \`plan_name\` VARCHAR(255) NULL,
-  \`amount\` DOUBLE DEFAULT 0,
-  \`original_amount\` DOUBLE DEFAULT 0,
-  \`due_date\` VARCHAR(100) NULL,
-  \`payment_date\` VARCHAR(100) NULL,
-  \`status\` VARCHAR(50) DEFAULT 'PENDING',
-  \`is_pro_rata\` TINYINT(1) DEFAULT 0,
-  \`pro_rata_days\` INT DEFAULT 0,
-  \`pix_code\` TEXT NULL,
-  \`pix_qr_code_url\` TEXT NULL,
-  \`mercado_pago_payment_id\` VARCHAR(100) NULL,
-  \`created_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 9. Tabela: mercado_pago_config
-CREATE TABLE IF NOT EXISTS \`mercado_pago_config\` (
-  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-  \`access_token\` TEXT NULL,
-  \`public_key\` TEXT NULL,
-  \`webhook_secret\` TEXT NULL,
-  \`is_sandbox\` TINYINT(1) DEFAULT 1,
-  \`auto_approve_simulated\` TINYINT(1) DEFAULT 1,
-  \`updated_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 10. Tabela: backup_settings
-CREATE TABLE IF NOT EXISTS \`backup_settings\` (
-  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-  \`schedule\` VARCHAR(50) NULL,
-  \`destination\` VARCHAR(50) NULL,
-  \`retention_days\` INT DEFAULT 30,
-  \`encrypt_backups\` TINYINT(1) DEFAULT 1,
-  \`auto_backup_enabled\` TINYINT(1) DEFAULT 1,
-  \`last_backup_date\` VARCHAR(100) NULL,
-  \`next_backup_date\` VARCHAR(100) NULL,
-  \`status\` VARCHAR(50) NULL,
-  \`storage_path\` VARCHAR(255) NULL,
-  \`storage_limit_gb\` INT DEFAULT 100,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 11. Tabela: notification_settings
-CREATE TABLE IF NOT EXISTS \`notification_settings\` (
-  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-  \`push_enabled\` TINYINT(1) DEFAULT 1,
-  \`fcm_server_key\` TEXT NULL,
-  \`telegram_bot_token\` TEXT NULL,
-  \`telegram_chat_id\` VARCHAR(100) NULL,
-  \`whatsapp_webhook_url\` TEXT NULL,
-  \`sound_alerts\` TINYINT(1) DEFAULT 1,
-  \`quiet_hours_enabled\` TINYINT(1) DEFAULT 0,
-  \`quiet_hours_start\` VARCHAR(20) NULL,
-  \`quiet_hours_end\` VARCHAR(20) NULL,
-  \`alert_severities\` JSON NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 12. Tabela: system_settings
-CREATE TABLE IF NOT EXISTS \`system_settings\` (
-  \`id\` VARCHAR(64) NOT NULL DEFAULT 'default',
-  \`storage_limit_gb\` DOUBLE DEFAULT 100,
-  \`vault_unlocked\` TINYINT(1) DEFAULT 1,
-  \`passphrase_hash\` TEXT NULL,
-  \`algorithm\` VARCHAR(50) DEFAULT 'AES-256-GCM',
-  \`updated_at\` VARCHAR(100) NULL,
-  PRIMARY KEY (\`id\`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- POPULAÇÃO DE DADOS (SEEDS)
-`;
-
-      // Seeds for license_plates
-      const lpList = licensePlates.length > 0 ? licensePlates : INITIAL_LICENSE_PLATES;
-      lpList.forEach((lp) => {
-        sql += `INSERT INTO \`license_plates\` (\`id\`,\`camera_id\`,\`camera_name\`,\`city\`,\`state_uf\`,\`plate_number\`,\`vehicle_type\`,\`vehicle_color\`,\`confidence\`,\`snapshot_url\`,\`timestamp\`,\`lat\`,\`lng\`,\`is_stolen_or_wanted\`,\`notes\`) VALUES (${escapeStr(lp.id)},${escapeStr(lp.cameraId)},${escapeStr(lp.cameraName)},${escapeStr(lp.city)},${escapeStr(lp.stateUf)},${escapeStr(lp.plateNumber)},${escapeStr(lp.vehicleType || 'Carro')},${escapeStr(lp.vehicleColor)},${lp.confidence || 95},${escapeStr(lp.snapshotUrl)},${escapeStr(lp.timestamp)},${lp.lat !== undefined ? lp.lat : 'NULL'},${lp.lng !== undefined ? lp.lng : 'NULL'},${lp.isStolenOrWanted ? 1 : 0},${escapeStr(lp.notes)}) ON DUPLICATE KEY UPDATE \`plate_number\`=VALUES(\`plate_number\`);\n`;
-      });
-
-      // Seeds for cameras
-      const camList = cameras.length > 0 ? cameras : INITIAL_CAMERAS;
-      camList.forEach((c) => {
-        sql += `INSERT INTO \`cameras\` (\`id\`,\`name\`,\`location\`,\`protocol\`,\`rtsp_url\`,\`rtmp_url\`,\`stream_key\`,\`rtmp_server_url\`,\`full_rtmp_url\`,\`state_uf\`,\`city\`,\`status\`,\`is_e2ee_encrypted\`,\`encryption_key_hash\`,\`fps\`,\`resolution\`,\`storage_used_gb\`,\`cloud_recordings_active\`,\`motion_sensitivity\`,\`ai_detection_enabled\`,\`two_way_audio_enabled\`,\`lat\`,\`lng\`,\`thumbnail_url\`,\`created_at\`) VALUES (${escapeStr(c.id)},${escapeStr(c.name)},${escapeStr(c.location)},${escapeStr(c.protocol || 'RTSP')},${escapeStr(c.rtspUrl)},${escapeStr(c.rtmpUrl)},${escapeStr(c.streamKey)},${escapeStr(c.rtmpServerUrl)},${escapeStr(c.fullRtmpUrl)},${escapeStr(c.stateUf)},${escapeStr(c.city)},${escapeStr(c.status || 'ONLINE')},${c.isE2EEEncrypted ? 1 : 0},${escapeStr(c.encryptionKeyHash)},${c.fps || 30},${escapeStr(c.resolution || '1080p')},${c.storageUsedGB || 0.1},${c.cloudRecordingsActive ? 1 : 0},${c.motionSensitivity || 7},${c.aiDetectionEnabled ? 1 : 0},${c.twoWayAudioEnabled ? 1 : 0},${c.lat || -17.0397},${c.lng || -39.5312},${escapeStr(c.thumbnailUrl)},${escapeStr(c.createdAt || '2026-01-01')}) ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`), \`rtsp_url\`=VALUES(\`rtsp_url\`), \`location\`=VALUES(\`location\`);\n`;
-      });
-
-      // Seeds for users
-      const userList = users.length > 0 ? users : INITIAL_USERS;
-      userList.forEach((u) => {
-        sql += `INSERT INTO \`users\` (\`id\`,\`name\`,\`email\`,\`password_hash\`,\`role\`,\`phone\`,\`state_uf\`,\`city\`,\`status\`,\`custom_permissions\`,\`allowed_camera_ids\`,\`plan_id\`,\`plan_name\`,\`monthly_fee\`,\`chosen_due_day\`,\`financial_status\`,\`days_overdue\`,\`last_active\`,\`created_at\`) VALUES (${escapeStr(u.id)},${escapeStr(u.name)},${escapeStr(u.email)},'$2b$10$itlpasswordhash2026',${escapeStr(u.role || 'RESIDENT')},${escapeStr(u.phone)},${escapeStr(u.stateUf)},${escapeStr(u.city)},${escapeStr(u.status || 'ACTIVE')},${escapeStr(JSON.stringify(u.customPermissions || {}))},${escapeStr(JSON.stringify(u.allowedCameraIds || ['ALL']))},${escapeStr(u.planId)},${escapeStr(u.planName)},${u.monthlyFee || 0},${u.chosenDueDay || 5},${escapeStr(u.financialStatus || 'OK')},${u.daysOverdue || 0},${escapeStr(u.lastActive || 'Agora')},${escapeStr(u.createdAt || '2026-01-01')}) ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`);\n`;
-      });
-
-      // Seeds for financial_plans
-      INITIAL_PLANS.forEach((p) => {
-        sql += `INSERT INTO \`financial_plans\` (\`id\`,\`name\`,\`monthly_price\`,\`cameras_included\`,\`cloud_retention_days\`,\`description\`,\`popular\`,\`created_at\`) VALUES (${escapeStr(p.id)},${escapeStr(p.name)},${p.monthlyPrice || 0},${p.camerasIncluded || 4},${p.cloudRetentionDays || 7},${escapeStr(p.description)},${p.popular ? 1 : 0},'2026-01-01') ON DUPLICATE KEY UPDATE \`name\`=VALUES(\`name\`);\n`;
-      });
-
-      sql += `\nSET FOREIGN_KEY_CHECKS = 1;\n-- Fim do Script SQL ITL Câmeras\n`;
-
-      res.setHeader('Content-Type', 'text/plain');
-      res.setHeader('Content-Disposition', `attachment; filename=itl_cameras_setup.sql`);
-      res.send(sql);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Erro ao gerar DUMP SQL' });
-    }
-  });
-
   // Logs
   app.get('/api/logs', (req, res) => {
     res.json(logs);
@@ -4061,26 +2938,23 @@ CREATE TABLE IF NOT EXISTS \`system_settings\` (
     res.json(backupConfig);
   });
 
-  app.post('/api/backup/trigger', async (req, res) => {
+  app.post('/api/backup/trigger', (req, res) => {
     backupConfig.status = 'RUNNING';
 
-    setTimeout(async () => {
+    setTimeout(() => {
       backupConfig.status = 'COMPLETED';
       backupConfig.lastBackupDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
       saveToLocalFile();
-      await syncBackupConfigToMysql(backupConfig);
       addLog('ITL Admin', 'Backup Manual em Nuvem/VPS executado com sucesso', 'BACKUP', 'Arquivo .tar.gz de imagens e banco SQL gerado');
     }, 2000);
 
     saveToLocalFile();
-    await syncBackupConfigToMysql(backupConfig);
     res.json({ message: 'Backup manual iniciado em segundo plano', config: backupConfig });
   });
 
-  app.put('/api/backup', async (req, res) => {
+  app.put('/api/backup', (req, res) => {
     backupConfig = { ...backupConfig, ...req.body };
     saveToLocalFile();
-    await syncBackupConfigToMysql(backupConfig);
     addLog('ITL Admin', 'Configurações de backup semanal alteradas', 'BACKUP');
     res.json(backupConfig);
   });
@@ -4090,10 +2964,9 @@ CREATE TABLE IF NOT EXISTS \`system_settings\` (
     res.json(notificationConfig);
   });
 
-  app.put('/api/notifications', async (req, res) => {
+  app.put('/api/notifications', (req, res) => {
     notificationConfig = { ...notificationConfig, ...req.body };
     saveToLocalFile();
-    await syncNotificationConfigToMysql(notificationConfig);
     addLog('ITL Admin', 'Configurações de Notificações Push Inteligentes atualizadas', 'SYSTEM');
     res.json(notificationConfig);
   });

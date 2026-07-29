@@ -18,8 +18,6 @@ import { FinancialManagement } from './components/FinancialManagement';
 import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
 import { FinancialAlertBanner } from './components/FinancialAlertBanner';
 import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
-import { DvrMatrixView } from './components/DvrMatrixView';
-import { LicensePlateRecognition } from './components/LicensePlateRecognition';
 
 import {
   Camera,
@@ -518,9 +516,6 @@ export default function App() {
           <button onClick={() => setActiveTab('live-grid')} className={`p-1.5 flex flex-col items-center ${activeTab === 'live-grid' ? 'text-emerald-400 font-bold' : ''}`}>
             Câmeras
           </button>
-          <button onClick={() => setActiveTab('dvr-matrix')} className={`p-1.5 flex flex-col items-center ${activeTab === 'dvr-matrix' ? 'text-emerald-400 font-bold' : ''}`}>
-            DVR
-          </button>
           <button onClick={() => setActiveTab('camera-map')} className={`p-1.5 flex flex-col items-center ${activeTab === 'camera-map' ? 'text-emerald-400 font-bold' : ''}`}>
             Mapa
           </button>
@@ -550,15 +545,6 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'dvr-matrix' && (
-            <DvrMatrixView
-              cameras={cameras}
-              activeUser={activeUser}
-              onSelectCamera={setInspectingCamera}
-              onTriggerTestAlert={triggerMotionAlert}
-            />
-          )}
-
           {activeTab === 'camera-map' && (
             <CameraMap cameras={cameras} onSelectCamera={setInspectingCamera} isLoggedIn={isLoggedIn} currentUser={activeUser} />
           )}
@@ -581,13 +567,6 @@ export default function App() {
               onDeleteRecordingsBatch={handleDeleteRecordingsBatch}
               isVaultUnlocked={e2eeSettings.isVaultUnlocked}
               onUnlockVault={() => setIsE2EEModalOpen(true)}
-            />
-          )}
-
-          {activeTab === 'license-plates' && (
-            <LicensePlateRecognition
-              cameras={cameras}
-              onTriggerAlert={(camId, eventType, severity) => triggerMotionAlert(camId, eventType as any, severity)}
             />
           )}
 

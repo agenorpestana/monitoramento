@@ -108,13 +108,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     setRetryCount(0);
   }, [camera.id, camera.videoStreamUrl, camera.rtspUrl, camera.rtmpUrl, camera.fullRtmpUrl, camera.protocol, camera.isLiveWebcam]);
 
-  // Fullscreen event listener with instant stream re-connection to prevent frozen frames
+  // Fullscreen event listener
   useEffect(() => {
     const handleFullscreenChange = () => {
-      const activeFs = !!document.fullscreenElement;
-      setIsFullscreen(activeFs);
-      // Force immediate stream reload so stream never freezes when entering or leaving fullscreen
-      setRetryCount((prev) => prev + 1);
+      setIsFullscreen(!!document.fullscreenElement);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -184,35 +181,8 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       setConnectionState('LOADING');
       return;
     }
-    // Auto retry MJPEG stream instead of going permanent offline immediately
-    console.log(`[Stream Player] Conexão oscilou para ${camera.name}. Tentando reconectar automaticamente em 2s...`);
-    setConnectionState('LOADING');
-    setTimeout(() => {
-      setRetryCount((prev) => prev + 1);
-    }, 2000);
+    setConnectionState('OFFLINE');
   };
-
-  // Watchdog: Automatic silent stream refresh every 60 seconds to prevent browser HTTP socket freezing (Paused during Fullscreen)
-  useEffect(() => {
-    const heartbeatInterval = setInterval(() => {
-      if (document.fullscreenElement) return; // Do not interrupt stream while viewing in fullscreen
-      console.log(`[Stream Watchdog] Auto-refresh de 60s executado para câmera ${camera.name}`);
-      setRetryCount((prev) => prev + 1);
-    }, 60000);
-
-    return () => clearInterval(heartbeatInterval);
-  }, [camera.name]);
-
-  // Safety timer: If stream stays in LOADING for more than 6 seconds, force auto-reconnect
-  useEffect(() => {
-    if (connectionState === 'LOADING') {
-      const timeout = setTimeout(() => {
-        console.log(`[Stream Watchdog] Timeout na conexão de ${camera.name}. Forçando reconexão do fluxo...`);
-        setRetryCount((prev) => prev + 1);
-      }, 6000);
-      return () => clearTimeout(timeout);
-    }
-  }, [connectionState, camera.name]);
 
   const handleVideoCanPlay = () => {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);

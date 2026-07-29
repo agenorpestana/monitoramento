@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Database,
   Calendar,
@@ -11,9 +11,6 @@ import {
   Lock,
   Server,
   Cloud,
-  Check,
-  AlertCircle,
-  Car,
 } from 'lucide-react';
 import { BackupConfig, User } from '../types';
 
@@ -32,54 +29,6 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
 }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [backupSuccess, setBackupSuccess] = useState(false);
-
-  const [dbStatus, setDbStatus] = useState<{
-    isMysqlActive: boolean;
-    activeEngine: string;
-    databaseName: string;
-    tables: {
-      license_plates: number;
-      cameras: number;
-      users: number;
-      cloud_recordings: number;
-    };
-  } | null>(null);
-
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [seedMessage, setSeedMessage] = useState<string | null>(null);
-
-  const fetchDbStatus = async () => {
-    try {
-      const res = await fetch('/api/database/status');
-      if (res.ok) {
-        const data = await res.json();
-        setDbStatus(data);
-      }
-    } catch (e) {}
-  };
-
-  useEffect(() => {
-    fetchDbStatus();
-  }, []);
-
-  const handleSeedDatabase = async () => {
-    setIsSeeding(true);
-    setSeedMessage(null);
-    try {
-      const res = await fetch('/api/database/seed', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setSeedMessage(data.message);
-        await fetchDbStatus();
-      } else {
-        setSeedMessage(data.error || 'Erro ao sincronizar banco de dados');
-      }
-    } catch (e: any) {
-      setSeedMessage('Falha na requisição ao servidor');
-    } finally {
-      setIsSeeding(false);
-    }
-  };
 
   const handleManualBackup = () => {
     setIsRunning(true);
@@ -144,95 +93,6 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
           </div>
         </div>
       )}
-
-      {/* Database Inspector & Schema Sync Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-          <div className="flex items-center space-x-2">
-            <Database className="w-5 h-5 text-cyan-400" />
-            <div>
-              <h3 className="text-sm font-bold text-slate-100">
-                Inspeção & Sincronização do Banco de Dados ({dbStatus?.activeEngine || 'SQL Engine'})
-              </h3>
-              <p className="text-xs text-slate-400">
-                Gerenciador de tabelas SQL, migração de esquemas e verificação da tabela <code className="text-cyan-300 font-mono">license_plates</code>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <a
-              href="/api/database/export-sql"
-              download="itl_cameras_setup.sql"
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow-lg shadow-emerald-600/20"
-              title="Baixar Script SQL (.sql) com a estrutura completa e dados para importar diretamente no MySQL"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Baixar Script SQL (.sql)</span>
-            </a>
-
-            <button
-              onClick={handleSeedDatabase}
-              disabled={isSeeding}
-              className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center space-x-2 transition shadow-lg shadow-cyan-600/20"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />
-              <span>{isSeeding ? 'Verificando & Populando...' : 'Verificar e Popular Tabelas MySQL'}</span>
-            </button>
-          </div>
-        </div>
-
-        {seedMessage && (
-          <div className="p-3 bg-cyan-950/60 border border-cyan-500/40 rounded-xl text-xs text-cyan-200 flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-            <span>{seedMessage}</span>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col space-y-1">
-            <span className="text-slate-400 font-medium flex items-center gap-1.5">
-              <Car className="w-3.5 h-3.5 text-amber-400" /> Tabela license_plates
-            </span>
-            <span className="text-lg font-bold text-slate-100">
-              {dbStatus?.tables?.license_plates !== undefined ? dbStatus.tables.license_plates : '6'} registros
-            </span>
-            <span className="text-[10px] text-emerald-400 font-mono">Status: Criada & Ativa</span>
-          </div>
-
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col space-y-1">
-            <span className="text-slate-400 font-medium flex items-center gap-1.5">
-              <Server className="w-3.5 h-3.5 text-cyan-400" /> Tabela cameras
-            </span>
-            <span className="text-lg font-bold text-slate-100">
-              {dbStatus?.tables?.cameras !== undefined ? dbStatus.tables.cameras : '4'} câmeras
-            </span>
-            <span className="text-[10px] text-emerald-400 font-mono">Status: Criada & Ativa</span>
-          </div>
-
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col space-y-1">
-            <span className="text-slate-400 font-medium flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> Tabela users
-            </span>
-            <span className="text-lg font-bold text-slate-100">
-              {dbStatus?.tables?.users !== undefined ? dbStatus.tables.users : '3'} usuários
-            </span>
-            <span className="text-[10px] text-emerald-400 font-mono">Status: Criada & Ativa</span>
-          </div>
-
-          <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex flex-col space-y-1">
-            <span className="text-slate-400 font-medium flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-emerald-400" /> Motor Ativo
-            </span>
-            <span className="text-xs font-bold text-emerald-400 truncate">
-              {dbStatus?.isMysqlActive ? 'MySQL 8.0' : 'SQLite 3 (Ativo)'}
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono">
-              DB: {dbStatus?.databaseName || 'itl_cameras'}
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* Configuration Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

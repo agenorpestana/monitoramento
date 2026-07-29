@@ -598,9 +598,6 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   crossOrigin="anonymous"
                   playsInline
                   autoPlay={isPlaying}
-                  onError={(e) => {
-                    console.warn('[Cloud Recordings] Fallback ao carregar vídeo da gravação.');
-                  }}
                   onTimeUpdate={(e) => {
                     setCurrentTime(Math.floor(e.currentTarget.currentTime));
                   }}
