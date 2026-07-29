@@ -3107,13 +3107,13 @@ async function startServer() {
                 role: 'user',
                 parts: [
                   {
-                    text: `Analise esta imagem da câmera de segurança para LPR (Reconhecimento de Placas de Veículos).
-1. Identifique os caracteres da placa do veículo no padrão Mercosul (ex: BRA2E19) ou antigo do Brasil (ex: ABC1234). Se não houver veículo ou a placa não estiver legível, responda "NENHUMA".
-2. Identifique o tipo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário).
-3. Identifique a cor do veículo.
+                    text: `Você é um sistema de Inteligência Artificial especialista em LPR (Automatic License Plate Recognition) para Câmeras de Segurança.
+Examine cuidadosamente toda a imagem fornecida (inclusive veículos em garagens, estacionamentos, ruas, caminhonetes, carros, motos).
+Localize a placa de licença veicular (Mercosul ou padrão brasileiro tradicional de 7 caracteres, por exemplo PKO4A53, PKO-4A53, BRA2E19, ABC1234).
+Atenção: A placa pode estar localizada na traseira ou dianteira do veículo, logo abaixo do para-choque ou no suporte de placa. Leia com atenção todos os 7 caracteres legíveis.
 
-Responda estritamente em formato JSON puro sem tags markdown:
-{"plate": "BRA2E19", "type": "Carro", "color": "Prata"}`
+Responda ESTRITAMENTE em formato JSON puro sem formatação markdown:
+{"plate": "PKO4A53", "type": "Utilitário", "color": "Bege"}`
                   },
                   { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
                 ],
@@ -3126,12 +3126,19 @@ Responda estritamente em formato JSON puro sem tags markdown:
           try {
             parsed = JSON.parse(cleanedJson);
           } catch (e) {
-            const plateMatch = textRes.toUpperCase().match(/[A-Z]{3}[0-9][A-Z0-9][0-9]{2}/) || textRes.toUpperCase().match(/[A-Z]{3}[0-9]{4}/);
-            if (plateMatch) parsed.plate = plateMatch[0];
+            console.warn('[LPR OCR] JSON Parse Fallback:', textRes);
           }
 
-          if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA' && parsed.plate.length >= 6) {
-            rawPlate = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          let extracted = parsed.plate || '';
+          if (!extracted || extracted.toUpperCase() === 'NENHUMA') {
+            const match = textRes.toUpperCase().match(/[A-Z]{3}[0-9][A-Z0-9][0-9]{2}/) || textRes.toUpperCase().match(/[A-Z]{3}[0-9]{4}/);
+            if (match) {
+              extracted = match[0];
+            }
+          }
+
+          if (extracted && extracted.toUpperCase() !== 'NENHUMA' && extracted.length >= 6) {
+            rawPlate = extracted.toUpperCase().replace(/[^A-Z0-9]/g, '');
             if (parsed.type) detectedType = parsed.type;
             if (parsed.color) detectedColor = parsed.color;
           }

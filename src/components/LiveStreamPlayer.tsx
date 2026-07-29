@@ -345,6 +345,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             <img
               src={mjpegUrl}
               alt={camera.name}
+              crossOrigin="anonymous"
               onLoad={() => setConnectionState('ONLINE')}
               onError={handleVideoError}
               className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
@@ -358,6 +359,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
               autoPlay
               playsInline
               muted={isMuted}
+              crossOrigin="anonymous"
               onCanPlay={handleVideoCanPlay}
               onError={handleVideoError}
               className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
@@ -374,6 +376,7 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
             autoPlay
             playsInline
             muted={isMuted}
+            crossOrigin="anonymous"
             className={`w-full h-full ${isFullscreen ? 'object-contain max-h-screen' : 'object-cover'} transition duration-300 ${
               connectionState === 'ONLINE' ? 'opacity-100' : 'opacity-0'
             }`}

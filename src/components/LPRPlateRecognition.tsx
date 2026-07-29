@@ -144,16 +144,40 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
     try {
       let imagePayload = imageBase64Data;
 
-      // Draw bounding box simulation on canvas if video/webcam is active
-      if (!imagePayload && videoRef.current && canvasRef.current) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          imagePayload = canvas.toDataURL('image/jpeg', 0.85);
+      // Extract live camera frame from player container if no explicit upload was provided
+      if (!imagePayload) {
+        const container = document.getElementById('lpr-player-container');
+        if (container) {
+          const imgEl = container.querySelector<HTMLImageElement>('img');
+          const videoEl = container.querySelector<HTMLVideoElement>('video');
+
+          if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = imgEl.naturalWidth;
+              canvas.height = imgEl.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(imgEl, 0, 0);
+                imagePayload = canvas.toDataURL('image/jpeg', 0.92);
+              }
+            } catch (e) {
+              console.warn('Canvas capture error from img:', e);
+            }
+          } else if (videoEl && videoEl.readyState >= 2) {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = videoEl.videoWidth || 1280;
+              canvas.height = videoEl.videoHeight || 720;
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(videoEl, 0, 0);
+                imagePayload = canvas.toDataURL('image/jpeg', 0.92);
+              }
+            } catch (e) {
+              console.warn('Canvas capture error from video:', e);
+            }
+          }
         }
       }
 
@@ -496,7 +520,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               {/* Video / Canvas Stage */}
               <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
                 {cameras.length > 0 && selectedCam ? (
-                  <div className="w-full h-full relative">
+                  <div id="lpr-player-container" className="w-full h-full relative">
                     <LiveStreamPlayer
                       key={selectedCam.id}
                       camera={selectedCam}
