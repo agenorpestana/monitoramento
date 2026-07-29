@@ -154,14 +154,14 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
           if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
             try {
               const canvas = document.createElement('canvas');
-              const maxW = 1280;
+              const maxW = 1920;
               const scale = Math.min(1, maxW / imgEl.naturalWidth);
               canvas.width = Math.round(imgEl.naturalWidth * scale);
               canvas.height = Math.round(imgEl.naturalHeight * scale);
               const ctx = canvas.getContext('2d');
               if (ctx) {
                 ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
-                imagePayload = canvas.toDataURL('image/jpeg', 0.88);
+                imagePayload = canvas.toDataURL('image/jpeg', 0.92);
               }
             } catch (e) {
               console.warn('Canvas capture error from img (CORS/Tainted):', e);
@@ -172,14 +172,14 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               const canvas = document.createElement('canvas');
               const origW = videoEl.videoWidth || 1280;
               const origH = videoEl.videoHeight || 720;
-              const maxW = 1280;
+              const maxW = 1920;
               const scale = Math.min(1, maxW / origW);
               canvas.width = Math.round(origW * scale);
               canvas.height = Math.round(origH * scale);
               const ctx = canvas.getContext('2d');
               if (ctx) {
                 ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                imagePayload = canvas.toDataURL('image/jpeg', 0.88);
+                imagePayload = canvas.toDataURL('image/jpeg', 0.92);
               }
             } catch (e) {
               console.warn('Canvas capture error from video:', e);

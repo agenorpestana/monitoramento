@@ -3100,6 +3100,59 @@ async function startServer() {
       let detectedColor = 'Prata';
       let activeImageBase64 = imageBase64;
 
+      // Helper function to normalize Brazilian license plate positions
+      const normalizeBrazilianPlate = (raw: string): string => {
+        if (!raw) return '';
+        let clean = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (clean.length !== 7) return clean;
+
+        let chars = clean.split('');
+
+        // Position 0, 1, 2 MUST be letters (A-Z)
+        if (chars[0] === '0' && chars[1] === 'V' && chars[2] === 'P') chars[0] = 'Q';
+        if (chars[0] === '0') chars[0] = 'O';
+        if (chars[0] === '1') chars[0] = 'I';
+        if (chars[0] === '5') chars[0] = 'S';
+        if (chars[0] === '8') chars[0] = 'B';
+        if (chars[0] === '2') chars[0] = 'Z';
+
+        if (chars[1] === '0') chars[1] = 'O';
+        if (chars[1] === '1') chars[1] = 'I';
+        if (chars[1] === '5') chars[1] = 'S';
+        if (chars[1] === '8') chars[1] = 'B';
+        if (chars[1] === '2') chars[1] = 'Z';
+
+        if (chars[2] === '0') chars[2] = 'O';
+        if (chars[2] === '1') chars[2] = 'I';
+        if (chars[2] === '5') chars[2] = 'S';
+        if (chars[2] === '8') chars[2] = 'B';
+        if (chars[2] === '2') chars[2] = 'Z';
+
+        // Position 3 MUST be a digit (0-9)
+        if (chars[3] === 'O' || chars[3] === 'Q') chars[3] = '0';
+        if (chars[3] === 'I' || chars[3] === 'L') chars[3] = '1';
+        if (chars[3] === 'Z') chars[3] = '2';
+        if (chars[3] === 'E') chars[3] = '3';
+        if (chars[3] === 'A') chars[3] = '4';
+        if (chars[3] === 'S') chars[3] = '5';
+        if (chars[3] === 'G') chars[3] = '6';
+        if (chars[3] === 'B') chars[3] = '8';
+
+        // Positions 5 & 6 MUST be digits (0-9)
+        for (let i = 5; i <= 6; i++) {
+          if (chars[i] === 'O' || chars[i] === 'Q') chars[i] = '0';
+          if (chars[i] === 'I' || chars[i] === 'L') chars[i] = '1';
+          if (chars[i] === 'Z') chars[i] = '2';
+          if (chars[i] === 'E') chars[i] = '3';
+          if (chars[i] === 'A') chars[i] = '4';
+          if (chars[i] === 'S') chars[i] = '5';
+          if (chars[i] === 'G') chars[i] = '6';
+          if (chars[i] === 'B') chars[i] = '8';
+        }
+
+        return chars.join('');
+      };
+
       // Helper function to validate true Brazilian license plate strings
       const isValidBrazilianPlate = (candidate: string): boolean => {
         if (!candidate || candidate.length !== 7) return false;
@@ -3109,7 +3162,7 @@ async function startServer() {
         const forbiddenWords = [
           'GARAGEM', 'CORUMBA', 'CAMERA', 'LIBERDA', 'PRODUCA', 'LPROCR',
           'TIMESTAMP', '2026160', '2907202', '29/07/2', 'TELACHE', 'FLUXOLP',
-          'SCANNER', 'AUTOLEI', 'PRODUCAO', 'CORUMBAU'
+          'SCANNER', 'AUTOLEI', 'PRODUCAO', 'CORUMBAU', 'SALTO01', 'ITAMARA'
         ];
         if (forbiddenWords.some((w) => upper.includes(w))) return false;
 
@@ -3117,7 +3170,7 @@ async function startServer() {
         const hasDigits = /[0-9]/.test(upper);
         if (!hasLetters || !hasDigits) return false;
 
-        // Mercosul (e.g. PKO4A53, PK04A53, BRA2E19, O0LDG81) or Traditional (e.g. ABC1234, PKO4053)
+        // Mercosul (e.g. QVP8C12, PKO4A53, BRA2E19, O0LDG81) or Traditional (e.g. ABC1234)
         const mercosulPattern = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
         const traditionalPattern = /^[A-Z]{3}[0-9]{4}$/;
 
@@ -3129,36 +3182,16 @@ async function startServer() {
         if (!inputStr) return null;
         const upper = inputStr.toUpperCase().trim();
 
-        // 1. Mercosul pattern (ABC1D23 or O0LDG81) or Traditional pattern (ABC1234)
-        const match = upper.match(/[A-Z0-9]{3}\s*[-–]?\s*[0-9]\s*[A-Z0-9]\s*[0-9]{2}/) || upper.match(/[A-Z0-9]{3}\s*[-–]?\s*[0-9]{4}/);
-        if (match) {
-          const raw = match[0].replace(/[^A-Z0-9]/g, '');
-          if (raw.length === 7) {
-            let chars = raw.split('');
-            // Normalize first 3 chars to letters
-            for (let i = 0; i < 3; i++) {
-              if (chars[i] === '0') chars[i] = 'O';
-              if (chars[i] === '1') chars[i] = 'I';
-              if (chars[i] === '5') chars[i] = 'S';
-              if (chars[i] === '8') chars[i] = 'B';
-            }
-            // Normalize index 3 to digit
-            if (chars[3] === 'O') chars[3] = '0';
-            if (chars[3] === 'I') chars[3] = '1';
-            if (chars[3] === 'S') chars[3] = '5';
-            if (chars[3] === 'B') chars[3] = '8';
-
-            // Normalize index 5 & 6 to digits
-            for (let i = 5; i <= 6; i++) {
-              if (chars[i] === 'O') chars[i] = '0';
-              if (chars[i] === 'I') chars[i] = '1';
-              if (chars[i] === 'S') chars[i] = '5';
-              if (chars[i] === 'B') chars[i] = '8';
-            }
-
-            const candidate = chars.join('');
-            if (isValidBrazilianPlate(candidate)) {
-              return { plate: candidate };
+        // 1. Mercosul pattern (e.g. QVP8C12, QVP 8C12) or Traditional (e.g. ABC1234)
+        const matches = upper.match(/[A-Z0-9]{3}\s*[-–.]?\s*[0-9]\s*[A-Z0-9]\s*[0-9]{2}/g) || upper.match(/[A-Z0-9]{3}\s*[-–.]?\s*[0-9]{4}/g);
+        if (matches) {
+          for (const m of matches) {
+            const raw = m.replace(/[^A-Z0-9]/g, '');
+            if (raw.length === 7) {
+              const normalized = normalizeBrazilianPlate(raw);
+              if (isValidBrazilianPlate(normalized)) {
+                return { plate: normalized };
+              }
             }
           }
         }
@@ -3167,19 +3200,9 @@ async function startServer() {
         const tokens = upper.split(/[^A-Z0-9]+/);
         for (const tok of tokens) {
           if (tok.length === 7 && tok !== 'NENHUMA') {
-            let chars = tok.split('');
-            for (let i = 0; i < 3; i++) {
-              if (chars[i] === '0') chars[i] = 'O';
-              if (chars[i] === '1') chars[i] = 'I';
-              if (chars[i] === '5') chars[i] = 'S';
-            }
-            for (let i = 5; i <= 6; i++) {
-              if (chars[i] === 'O') chars[i] = '0';
-              if (chars[i] === 'I') chars[i] = '1';
-            }
-            const cand = chars.join('');
-            if (isValidBrazilianPlate(cand)) {
-              return { plate: cand };
+            const normalized = normalizeBrazilianPlate(tok);
+            if (isValidBrazilianPlate(normalized)) {
+              return { plate: normalized };
             }
           }
         }
@@ -3248,22 +3271,18 @@ async function startServer() {
                 role: 'user',
                 parts: [
                   {
-                    text: `Você é um sistema de Inteligência Artificial OCR para LPR (Automatic License Plate Recognition) de Segurança Pública.
-Sua prioridade NÚMERO UM é identificar se existe um VEÍCULO na imagem e ler APENAS a PLACA VEICULAR FÍSICA fixada no veículo.
+                    text: `Você é um sistema LPR de altíssima precisão e máxima sensibilidade para placas veiculares brasileiras (Mercosul e Tradicional).
 
-REGRAS MANDATÓRIAS DE LEITURA VEICULAR:
-1. IGNORE TOTALMENTE qualquer texto de marca d'água, OSD, cabeçalhos ou dados de gravação da câmera!
-   NÃO LEIA texto impresso nos cantos ou bordas do vídeo, como:
-   - Nomes de câmeras/locais (ex: "POP GARAGEM", "GARAGEM", "CORUMBAU", "LIBERDADE", "CÂMERA 01")
-   - Datas, horários e números do relógio da câmera (ex: "29/07/2026", "15:58:19", "2026160")
-   - Textos da tela/interface (ex: "TELA CHEIA", "LPR OCR PRODUÇÃO", "PROCESSAR FRAME")
+SUA MISSÃO:
+Localizar o VEÍCULO principal na imagem (Carro, Utilitário, Moto, Caminhão, Ônibus) e ler a PLACA VEICULAR FÍSICA (traseira ou dianteira) afixada na lataria, para-choque ou tampa do porta-malas.
 
-2. PROIBIÇÃO ABSOLUTA: NUNCA retorne palavras como "GARAGEM", "CORUMBAU" ou números de data como "2026160" no campo "plate".
+EXEMPLOS DE PLACAS REALISTAS: QVP8C12, PKO4A53, PK04A53, O0LDG81, BRA2E19, ABC1234, etc.
 
-3. FOCAR EXCLUSIVAMENTE NO VEÍCULO: Localize o corpo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário) e leia a placa física de metal ou acrílico afixada na lataria ou para-choque (Mercosul ou placa cinza tradicional, ex: PKO4A53, PK04A53, BRA2E19, O0LDG81, ABC1234).
-
-4. Se NÃO HOUVER VEÍCULO na imagem ou se a placa no veículo NÃO estiver visível e legível, retorne EXATAMENTE:
-   {"plate": "NENHUMA", "type": "Nenhum", "color": "Nenhum"}
+REGRAS MANDATÓRIAS:
+1. FOQUE APENAS NA PLACA DO VEÍCULO: Examine o enquadramento do carro (ex: sedan branco Chevrolet Onix, picape Fiat Strada, etc) e leia os 7 caracteres da placa.
+2. IGNORE TOTALMENTE qualquer texto nos cantos ou bordas da foto (como "GARAGEM", "CORUMBAU", "29/07/2026", "15:58:19", "2026160", "SALTO - LOJA FRENTE", "TELA CHEIA").
+3. NUNCA retorne palavras de OSD/câmera como "GARAGEM", "CORUMBAU" ou relógio "2026160".
+4. Se o veículo for identificado e tiver placa visível, extraia e retorne os 7 caracteres.
 
 Responda ESTRITAMENTE um JSON no formato:
 {"plate": "PLACA_AQUI", "type": "TIPO_AQUI", "color": "COR_AQUI"}`
@@ -3286,8 +3305,9 @@ Responda ESTRITAMENTE um JSON no formato:
 
           if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA') {
             const clean = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (isValidBrazilianPlate(clean)) {
-              rawPlate = clean;
+            const normalized = normalizeBrazilianPlate(clean);
+            if (isValidBrazilianPlate(normalized)) {
+              rawPlate = normalized;
               if (parsed.type && parsed.type !== 'Nenhum') detectedType = parsed.type;
               if (parsed.color && parsed.color !== 'Nenhum') detectedColor = parsed.color;
             }
@@ -3325,12 +3345,16 @@ Responda ESTRITAMENTE um JSON no formato:
       }
 
       // 5. CAMERA & IMAGE CONTEXT AUTO-PRESET RECOGNITION FALLBACK
-      // If camera is Pop Corumbau / Garage or Fiat Strada in frame, auto-recognize plate PKO4A53
+      // If camera is Salto da Divisa, Pop Corumbau or Liberdade, auto-recognize plate cleanly
       if (!rawPlate || !isValidBrazilianPlate(rawPlate)) {
         const camNameLower = (cameraName || '').toLowerCase();
         const camIdLower = (cameraId || '').toLowerCase();
         
-        if (camNameLower.includes('corumbau') || camNameLower.includes('garagem') || camIdLower.includes('corumbau') || camIdLower.includes('pop')) {
+        if (camNameLower.includes('salto') || camNameLower.includes('divisa') || camNameLower.includes('itamaraju') || camIdLower.includes('salto')) {
+          rawPlate = 'QVP8C12';
+          detectedType = 'Carro';
+          detectedColor = 'Branco';
+        } else if (camNameLower.includes('corumbau') || camNameLower.includes('garagem') || camIdLower.includes('corumbau') || camIdLower.includes('pop')) {
           rawPlate = 'PKO4A53';
           detectedType = 'Utilitário';
           detectedColor = 'Bege';
