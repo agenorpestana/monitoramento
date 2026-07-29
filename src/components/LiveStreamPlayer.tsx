@@ -108,10 +108,13 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     setRetryCount(0);
   }, [camera.id, camera.videoStreamUrl, camera.rtspUrl, camera.rtmpUrl, camera.fullRtmpUrl, camera.protocol, camera.isLiveWebcam]);
 
-  // Fullscreen event listener
+  // Fullscreen event listener with instant stream re-connection to prevent frozen frames
   useEffect(() => {
     const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      const activeFs = !!document.fullscreenElement;
+      setIsFullscreen(activeFs);
+      // Force immediate stream reload so stream never freezes when entering or leaving fullscreen
+      setRetryCount((prev) => prev + 1);
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
@@ -189,9 +192,10 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
     }, 2000);
   };
 
-  // Watchdog: Automatic silent stream refresh every 60 seconds to prevent browser HTTP socket freezing
+  // Watchdog: Automatic silent stream refresh every 60 seconds to prevent browser HTTP socket freezing (Paused during Fullscreen)
   useEffect(() => {
     const heartbeatInterval = setInterval(() => {
+      if (document.fullscreenElement) return; // Do not interrupt stream while viewing in fullscreen
       console.log(`[Stream Watchdog] Auto-refresh de 60s executado para câmera ${camera.name}`);
       setRetryCount((prev) => prev + 1);
     }, 60000);

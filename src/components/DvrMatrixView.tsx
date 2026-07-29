@@ -21,6 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { Camera, User } from '../types';
+import { LiveStreamPlayer } from './LiveStreamPlayer';
 
 interface DvrMatrixViewProps {
   cameras: Camera[];
@@ -59,9 +60,9 @@ export const DvrMatrixView: React.FC<DvrMatrixViewProps> = ({
   // Auto-Tour / Ronda Automática state
   const [isAutoTour, setIsAutoTour] = useState<boolean>(false);
 
-  // Auto-Refresh Stream State (Default: 60s silent re-sync)
-  const [autoRefreshIntervalSec, setAutoRefreshIntervalSec] = useState<number>(60);
-  const [countdownSec, setCountdownSec] = useState<number>(60);
+  // Auto-Refresh Stream State (Default: 5 minutes / 300s silent re-sync)
+  const [autoRefreshIntervalSec, setAutoRefreshIntervalSec] = useState<number>(300);
+  const [countdownSec, setCountdownSec] = useState<number>(300);
   const [matrixRefreshKey, setMatrixRefreshKey] = useState<number>(0);
 
   useEffect(() => {
@@ -69,6 +70,9 @@ export const DvrMatrixView: React.FC<DvrMatrixViewProps> = ({
     setCountdownSec(autoRefreshIntervalSec);
 
     const timer = setInterval(() => {
+      // Pause auto-refresh if browser is in full screen mode or modal fullscreenCam is open
+      if (document.fullscreenElement || fullscreenCam) return;
+
       setCountdownSec((prev) => {
         if (prev <= 1) {
           setMatrixRefreshKey((k) => k + 1);
@@ -79,7 +83,18 @@ export const DvrMatrixView: React.FC<DvrMatrixViewProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [autoRefreshIntervalSec]);
+  }, [autoRefreshIntervalSec, fullscreenCam]);
+
+  // Unfreeze matrix streams whenever exiting full screen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setMatrixRefreshKey((k) => k + 1);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const forceRefreshMatrixStreams = () => {
     setMatrixRefreshKey((k) => k + 1);
@@ -274,16 +289,14 @@ export const DvrMatrixView: React.FC<DvrMatrixViewProps> = ({
 
         {/* Auto Refresh, Auto Tour & Pagination */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Auto-Refresh Timer Badge & Controls */}
-          <div className="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1.5 rounded-xl border border-slate-800 text-xs">
-            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${autoRefreshIntervalSec > 0 ? 'animate-spin' : ''}`} />
-            <span className="text-slate-400 hidden sm:inline font-medium">Auto-Refresh:</span>
+          {/* Auto-Refresh Timer Badge & Controls (Hidden on page as requested) */}
+          <div className="hidden">
             <select
               value={autoRefreshIntervalSec}
               onChange={(e) => setAutoRefreshIntervalSec(Number(e.target.value))}
-              className="bg-slate-900 text-emerald-400 font-bold border border-slate-700 rounded-lg px-2 py-0.5 text-xs outline-none focus:border-emerald-500 cursor-pointer"
             >
-              <option value={30}>30s</option>
+              <option value={300}>5 min (Padrão)</option>
+              <option value={600}>10 min</option>
               <option value={60}>1 min</option>
               <option value={120}>2 min</option>
               <option value={0}>Desativado</option>
@@ -522,13 +535,10 @@ export const DvrMatrixView: React.FC<DvrMatrixViewProps> = ({
 
           {/* Fullscreen Video Stream Container */}
           <div className="relative flex-1 my-4 bg-slate-950 border border-slate-800/80 rounded-3xl overflow-hidden shadow-2xl flex items-center justify-center">
-            <img
-              src={
-                fullscreenCam.thumbnailUrl ||
-                'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=1200&auto=format&fit=crop&q=80'
-              }
-              alt={fullscreenCam.name}
-              className="w-full h-full object-cover"
+            <LiveStreamPlayer
+              camera={fullscreenCam}
+              isMuted={mutedCams[fullscreenCam.id] ?? true}
+              showOverlayControls={true}
             />
 
             {/* Live Camera Overlay HUD Controls */}
