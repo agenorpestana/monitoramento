@@ -83,6 +83,33 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
   const [recordingStatusMsg, setRecordingStatusMsg] = useState<string>('');
   const [recordingError, setRecordingError] = useState<string | null>(null);
 
+  // Auto-Refresh state for Cloud Vault (Default: 60s imperceptible refresh)
+  const [autoRefreshIntervalSec, setAutoRefreshIntervalSec] = useState<number>(60);
+  const [countdownSec, setCountdownSec] = useState<number>(60);
+  const [vaultRefreshKey, setVaultRefreshKey] = useState<number>(0);
+
+  useEffect(() => {
+    if (autoRefreshIntervalSec <= 0) return;
+    setCountdownSec(autoRefreshIntervalSec);
+
+    const timer = setInterval(() => {
+      setCountdownSec((prev) => {
+        if (prev <= 1) {
+          setVaultRefreshKey((k) => k + 1);
+          return autoRefreshIntervalSec;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [autoRefreshIntervalSec]);
+
+  const forceRefreshVault = () => {
+    setVaultRefreshKey((k) => k + 1);
+    if (autoRefreshIntervalSec > 0) setCountdownSec(autoRefreshIntervalSec);
+  };
+
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Fetch storage limit from backend on mount
@@ -446,6 +473,36 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
             </span>
           </button>
 
+          {/* Auto-Refresh Timer Badge & Controls */}
+          <div className="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${autoRefreshIntervalSec > 0 ? 'animate-spin' : ''}`} />
+            <span className="text-slate-400 hidden sm:inline font-medium">Auto-Refresh:</span>
+            <select
+              value={autoRefreshIntervalSec}
+              onChange={(e) => setAutoRefreshIntervalSec(Number(e.target.value))}
+              className="bg-slate-900 text-emerald-400 font-bold border border-slate-700 rounded-lg px-2 py-0.5 text-xs outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              <option value={30}>30s</option>
+              <option value={60}>1 min (60s)</option>
+              <option value={120}>2 min</option>
+              <option value={0}>Desativado</option>
+            </select>
+            {autoRefreshIntervalSec > 0 && (
+              <span className="text-[11px] font-mono font-bold text-slate-300 ml-0.5">
+                ({countdownSec}s)
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={forceRefreshVault}
+            className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-bold flex items-center gap-1"
+            title="Recarregar Lista de Gravações Agora"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Recarregar</span>
+          </button>
+
           <button
             onClick={onUnlockVault}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 border transition ${
@@ -587,7 +644,7 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl space-y-3 p-4">
               <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
                 <video
-                  key={activeRecording.id}
+                  key={`${activeRecording.id}_${vaultRefreshKey}`}
                   ref={videoRef}
                   src={
                     activeRecording.streamUrl && activeRecording.streamUrl.endsWith('.mp4')
@@ -598,6 +655,9 @@ export const CloudRecordingsVault: React.FC<CloudRecordingsVaultProps> = ({
                   crossOrigin="anonymous"
                   playsInline
                   autoPlay={isPlaying}
+                  onError={(e) => {
+                    console.warn('[Cloud Recordings] Fallback ao carregar vídeo da gravação.');
+                  }}
                   onTimeUpdate={(e) => {
                     setCurrentTime(Math.floor(e.currentTarget.currentTime));
                   }}

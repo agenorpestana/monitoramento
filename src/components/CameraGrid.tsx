@@ -46,6 +46,34 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   const [liveTimestamps, setLiveTimestamps] = useState<Record<string, string>>({});
   const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
 
+  // Auto-Refresh Stream State (Default: 60 seconds imperceptible refresh)
+  const [autoRefreshIntervalSec, setAutoRefreshIntervalSec] = useState<number>(60);
+  const [countdownSec, setCountdownSec] = useState<number>(60);
+  const [gridRefreshKey, setGridRefreshKey] = useState<number>(0);
+
+  // Countdown timer for automatic silent stream refresh
+  useEffect(() => {
+    if (autoRefreshIntervalSec <= 0) return;
+    setCountdownSec(autoRefreshIntervalSec);
+
+    const timer = setInterval(() => {
+      setCountdownSec((prev) => {
+        if (prev <= 1) {
+          setGridRefreshKey((k) => k + 1);
+          return autoRefreshIntervalSec;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [autoRefreshIntervalSec]);
+
+  const forceRefreshAllStreams = () => {
+    setGridRefreshKey((k) => k + 1);
+    if (autoRefreshIntervalSec > 0) setCountdownSec(autoRefreshIntervalSec);
+  };
+
   // Audio stream simulator state
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
@@ -110,7 +138,37 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Auto-Refresh Timer Badge & Controls */}
+          <div className="flex items-center space-x-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800 text-xs">
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${autoRefreshIntervalSec > 0 ? 'animate-spin' : ''}`} />
+            <span className="text-slate-400 hidden lg:inline font-medium">Auto-Refresh:</span>
+            <select
+              value={autoRefreshIntervalSec}
+              onChange={(e) => setAutoRefreshIntervalSec(Number(e.target.value))}
+              className="bg-slate-900 text-emerald-400 font-bold border border-slate-700 rounded-lg px-2 py-0.5 text-xs outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              <option value={30}>30s</option>
+              <option value={60}>1 min (60s)</option>
+              <option value={120}>2 min</option>
+              <option value={0}>Desativado</option>
+            </select>
+            {autoRefreshIntervalSec > 0 && (
+              <span className="text-[11px] font-mono font-bold text-slate-300 ml-1">
+                ({countdownSec}s)
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={forceRefreshAllStreams}
+            className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-xl transition text-xs font-bold flex items-center gap-1.5"
+            title="Sincronizar e Recarregar Transmissões Agora"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Recarregar</span>
+          </button>
+
           {/* Grid Layout Switcher */}
           <span className="text-xs text-slate-400 hidden sm:inline">Visualização:</span>
           <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
@@ -168,7 +226,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
 
           return (
             <div
-              key={camera.id}
+              key={`${camera.id}_${gridRefreshKey}`}
               className={`group relative bg-slate-900 border rounded-2xl overflow-hidden shadow-lg transition-all ${
                 camera.status === 'ALERT'
                   ? 'border-rose-500 ring-2 ring-rose-500/30'

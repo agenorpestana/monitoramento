@@ -181,8 +181,34 @@ export const LiveStreamPlayer: React.FC<LiveStreamPlayerProps> = ({
       setConnectionState('LOADING');
       return;
     }
-    setConnectionState('OFFLINE');
+    // Auto retry MJPEG stream instead of going permanent offline immediately
+    console.log(`[Stream Player] Conexão oscilou para ${camera.name}. Tentando reconectar automaticamente em 2s...`);
+    setConnectionState('LOADING');
+    setTimeout(() => {
+      setRetryCount((prev) => prev + 1);
+    }, 2000);
   };
+
+  // Watchdog: Automatic silent stream refresh every 60 seconds to prevent browser HTTP socket freezing
+  useEffect(() => {
+    const heartbeatInterval = setInterval(() => {
+      console.log(`[Stream Watchdog] Auto-refresh de 60s executado para câmera ${camera.name}`);
+      setRetryCount((prev) => prev + 1);
+    }, 60000);
+
+    return () => clearInterval(heartbeatInterval);
+  }, [camera.name]);
+
+  // Safety timer: If stream stays in LOADING for more than 6 seconds, force auto-reconnect
+  useEffect(() => {
+    if (connectionState === 'LOADING') {
+      const timeout = setTimeout(() => {
+        console.log(`[Stream Watchdog] Timeout na conexão de ${camera.name}. Forçando reconexão do fluxo...`);
+        setRetryCount((prev) => prev + 1);
+      }, 6000);
+      return () => clearTimeout(timeout);
+    }
+  }, [connectionState, camera.name]);
 
   const handleVideoCanPlay = () => {
     if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current);
