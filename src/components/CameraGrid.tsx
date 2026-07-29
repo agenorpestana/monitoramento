@@ -45,6 +45,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
   const [mutedCameraIds, setMutedCameraIds] = useState<Record<string, boolean>>({});
   const [liveTimestamps, setLiveTimestamps] = useState<Record<string, string>>({});
   const [editingCamera, setEditingCamera] = useState<Camera | null>(null);
+  const [autoRefreshKey, setAutoRefreshKey] = useState<number>(0);
 
   // Audio stream simulator state
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -54,6 +55,25 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
     if (!activeUser.allowedCameraIds || activeUser.allowedCameraIds.includes('ALL')) return cameras;
     return cameras.filter((c) => activeUser.allowedCameraIds.includes(c.id));
   }, [cameras, activeUser]);
+
+  // Auto-refresh streams every 2 minutes (120,000 ms) unless full screen mode is active
+  useEffect(() => {
+    const TWO_MINUTES_MS = 2 * 60 * 1000;
+    const interval = setInterval(() => {
+      const isFullscreenActive = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isFullscreenActive) {
+        setAutoRefreshKey((prev) => prev + 1);
+      }
+    }, TWO_MINUTES_MS);
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Update timestamps every second
   useEffect(() => {
@@ -178,6 +198,7 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               {/* Camera Live Video Player */}
               <div className="w-full relative">
                 <LiveStreamPlayer
+                  key={`${camera.id}-${autoRefreshKey}`}
                   camera={camera}
                   isMuted={isMuted}
                   onSelectCamera={onSelectCamera}

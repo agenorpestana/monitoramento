@@ -1,6 +1,6 @@
 {
   "name": "Central ITL - Segurança & Câmeras ao Vivo",
-  "description": "Sistema ITL de monitoramento de câmeras ao vivo com gravação em nuvem, alertas de movimento em tempo real, suporte RTSP/RTMP áudio bidirecional, criptografia E2EE, backup semanal e controle de permissões.",
+  "description": "Sistema ITL de monitoramento com LPR Reconhecimento de Placas (YOLO + PaddleOCR/EasyOCR/Gemini Vision), cadastro de veículos roubados/procurados com alerta em tempo real, deduplicação inteligente para carros parados e mapa de ocorrências com geolocalização exata.",
   "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

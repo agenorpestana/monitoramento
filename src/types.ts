@@ -148,7 +148,7 @@ export interface ActivityLog {
   userId?: string;
   userName: string;
   action: string;
-  category: 'AUTH' | 'LIVE_VIEW' | 'RECORDING' | 'SYSTEM' | 'BACKUP' | 'PTZ' | 'AUDIO' | 'FINANCIAL' | 'SETTINGS';
+  category: 'AUTH' | 'LIVE_VIEW' | 'RECORDING' | 'SYSTEM' | 'BACKUP' | 'PTZ' | 'AUDIO' | 'FINANCIAL' | 'SETTINGS' | 'LPR';
   details?: string;
   ipAddress?: string;
   timestamp: string;
@@ -185,4 +185,58 @@ export interface E2EESettings {
   passphraseHash: string;
   algorithm: string;
   totalEncryptedStreams: number;
+}
+
+export interface StolenVehicleDetails {
+  ownerName?: string;
+  ownerPhone?: string;
+  reportedDate?: string;
+  alertReason?: string;
+  urgencyLevel?: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+}
+
+export interface LPRDetection {
+  id: string;
+  plate: string;
+  normalizedPlate: string; // e.g. ABC1D23 or ABC1234
+  carImageUrl?: string; // Full car crop / frame
+  plateImageUrl?: string; // License plate cropped snippet
+  vehicleType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido';
+  vehicleColor?: string;
+  cameraId: string;
+  cameraName: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  timestamp: string;
+  confidence: number; // e.g. 98.5
+  isStolenAlert: boolean;
+  stolenDetails?: StolenVehicleDetails;
+  ocrEngine?: 'YOLO+PaddleOCR' | 'YOLO+EasyOCR' | 'GeminiVisionAI';
+  ignoredParkedCount?: number;
+}
+
+export interface StolenVehicle {
+  id: string;
+  plate: string;
+  normalizedPlate: string;
+  vehicleModel: string;
+  vehicleColor: string;
+  ownerName: string;
+  ownerPhone: string;
+  reason: string;
+  urgencyLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  reportedDate: string;
+  status: 'ACTIVE' | 'RECOVERED' | 'CANCELLED';
+  notes?: string;
+  createdAt: string;
+}
+
+export interface LPRSettings {
+  cooldownMinutes: number; // Deduplication interval for parked cars
+  minConfidenceThreshold: number;
+  preferredOcrEngine: 'YOLO+PaddleOCR' | 'YOLO+EasyOCR' | 'GeminiVisionAI';
+  enableAudioAlerts: boolean;
+  autoNotifyWebhooks: boolean;
+  webhookUrl?: string;
 }

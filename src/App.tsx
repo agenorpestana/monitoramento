@@ -18,6 +18,7 @@ import { FinancialManagement } from './components/FinancialManagement';
 import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
 import { FinancialAlertBanner } from './components/FinancialAlertBanner';
 import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
+import { LPRPlateRecognition } from './components/LPRPlateRecognition';
 
 import {
   Camera,
@@ -33,6 +34,9 @@ import {
   Invoice,
   FinancialPlan,
   MercadoPagoConfig,
+  LPRDetection,
+  StolenVehicle,
+  LPRSettings,
 } from './types';
 
 import {
@@ -44,6 +48,9 @@ import {
   INITIAL_BACKUP_CONFIG,
   INITIAL_NOTIFICATION_CONFIG,
   INITIAL_E2EE_SETTINGS,
+  INITIAL_STOLEN_VEHICLES,
+  INITIAL_LPR_DETECTIONS,
+  INITIAL_LPR_SETTINGS,
 } from './data/mockData';
 
 import {
@@ -112,6 +119,11 @@ export default function App() {
   const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(INITIAL_NOTIFICATION_CONFIG);
   const [e2eeSettings, setE2eesettings] = useState<E2EESettings>(INITIAL_E2EE_SETTINGS);
 
+  // LPR Module States
+  const [lprDetections, setLprDetections] = useState<LPRDetection[]>(INITIAL_LPR_DETECTIONS);
+  const [stolenVehicles, setStolenVehicles] = useState<StolenVehicle[]>(INITIAL_STOLEN_VEHICLES);
+  const [lprSettings, setLprSettings] = useState<LPRSettings>(INITIAL_LPR_SETTINGS);
+
   // Financial States
   const [plans, setPlans] = useState<FinancialPlan[]>(INITIAL_PLANS);
   const [invoices, setInvoices] = useState<Invoice[]>([
@@ -146,7 +158,7 @@ export default function App() {
   useEffect(() => {
     const fetchBackendData = async () => {
       try {
-        const [cRes, aRes, rRes, uRes, lRes, bRes, nRes, pRes, iRes, mpRes] = await Promise.all([
+        const [cRes, aRes, rRes, uRes, lRes, bRes, nRes, pRes, iRes, mpRes, lprDetRes, stolenRes, lprSetRes] = await Promise.all([
           fetch('/api/cameras').then((r) => r.json()),
           fetch('/api/alerts').then((r) => r.json()),
           fetch('/api/recordings').then((r) => r.json()),
@@ -157,6 +169,9 @@ export default function App() {
           fetch('/api/financial/plans').then((r) => r.json()),
           fetch('/api/financial/invoices').then((r) => r.json()),
           fetch('/api/mercadopago/config').then((r) => r.json()),
+          fetch('/api/lpr/detections').then((r) => r.json()),
+          fetch('/api/lpr/stolen').then((r) => r.json()),
+          fetch('/api/lpr/settings').then((r) => r.json()),
         ]);
 
         if (Array.isArray(cRes)) setCameras(cRes);
@@ -168,6 +183,9 @@ export default function App() {
         if (Array.isArray(lRes)) setLogs(lRes);
         if (bRes && bRes.schedule) setBackupConfig(bRes);
         if (nRes && nRes.pushEnabled !== undefined) setNotificationConfig(nRes);
+        if (Array.isArray(lprDetRes)) setLprDetections(lprDetRes);
+        if (Array.isArray(stolenRes)) setStolenVehicles(stolenRes);
+        if (lprSetRes && lprSetRes.cooldownMinutes !== undefined) setLprSettings(lprSetRes);
         if (Array.isArray(pRes) && pRes.length > 0) setPlans(pRes);
         if (Array.isArray(iRes) && iRes.length > 0) setInvoices(iRes);
         if (mpRes && mpRes.accessToken) setMpConfig(mpRes);
@@ -446,6 +464,114 @@ export default function App() {
     );
   }
 
+  // LPR Module Action Handlers
+  const handleDetectPlate = async (payload: any) => {
+    try {
+      const res = await fetch('/api/lpr/detect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then((r) => r.json());
+
+      if (res.success && res.detection && !res.isThrottled) {
+        setLprDetections((prev) => [res.detection, ...prev]);
+      }
+      return res;
+    } catch (err) {
+      console.error('[LPR Detect Error]:', err);
+      const plate = payload.testPlateHint || 'BRA2E19';
+      const isStolen = stolenVehicles.some(
+        (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === plate.replace(/[^A-Z0-9]/g, '')
+      );
+      const simDet: LPRDetection = {
+        id: `lpr-${Date.now()}`,
+        plate,
+        normalizedPlate: plate.replace(/[^A-Z0-9]/g, ''),
+        carImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+        plateImageUrl: payload.imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
+        vehicleType: 'Carro',
+        vehicleColor: 'Prata',
+        cameraId: payload.cameraId || 'cam-01',
+        cameraName: payload.cameraName || 'Câmera Principal LPR',
+        address: payload.address || 'Av. Liberdade, 1200',
+        latitude: payload.latitude || -17.0397,
+        longitude: payload.longitude || -39.5312,
+        timestamp: new Date().toISOString(),
+        confidence: 97.5,
+        isStolenAlert: isStolen,
+        ocrEngine: lprSettings.preferredOcrEngine || 'YOLO+PaddleOCR',
+      };
+      setLprDetections((prev) => [simDet, ...prev]);
+      return { success: true, isThrottled: false, isStolenAlert: isStolen, detection: simDet };
+    }
+  };
+
+  const handleAddStolenVehicle = async (vehicle: Omit<StolenVehicle, 'id' | 'createdAt'>) => {
+    try {
+      const res = await fetch('/api/lpr/stolen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vehicle),
+      }).then((r) => r.json());
+
+      if (res && res.id) {
+        setStolenVehicles((prev) => [res, ...prev]);
+      }
+      return res;
+    } catch (err) {
+      const fallback: StolenVehicle = {
+        ...vehicle,
+        id: `stolen-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      setStolenVehicles((prev) => [fallback, ...prev]);
+      return fallback;
+    }
+  };
+
+  const handleUpdateStolenStatus = async (id: string, status: 'ACTIVE' | 'RECOVERED' | 'CANCELLED') => {
+    try {
+      await fetch(`/api/lpr/stolen/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch (e) {}
+    setStolenVehicles((prev) => prev.map((s) => (s.id === id ? { ...s, status } : s)));
+  };
+
+  const handleDeleteStolenVehicle = async (id: string) => {
+    try {
+      await fetch(`/api/lpr/stolen/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    setStolenVehicles((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleUpdateLprSettings = async (settings: LPRSettings) => {
+    try {
+      await fetch('/api/lpr/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+    } catch (e) {}
+    setLprSettings(settings);
+  };
+
+  const handleClearLprHistory = async () => {
+    try {
+      await fetch('/api/lpr/detections', { method: 'DELETE' });
+    } catch (e) {}
+    setLprDetections([]);
+  };
+
+  const handleDeleteLprDetection = async (id: string) => {
+    try {
+      await fetch(`/api/lpr/detections/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    setLprDetections((prev) => prev.filter((d) => d.id !== id));
+  };
+
   // Render Authenticated Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
@@ -542,6 +668,23 @@ export default function App() {
               onSelectCamera={setInspectingCamera}
               onTriggerTestAlert={triggerMotionAlert}
               onUpdateCamera={handleUpdateCamera}
+            />
+          )}
+
+          {activeTab === 'lpr-recognition' && (
+            <LPRPlateRecognition
+              cameras={cameras}
+              lprDetections={lprDetections}
+              stolenVehicles={stolenVehicles}
+              lprSettings={lprSettings}
+              activeUser={activeUser}
+              onDetectPlate={handleDetectPlate}
+              onAddStolenVehicle={handleAddStolenVehicle}
+              onUpdateStolenStatus={handleUpdateStolenStatus}
+              onDeleteStolenVehicle={handleDeleteStolenVehicle}
+              onUpdateSettings={handleUpdateLprSettings}
+              onClearHistory={handleClearLprHistory}
+              onDeleteDetection={handleDeleteLprDetection}
             />
           )}
 

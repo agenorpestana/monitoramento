@@ -11,6 +11,7 @@ import {
   Smartphone,
   Lock,
   DollarSign,
+  Car,
 } from 'lucide-react';
 
 import { User } from '../types';
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const rawNavItems = [
     { id: 'live-grid', label: 'Câmeras ao Vivo', icon: Grid, badge: totalCameras },
+    { id: 'lpr-recognition', label: 'Placas LPR & Roubos', icon: Car },
     { id: 'camera-map', label: 'Mapa Vizinhança', icon: Map },
     { id: 'motion-alerts', label: 'Alertas de Movimento', icon: Bell, badge: unreadAlertsCount, alert: unreadAlertsCount > 0 },
     { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },

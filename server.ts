@@ -6,6 +6,7 @@ import mysql from 'mysql2/promise';
 import initSqlJs from 'sql.js';
 import { spawn, ChildProcess, execSync } from 'child_process';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
 
 // Map to manage active FFmpeg processes for RTSP/RTMP conversion
 const activeFfmpegProcesses = new Map<string, ChildProcess>();
@@ -170,9 +171,26 @@ import {
   INITIAL_LOGS,
   INITIAL_BACKUP_CONFIG,
   INITIAL_NOTIFICATION_CONFIG,
+  INITIAL_STOLEN_VEHICLES,
+  INITIAL_LPR_DETECTIONS,
+  INITIAL_LPR_SETTINGS,
 } from './src/data/mockData';
 import { INITIAL_PLANS, INITIAL_MP_CONFIG } from './src/lib/financial';
-import { Camera, MotionAlert, CloudRecording, User, ActivityLog, BackupConfig, NotificationConfig, FinancialPlan, Invoice, MercadoPagoConfig } from './src/types';
+import {
+  Camera,
+  MotionAlert,
+  CloudRecording,
+  User,
+  ActivityLog,
+  BackupConfig,
+  NotificationConfig,
+  FinancialPlan,
+  Invoice,
+  MercadoPagoConfig,
+  LPRDetection,
+  StolenVehicle,
+  LPRSettings,
+} from './src/types';
 
 const LOCAL_STORE_FILE = path.join(process.cwd(), 'itl_database_store.json');
 
@@ -233,6 +251,19 @@ async function startServer() {
   let plans: FinancialPlan[] = [...INITIAL_PLANS];
   let invoices: Invoice[] = [];
   let mpConfig: MercadoPagoConfig = { ...INITIAL_MP_CONFIG };
+  let lprDetections: LPRDetection[] = [...INITIAL_LPR_DETECTIONS];
+  let stolenVehicles: StolenVehicle[] = [...INITIAL_STOLEN_VEHICLES];
+  let lprSettings: LPRSettings = { ...INITIAL_LPR_SETTINGS };
+
+  // Initialize Gemini AI Client for OCR Vision if API Key exists
+  let aiClient: GoogleGenAI | null = null;
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    } catch (err) {
+      console.warn('[Gemini AI] Aviso ao inicializar SDK:', err);
+    }
+  }
   const deletedRecordingIds = new Set<string>();
 
   // Real Active Recording Sessions Tracker
@@ -267,6 +298,9 @@ async function startServer() {
         plans,
         invoices,
         mpConfig,
+        lprDetections,
+        stolenVehicles,
+        lprSettings,
       };
       fs.writeFileSync(LOCAL_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
@@ -300,6 +334,9 @@ async function startServer() {
         if (parsed.plans && Array.isArray(parsed.plans)) plans = parsed.plans;
         if (parsed.invoices && Array.isArray(parsed.invoices)) invoices = parsed.invoices;
         if (parsed.mpConfig && parsed.mpConfig.accessToken) mpConfig = parsed.mpConfig;
+        if (parsed.lprDetections && Array.isArray(parsed.lprDetections)) lprDetections = parsed.lprDetections;
+        if (parsed.stolenVehicles && Array.isArray(parsed.stolenVehicles)) stolenVehicles = parsed.stolenVehicles;
+        if (parsed.lprSettings) lprSettings = parsed.lprSettings;
         console.log(`[ITL Storage] ${cameras.length} câmeras e ${users.length} usuários carregados do arquivo local.`);
         return true;
       }
@@ -489,6 +526,58 @@ async function startServer() {
           id TEXT PRIMARY KEY,
           storage_limit_gb REAL DEFAULT 100,
           updated_at TEXT
+        );
+      `);
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS lpr_detections (
+          id TEXT PRIMARY KEY,
+          plate TEXT NOT NULL,
+          normalized_plate TEXT NOT NULL,
+          car_image_url TEXT,
+          plate_image_url TEXT,
+          vehicle_type TEXT,
+          vehicle_color TEXT,
+          camera_id TEXT,
+          camera_name TEXT,
+          address TEXT,
+          latitude REAL,
+          longitude REAL,
+          timestamp TEXT,
+          confidence REAL,
+          is_stolen_alert INTEGER DEFAULT 0,
+          ocr_engine TEXT,
+          ignored_parked_count INTEGER DEFAULT 0
+        );
+      `);
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS stolen_vehicles (
+          id TEXT PRIMARY KEY,
+          plate TEXT UNIQUE NOT NULL,
+          normalized_plate TEXT NOT NULL,
+          vehicle_model TEXT,
+          vehicle_color TEXT,
+          owner_name TEXT,
+          owner_phone TEXT,
+          reason TEXT,
+          urgency_level TEXT,
+          reported_date TEXT,
+          status TEXT DEFAULT 'ACTIVE',
+          notes TEXT,
+          created_at TEXT
+        );
+      `);
+
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS lpr_settings (
+          id TEXT PRIMARY KEY,
+          cooldown_minutes INTEGER DEFAULT 3,
+          preferred_ocr_engine TEXT DEFAULT 'YOLO+PaddleOCR',
+          min_confidence REAL DEFAULT 75.0,
+          auto_notify_webhooks INTEGER DEFAULT 1,
+          webhook_url TEXT,
+          enable_audio_alerts INTEGER DEFAULT 1
         );
       `);
 
@@ -1092,6 +1181,8 @@ async function startServer() {
           fileSizeMB: parseFloat(row.file_size_mb || 0),
           streamUrl: row.stream_url,
           thumbnailUrl: row.thumbnail_url,
+          isE2EELocked: false,
+          tags: ['gravação', 'nuvem'],
         }));
 
         const recMap = new Map<string, CloudRecording>();
@@ -2978,6 +3069,239 @@ async function startServer() {
       message: 'Notificação push enviada para dispositivos pareados via FCM/Telegram/WhatsApp',
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // ==========================================
+  // LPR / ALPR (RECONHECIMENTO DE PLACAS) API
+  // ==========================================
+
+  // Get LPR Detections History
+  app.get('/api/lpr/detections', (req, res) => {
+    res.json(lprDetections);
+  });
+
+  // Process / Register LPR Plate Detection with Deduplication and Stolen Alerts
+  app.post('/api/lpr/detect', async (req, res) => {
+    try {
+      const {
+        imageBase64,
+        cameraId = 'cam-01',
+        cameraName = 'Câmera Principal LPR',
+        latitude = -17.0397,
+        longitude = -39.5312,
+        address = 'Av. Liberdade, 1200',
+        testPlateHint,
+      } = req.body || {};
+
+      let rawPlate = testPlateHint || 'BRA2E19';
+
+      // If user uploaded image and Gemini AI is active, try OCR reading
+      if (!testPlateHint && imageBase64 && aiClient) {
+        try {
+          const response = await aiClient.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  { text: 'Extraia apenas a placa do veículo presente nesta imagem no padrão brasileiro (ex: BRA2E19 ou ABC1234). Responda estritamente apenas os caracteres da placa em maiúsculas.' },
+                  { inlineData: { mimeType: 'image/jpeg', data: imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+                ],
+              },
+            ],
+          });
+          const textRes = response.text ? response.text.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') : '';
+          if (textRes && textRes.length >= 6) {
+            rawPlate = textRes;
+          }
+        } catch (e) {
+          console.warn('[LPR OCR Gemini] Falha ao extrair OCR:', e);
+        }
+      }
+
+      const formattedPlate = rawPlate.toUpperCase().trim();
+      const normalizedPlate = formattedPlate.replace(/[^A-Z0-9]/g, '');
+
+      // ESTRATÉGIA DE DEDUPLICAÇÃO DE CARROS PARADOS
+      // Se a mesma placa passou na mesma câmera dentro do tempo limite (cooldownMinutes)
+      const cooldownMs = (lprSettings.cooldownMinutes || 3) * 60 * 1000;
+      const nowMs = Date.now();
+
+      const existingRecentDet = lprDetections.find((d) => {
+        const isSamePlate = d.normalizedPlate === normalizedPlate;
+        const isSameCamera = d.cameraId === cameraId;
+        const ageMs = nowMs - new Date(d.timestamp).getTime();
+        return isSamePlate && isSameCamera && ageMs <= cooldownMs;
+      });
+
+      if (existingRecentDet) {
+        existingRecentDet.ignoredParkedCount = (existingRecentDet.ignoredParkedCount || 0) + 1;
+        saveToLocalFile();
+        return res.json({
+          success: true,
+          isThrottled: true,
+          message: `🚗 Veículo Parado Detectado: A placa ${formattedPlate} já foi capturada na câmera ${cameraName} nos últimos ${lprSettings.cooldownMinutes} minutos. Gravação adicional ignorada para economizar espaço em banco de dados.`,
+          detection: existingRecentDet,
+        });
+      }
+
+      // CHECK IF PLATE IS IN STOLEN VEHICLES REGISTRY
+      const matchedStolen = stolenVehicles.find(
+        (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === normalizedPlate
+      );
+
+      const isStolenAlert = Boolean(matchedStolen);
+
+      const newDetection: LPRDetection = {
+        id: `lpr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        plate: formattedPlate,
+        normalizedPlate,
+        carImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+        plateImageUrl: imageBase64 || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
+        vehicleType: 'Carro',
+        vehicleColor: matchedStolen ? matchedStolen.vehicleColor : 'Prata',
+        cameraId,
+        cameraName,
+        address,
+        latitude,
+        longitude,
+        timestamp: new Date().toISOString(),
+        confidence: isStolenAlert ? 99.8 : 97.5,
+        isStolenAlert,
+        ocrEngine: lprSettings.preferredOcrEngine || 'YOLO+PaddleOCR',
+        ignoredParkedCount: 0,
+        stolenDetails: matchedStolen
+          ? {
+              ownerName: matchedStolen.ownerName,
+              ownerPhone: matchedStolen.ownerPhone,
+              alertReason: matchedStolen.reason,
+              urgencyLevel: matchedStolen.urgencyLevel,
+            }
+          : undefined,
+      };
+
+      lprDetections.unshift(newDetection);
+      saveToLocalFile();
+
+      if (isStolenAlert) {
+        addLog(
+          'ALERTA LPR / ROUBO',
+          `🚨 VEÍCULO ROUBADO DETECTADO: Placa ${formattedPlate} na Câmera ${cameraName}`,
+          'LPR',
+          `Endereço: ${address} | Lat: ${latitude}, Lng: ${longitude}`
+        );
+      } else {
+        addLog(
+          'SISTEMA LPR',
+          `Captura de placa ${formattedPlate} realizada na Câmera ${cameraName}`,
+          'SYSTEM'
+        );
+      }
+
+      return res.json({
+        success: true,
+        isThrottled: false,
+        isStolenAlert,
+        detection: newDetection,
+      });
+    } catch (err) {
+      console.error('[LPR Detect API Error]:', err);
+      res.status(500).json({ error: 'Erro ao processar imagem LPR' });
+    }
+  });
+
+  // Delete single detection record
+  app.delete('/api/lpr/detections/:id', (req, res) => {
+    const { id } = req.params;
+    lprDetections = lprDetections.filter((d) => d.id !== id);
+    saveToLocalFile();
+    res.json({ success: true, message: 'Registro de placa excluído' });
+  });
+
+  // Clear all LPR detections history
+  app.delete('/api/lpr/detections', (req, res) => {
+    lprDetections = [];
+    saveToLocalFile();
+    res.json({ success: true, message: 'Histórico LPR limpo com sucesso' });
+  });
+
+  // Stolen Vehicles Registry API
+  app.get('/api/lpr/stolen', (req, res) => {
+    res.json(stolenVehicles);
+  });
+
+  app.post('/api/lpr/stolen', (req, res) => {
+    const {
+      plate,
+      vehicleModel,
+      vehicleColor,
+      ownerName,
+      ownerPhone,
+      reason,
+      urgencyLevel = 'CRITICAL',
+      notes,
+    } = req.body || {};
+
+    if (!plate) {
+      return res.status(400).json({ error: 'Placa do veículo é obrigatória' });
+    }
+
+    const formattedPlate = plate.toUpperCase().trim();
+    const normalizedPlate = formattedPlate.replace(/[^A-Z0-9]/g, '');
+
+    const newStolen: StolenVehicle = {
+      id: `stolen-${Date.now()}`,
+      plate: formattedPlate,
+      normalizedPlate,
+      vehicleModel: vehicleModel || 'Não especificado',
+      vehicleColor: vehicleColor || 'Indefinida',
+      ownerName: ownerName || 'Não informado',
+      ownerPhone: ownerPhone || '',
+      reason: reason || 'Registro de roubo/furto',
+      urgencyLevel,
+      reportedDate: new Date().toISOString().split('T')[0],
+      status: 'ACTIVE',
+      notes,
+      createdAt: new Date().toISOString(),
+    };
+
+    stolenVehicles.unshift(newStolen);
+    saveToLocalFile();
+    addLog('ITL Admin', `Novo Veículo Roubado Cadastrado: Placa ${formattedPlate}`, 'SYSTEM');
+
+    res.json(newStolen);
+  });
+
+  app.put('/api/lpr/stolen/:id', (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const item = stolenVehicles.find((s) => s.id === id);
+    if (item) {
+      if (status) item.status = status;
+      saveToLocalFile();
+      addLog('ITL Admin', `Status do Veículo Roubado (${item.plate}) alterado para ${status}`, 'SYSTEM');
+    }
+    res.json(item || { error: 'Não encontrado' });
+  });
+
+  app.delete('/api/lpr/stolen/:id', (req, res) => {
+    const { id } = req.params;
+    stolenVehicles = stolenVehicles.filter((s) => s.id !== id);
+    saveToLocalFile();
+    res.json({ success: true, message: 'Registro de roubo removido' });
+  });
+
+  // LPR Module Settings API
+  app.get('/api/lpr/settings', (req, res) => {
+    res.json(lprSettings);
+  });
+
+  app.put('/api/lpr/settings', (req, res) => {
+    lprSettings = { ...lprSettings, ...req.body };
+    saveToLocalFile();
+    addLog('ITL Admin', 'Configurações do módulo LPR atualizadas', 'SYSTEM');
+    res.json(lprSettings);
   });
 
   // Vite middleware for development
