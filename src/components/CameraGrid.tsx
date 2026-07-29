@@ -149,15 +149,10 @@ export const CameraGrid: React.FC<CameraGridProps> = ({
               className="bg-slate-900 text-emerald-400 font-bold border border-slate-700 rounded-lg px-2 py-0.5 text-xs outline-none focus:border-emerald-500 cursor-pointer"
             >
               <option value={30}>30s</option>
-              <option value={60}>1 min (60s)</option>
+              <option value={60}>1 min</option>
               <option value={120}>2 min</option>
               <option value={0}>Desativado</option>
             </select>
-            {autoRefreshIntervalSec > 0 && (
-              <span className="text-[11px] font-mono font-bold text-slate-300 ml-1">
-                ({countdownSec}s)
-              </span>
-            )}
           </div>
 
           <button

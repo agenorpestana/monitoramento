@@ -538,6 +538,35 @@ async function startServer() {
         if (loadedUsers.length > 0) users = loadedUsers;
         console.log(`[SQLite ITL] ${users.length} usuários carregados do banco de dados SQL.`);
       }
+
+      // Load license_plates
+      try {
+        const lpRes = sqliteDb.exec('SELECT * FROM license_plates ORDER BY timestamp DESC');
+        if (lpRes && lpRes.length > 0 && lpRes[0].values.length > 0) {
+          const cols = lpRes[0].columns;
+          const getVal = (row: any[], name: string) => row[cols.indexOf(name)];
+
+          const loadedPlates: LicensePlateRecord[] = lpRes[0].values.map((row: any[]) => ({
+            id: String(getVal(row, 'id')),
+            cameraId: String(getVal(row, 'camera_id') || ''),
+            cameraName: String(getVal(row, 'camera_name') || ''),
+            city: String(getVal(row, 'city') || ''),
+            stateUf: String(getVal(row, 'state_uf') || ''),
+            plateNumber: String(getVal(row, 'plate_number') || ''),
+            vehicleType: (getVal(row, 'vehicle_type') || 'Carro') as any,
+            vehicleColor: String(getVal(row, 'vehicle_color') || ''),
+            confidence: Number(getVal(row, 'confidence') || 95),
+            snapshotUrl: String(getVal(row, 'snapshot_url') || ''),
+            timestamp: String(getVal(row, 'timestamp') || new Date().toISOString()),
+            lat: getVal(row, 'lat') !== null ? Number(getVal(row, 'lat')) : undefined,
+            lng: getVal(row, 'lng') !== null ? Number(getVal(row, 'lng')) : undefined,
+            isStolenOrWanted: Boolean(getVal(row, 'is_stolen_or_wanted')),
+            notes: String(getVal(row, 'notes') || ''),
+          }));
+          if (loadedPlates.length > 0) licensePlates = loadedPlates;
+          console.log(`[SQLite ITL] ${licensePlates.length} leituras de placas (license_plates) carregadas do banco SQL.`);
+        }
+      } catch (e) {}
     } catch (e: any) {
       console.error('[SQLite ITL Error] Erro ao ler dados do SQLite:', e.message);
     }
@@ -622,9 +651,33 @@ async function startServer() {
         );
       `);
 
+      sqliteDb.run(`
+        CREATE TABLE IF NOT EXISTS license_plates (
+          id TEXT PRIMARY KEY,
+          camera_id TEXT,
+          camera_name TEXT,
+          city TEXT,
+          state_uf TEXT,
+          plate_number TEXT NOT NULL,
+          vehicle_type TEXT DEFAULT 'Carro',
+          vehicle_color TEXT,
+          confidence INTEGER DEFAULT 95,
+          snapshot_url TEXT,
+          timestamp TEXT,
+          lat REAL,
+          lng REAL,
+          is_stolen_or_wanted INTEGER DEFAULT 0,
+          notes TEXT
+        );
+      `);
+
       loadDataFromSqlite();
 
-      // Ensure current in-memory cameras and users are seeded into SQLite tables
+      if (licensePlates.length === 0) {
+        licensePlates = [...INITIAL_LICENSE_PLATES];
+      }
+
+      // Ensure current in-memory cameras, users, and license_plates are seeded into SQLite tables
       if (cameras.length > 0) {
         cameras.forEach((c) => {
           try {
@@ -655,8 +708,23 @@ async function startServer() {
         });
       }
 
+      if (licensePlates.length > 0) {
+        licensePlates.forEach((lp) => {
+          try {
+            sqliteDb.run(
+              `INSERT OR REPLACE INTO license_plates (
+                id, camera_id, camera_name, city, state_uf, plate_number, vehicle_type, vehicle_color, confidence, snapshot_url, timestamp, lat, lng, is_stolen_or_wanted, notes
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                lp.id, lp.cameraId || '', lp.cameraName || '', lp.city || '', lp.stateUf || '', lp.plateNumber, lp.vehicleType || 'Carro', lp.vehicleColor || '', lp.confidence || 95, lp.snapshotUrl || '', lp.timestamp || new Date().toISOString(), lp.lat || null, lp.lng || null, lp.isStolenOrWanted ? 1 : 0, lp.notes || ''
+              ]
+            );
+          } catch (e) {}
+        });
+      }
+
       saveSqliteFile();
-      console.log(`[SQLite ITL Engine] Tabela 'cameras' (${cameras.length} registros) e 'users' (${users.length} registros) sincronizadas no SQLite!`);
+      console.log(`[SQLite ITL Engine] Tabelas 'cameras' (${cameras.length}), 'users' (${users.length}) e 'license_plates' (${licensePlates.length}) sincronizadas no SQLite!`);
     } catch (err: any) {
       console.error('[SQLite ITL Error] Falha ao inicializar SQLite Engine:', err.message || err);
       loadFromLocalFile();
@@ -746,6 +814,46 @@ async function startServer() {
     if (!sqliteDb) return;
     try {
       sqliteDb.run('DELETE FROM users WHERE id = ?', [id]);
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const syncLicensePlateToSqlite = (lp: LicensePlateRecord) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO license_plates (
+          id, camera_id, camera_name, city, state_uf, plate_number, vehicle_type, vehicle_color, confidence, snapshot_url, timestamp, lat, lng, is_stolen_or_wanted, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          lp.id,
+          lp.cameraId || '',
+          lp.cameraName || '',
+          lp.city || '',
+          lp.stateUf || '',
+          lp.plateNumber,
+          lp.vehicleType || 'Carro',
+          lp.vehicleColor || '',
+          lp.confidence || 95,
+          lp.snapshotUrl || '',
+          lp.timestamp || new Date().toISOString(),
+          lp.lat !== undefined ? lp.lat : null,
+          lp.lng !== undefined ? lp.lng : null,
+          lp.isStolenOrWanted ? 1 : 0,
+          lp.notes || '',
+        ]
+      );
+      saveSqliteFile();
+      console.log(`[SQLite ITL Sync] Placa LPR '${lp.plateNumber}' (${lp.id}) GRAVADA no banco SQL!`);
+    } catch (e: any) {
+      console.error('[SQLite LPR Sync Error]', e.message);
+    }
+  };
+
+  const deleteLicensePlateFromSqlite = (id: string) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM license_plates WHERE id = ?', [id]);
       saveSqliteFile();
     } catch (e) {}
   };
@@ -1144,6 +1252,7 @@ async function startServer() {
       if (alerts.length === 0) alerts = [...INITIAL_ALERTS];
       if (recordings.length === 0) recordings = [...INITIAL_RECORDINGS];
       if (logs.length === 0) logs = [...INITIAL_LOGS];
+      if (licensePlates.length === 0) licensePlates = [...INITIAL_LICENSE_PLATES];
 
       // 2. Sync Cameras
       for (const c of cameras) { try { await syncCameraToMysql(c); } catch (e) {} }
@@ -3168,6 +3277,7 @@ async function startServer() {
     };
 
     licensePlates.unshift(newRecord);
+    syncLicensePlateToSqlite(newRecord);
     saveToLocalFile();
     await syncLicensePlateToMysql(newRecord);
 
@@ -3197,6 +3307,7 @@ async function startServer() {
   app.delete('/api/license-plates/:id', async (req, res) => {
     const { id } = req.params;
     licensePlates = licensePlates.filter((p) => p.id !== id);
+    deleteLicensePlateFromSqlite(id);
     saveToLocalFile();
     await deleteLicensePlateFromMysql(id);
     addLog('ITL Admin', `Registro LPR excluído`, 'SYSTEM', `ID: ${id}`);
@@ -3311,6 +3422,7 @@ async function startServer() {
     };
 
     licensePlates.unshift(newRecord);
+    syncLicensePlateToSqlite(newRecord);
     saveToLocalFile();
     await syncLicensePlateToMysql(newRecord);
 
@@ -3457,6 +3569,78 @@ async function startServer() {
       paymentId: `mp-sim-${Date.now()}`,
       message: 'Pagamento processado e aprovado no Mercado Pago!',
     });
+  });
+
+  // Database Status & Seed Verification Endpoints
+  app.get('/api/database/status', async (req, res) => {
+    res.json({
+      isMysqlActive,
+      activeEngine: isMysqlActive ? 'MySQL 8.0 Engine' : 'SQLite 3 SQL Engine (WebAssembly)',
+      databaseName: process.env.DB_NAME || 'itl_cameras',
+      tables: {
+        license_plates: licensePlates.length,
+        cameras: cameras.length,
+        users: users.length,
+        cloud_recordings: recordings.length,
+        motion_alerts: alerts.length,
+        activity_logs: logs.length,
+        financial_plans: plans.length,
+        financial_invoices: invoices.length,
+      },
+      sampleLicensePlates: licensePlates.slice(0, 5),
+    });
+  });
+
+  app.post('/api/database/seed', async (req, res) => {
+    try {
+      if (licensePlates.length === 0) {
+        licensePlates = [...INITIAL_LICENSE_PLATES];
+      }
+      if (cameras.length === 0) cameras = [...INITIAL_CAMERAS];
+      if (users.length === 0) users = [...INITIAL_USERS];
+
+      // Ensure SQLite has all tables and records
+      if (sqliteDb) {
+        licensePlates.forEach((lp) => syncLicensePlateToSqlite(lp));
+        cameras.forEach((c) => syncCameraToSqlite(c));
+        users.forEach((u) => syncUserToSqlite(u));
+      }
+
+      // If MySQL is active or can be initialized, run migration and sync
+      if (!isMysqlActive) {
+        await initMysqlAndSync();
+      }
+
+      if (isMysqlActive && pool) {
+        await verifyAndMigrateSchema(pool, process.env.DB_NAME || 'itl_cameras');
+        for (const lp of licensePlates) {
+          await syncLicensePlateToMysql(lp);
+        }
+        for (const c of cameras) {
+          await syncCameraToMysql(c);
+        }
+        for (const u of users) {
+          await syncUserToMysql(u);
+        }
+      }
+
+      saveToLocalFile();
+      addLog('ITL Admin', 'Banco de dados verificado, tabelas migradas e dados populados com sucesso', 'SYSTEM');
+
+      res.json({
+        success: true,
+        isMysqlActive,
+        activeEngine: isMysqlActive ? 'MySQL 8.0 Engine' : 'SQLite 3 SQL Engine',
+        message: `Banco de dados verificado com sucesso. Tabela 'license_plates' criada/verificada com ${licensePlates.length} registros populados.`,
+        tables: {
+          license_plates: licensePlates.length,
+          cameras: cameras.length,
+          users: users.length,
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || 'Erro ao popular banco de dados' });
+    }
   });
 
   // Logs
