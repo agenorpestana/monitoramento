@@ -237,6 +237,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
       handleRunDetection(undefined, base64);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Auto scanner interval simulation loop
