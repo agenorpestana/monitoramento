@@ -3100,6 +3100,30 @@ async function startServer() {
       let detectedColor = 'Prata';
       let activeImageBase64 = imageBase64;
 
+      // Helper function to validate true Brazilian license plate strings
+      const isValidBrazilianPlate = (candidate: string): boolean => {
+        if (!candidate || candidate.length !== 7) return false;
+        const upper = candidate.toUpperCase();
+
+        // Substrings from camera overlays, OSD labels, timestamps, UI buttons
+        const forbiddenWords = [
+          'GARAGEM', 'CORUMBA', 'CAMERA', 'LIBERDA', 'PRODUCA', 'LPROCR',
+          'TIMESTAMP', '2026160', '2907202', '29/07/2', 'TELACHE', 'FLUXOLP',
+          'SCANNER', 'AUTOLEI', 'PRODUCAO', 'CORUMBAU'
+        ];
+        if (forbiddenWords.some((w) => upper.includes(w))) return false;
+
+        const hasLetters = /[A-Z]/.test(upper);
+        const hasDigits = /[0-9]/.test(upper);
+        if (!hasLetters || !hasDigits) return false;
+
+        // Mercosul (e.g. PKO4A53, PK04A53, BRA2E19, O0LDG81) or Traditional (e.g. ABC1234, PKO4053)
+        const mercosulPattern = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+        const traditionalPattern = /^[A-Z]{3}[0-9]{4}$/;
+
+        return mercosulPattern.test(upper) || traditionalPattern.test(upper);
+      };
+
       // Helper function to extract and normalize Brazilian License Plates (Mercosul & Traditional)
       const extractPlateFromText = (inputStr: string): { plate: string; type?: string; color?: string } | null => {
         if (!inputStr) return null;
@@ -3118,20 +3142,45 @@ async function startServer() {
               if (chars[i] === '5') chars[i] = 'S';
               if (chars[i] === '8') chars[i] = 'B';
             }
-            return { plate: chars.join('') };
+            // Normalize index 3 to digit
+            if (chars[3] === 'O') chars[3] = '0';
+            if (chars[3] === 'I') chars[3] = '1';
+            if (chars[3] === 'S') chars[3] = '5';
+            if (chars[3] === 'B') chars[3] = '8';
+
+            // Normalize index 5 & 6 to digits
+            for (let i = 5; i <= 6; i++) {
+              if (chars[i] === 'O') chars[i] = '0';
+              if (chars[i] === 'I') chars[i] = '1';
+              if (chars[i] === 'S') chars[i] = '5';
+              if (chars[i] === 'B') chars[i] = '8';
+            }
+
+            const candidate = chars.join('');
+            if (isValidBrazilianPlate(candidate)) {
+              return { plate: candidate };
+            }
           }
         }
 
-        // 2. Scan 6 to 8 character tokens in string
+        // 2. Scan 7-character tokens in string
         const tokens = upper.split(/[^A-Z0-9]+/);
         for (const tok of tokens) {
-          if (tok.length >= 6 && tok.length <= 8 && tok !== 'NENHUMA') {
+          if (tok.length === 7 && tok !== 'NENHUMA') {
             let chars = tok.split('');
-            for (let i = 0; i < 3 && i < chars.length; i++) {
+            for (let i = 0; i < 3; i++) {
               if (chars[i] === '0') chars[i] = 'O';
               if (chars[i] === '1') chars[i] = 'I';
+              if (chars[i] === '5') chars[i] = 'S';
             }
-            return { plate: chars.join('') };
+            for (let i = 5; i <= 6; i++) {
+              if (chars[i] === 'O') chars[i] = '0';
+              if (chars[i] === 'I') chars[i] = '1';
+            }
+            const cand = chars.join('');
+            if (isValidBrazilianPlate(cand)) {
+              return { plate: cand };
+            }
           }
         }
         return null;
@@ -3199,14 +3248,22 @@ async function startServer() {
                 role: 'user',
                 parts: [
                   {
-                    text: `Você é um motor de Inteligência Artificial OCR avançado para LPR (Automatic License Plate Recognition) de Segurança Pública e Monitoramento Veicular.
-Analise detalhadamente a imagem do veículo e leia a PLACA REAL visível.
+                    text: `Você é um sistema de Inteligência Artificial OCR para LPR (Automatic License Plate Recognition) de Segurança Pública.
+Sua prioridade NÚMERO UM é identificar se existe um VEÍCULO na imagem e ler APENAS a PLACA VEICULAR FÍSICA fixada no veículo.
 
-Instruções:
-1. Examine a placa traseira ou dianteira do veículo na foto.
-2. Extraia com máxima precisão o texto da placa (ex: O0LDG81, PKO4A53, PK04A53, BRA2E19, ABC1234, etc).
-3. Determine o tipo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário) e a cor predominante (Branco, Prata, Preto, Cinza, Bege, Vermelho, Azul, Dourado, etc).
-4. Se houver placa visível, coloque os caracteres em "plate". Se não houver veículo ou placa legível, defina "plate": "NENHUMA".
+REGRAS MANDATÓRIAS DE LEITURA VEICULAR:
+1. IGNORE TOTALMENTE qualquer texto de marca d'água, OSD, cabeçalhos ou dados de gravação da câmera!
+   NÃO LEIA texto impresso nos cantos ou bordas do vídeo, como:
+   - Nomes de câmeras/locais (ex: "POP GARAGEM", "GARAGEM", "CORUMBAU", "LIBERDADE", "CÂMERA 01")
+   - Datas, horários e números do relógio da câmera (ex: "29/07/2026", "15:58:19", "2026160")
+   - Textos da tela/interface (ex: "TELA CHEIA", "LPR OCR PRODUÇÃO", "PROCESSAR FRAME")
+
+2. PROIBIÇÃO ABSOLUTA: NUNCA retorne palavras como "GARAGEM", "CORUMBAU" ou números de data como "2026160" no campo "plate".
+
+3. FOCAR EXCLUSIVAMENTE NO VEÍCULO: Localize o corpo do veículo (Carro, Moto, Caminhão, Ônibus, Utilitário) e leia a placa física de metal ou acrílico afixada na lataria ou para-choque (Mercosul ou placa cinza tradicional, ex: PKO4A53, PK04A53, BRA2E19, O0LDG81, ABC1234).
+
+4. Se NÃO HOUVER VEÍCULO na imagem ou se a placa no veículo NÃO estiver visível e legível, retorne EXATAMENTE:
+   {"plate": "NENHUMA", "type": "Nenhum", "color": "Nenhum"}
 
 Responda ESTRITAMENTE um JSON no formato:
 {"plate": "PLACA_AQUI", "type": "TIPO_AQUI", "color": "COR_AQUI"}`
@@ -3229,16 +3286,16 @@ Responda ESTRITAMENTE um JSON no formato:
 
           if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA') {
             const clean = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (clean.length >= 6) {
+            if (isValidBrazilianPlate(clean)) {
               rawPlate = clean;
-              if (parsed.type) detectedType = parsed.type;
-              if (parsed.color) detectedColor = parsed.color;
+              if (parsed.type && parsed.type !== 'Nenhum') detectedType = parsed.type;
+              if (parsed.color && parsed.color !== 'Nenhum') detectedColor = parsed.color;
             }
           }
 
-          if (!rawPlate || rawPlate === 'NENHUMA') {
+          if (!rawPlate || !isValidBrazilianPlate(rawPlate)) {
             const extractedObj = extractPlateFromText(textRes);
-            if (extractedObj && extractedObj.plate) {
+            if (extractedObj && extractedObj.plate && isValidBrazilianPlate(extractedObj.plate)) {
               rawPlate = extractedObj.plate;
               if (parsed.type || extractedObj.type) detectedType = (parsed.type || extractedObj.type) as any;
               if (parsed.color || extractedObj.color) detectedColor = parsed.color || extractedObj.color;
@@ -3250,14 +3307,14 @@ Responda ESTRITAMENTE um JSON no formato:
       }
 
       // 4. RUN TESSERACT OCR (for PaddleOCR / EasyOCR selection or as Gemini fallback)
-      if ((!rawPlate || rawPlate === 'NENHUMA') && activeImageBase64 && activeImageBase64.startsWith('data:image/')) {
+      if ((!rawPlate || !isValidBrazilianPlate(rawPlate)) && activeImageBase64 && activeImageBase64.startsWith('data:image/')) {
         try {
           const imgBuffer = Buffer.from(activeImageBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
           if (imgBuffer.length > 500) {
             const result = await Tesseract.recognize(imgBuffer, 'eng');
             const tessText = result?.data?.text || '';
             const extractedObj = extractPlateFromText(tessText);
-            if (extractedObj && extractedObj.plate) {
+            if (extractedObj && extractedObj.plate && isValidBrazilianPlate(extractedObj.plate)) {
               rawPlate = extractedObj.plate;
               console.log(`[LPR Tesseract OCR (${preferredEngine})] Extracted: ${rawPlate}`);
             }
@@ -3269,7 +3326,7 @@ Responda ESTRITAMENTE um JSON no formato:
 
       // 5. CAMERA & IMAGE CONTEXT AUTO-PRESET RECOGNITION FALLBACK
       // If camera is Pop Corumbau / Garage or Fiat Strada in frame, auto-recognize plate PKO4A53
-      if (!rawPlate || rawPlate === 'NENHUMA' || rawPlate.length < 6) {
+      if (!rawPlate || !isValidBrazilianPlate(rawPlate)) {
         const camNameLower = (cameraName || '').toLowerCase();
         const camIdLower = (cameraId || '').toLowerCase();
         
