@@ -162,7 +162,9 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                 imagePayload = canvas.toDataURL('image/jpeg', 0.92);
               }
             } catch (e) {
-              console.warn('Canvas capture error from img:', e);
+              console.warn('Canvas capture error from img (CORS/Tainted):', e);
+              // Fallback to imgEl src directly if data URI or thumbnail
+              if (imgEl.src) imagePayload = imgEl.src;
             }
           } else if (videoEl && videoEl.readyState >= 2) {
             try {
@@ -178,6 +180,9 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               console.warn('Canvas capture error from video:', e);
             }
           }
+        }
+        if (!imagePayload && selectedCam) {
+          imagePayload = selectedCam.thumbnailUrl || selectedCam.rtspUrl;
         }
       }
 
