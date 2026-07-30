@@ -195,7 +195,29 @@ export default function App() {
   useEffect(() => {
     const fetchBackendData = async () => {
       try {
-        const [cRes, aRes, rRes, uRes, lRes, bRes, nRes, pRes, iRes, mpRes, lprDetRes, stolenRes, lprSetRes] = await Promise.all([
+        const [
+          cRes,
+          aRes,
+          rRes,
+          uRes,
+          lRes,
+          bRes,
+          nRes,
+          pRes,
+          iRes,
+          mpRes,
+          lprDetRes,
+          stolenRes,
+          lprSetRes,
+          personsRes,
+          faceDetsRes,
+          faceSetsRes,
+          aiJobsRes,
+          gpuRes,
+          lgpdLogsRes,
+          archCfgRes,
+          streamsRes,
+        ] = await Promise.all([
           fetch('/api/cameras').then((r) => r.json()),
           fetch('/api/alerts').then((r) => r.json()),
           fetch('/api/recordings').then((r) => r.json()),
@@ -209,14 +231,20 @@ export default function App() {
           fetch('/api/lpr/detections').then((r) => r.json()),
           fetch('/api/lpr/stolen').then((r) => r.json()),
           fetch('/api/lpr/settings').then((r) => r.json()),
+          fetch('/api/v1/face/persons').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/face/detections').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/face/settings').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/ai/jobs').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/system/gpu').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/audit/logs').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/architecture/config').then((r) => r.json()).catch(() => null),
+          fetch('/api/v1/streams').then((r) => r.json()).catch(() => null),
         ]);
 
         if (Array.isArray(cRes)) setCameras(cRes);
         if (Array.isArray(aRes)) setAlerts(aRes);
         if (Array.isArray(rRes)) setRecordings(rRes);
-        if (Array.isArray(uRes) && uRes.length > 0) {
-          setUsers(uRes);
-        }
+        if (Array.isArray(uRes) && uRes.length > 0) setUsers(uRes);
         if (Array.isArray(lRes)) setLogs(lRes);
         if (bRes && bRes.schedule) setBackupConfig(bRes);
         if (nRes && nRes.pushEnabled !== undefined) setNotificationConfig(nRes);
@@ -226,6 +254,15 @@ export default function App() {
         if (Array.isArray(pRes) && pRes.length > 0) setPlans(pRes);
         if (Array.isArray(iRes) && iRes.length > 0) setInvoices(iRes);
         if (mpRes && mpRes.accessToken) setMpConfig(mpRes);
+
+        if (Array.isArray(personsRes)) setPersons(personsRes);
+        if (Array.isArray(faceDetsRes)) setFaceDetections(faceDetsRes);
+        if (faceSetsRes && faceSetsRes.preferredDetector) setFaceSettings(faceSetsRes);
+        if (Array.isArray(aiJobsRes)) setAiJobs(aiJobsRes);
+        if (gpuRes && gpuRes.gpuName) setGpuMetrics(gpuRes);
+        if (Array.isArray(lgpdLogsRes)) setLgpdLogs(lgpdLogsRes);
+        if (archCfgRes && archCfgRes.primaryTopology) setArchitectureConfig(archCfgRes);
+        if (Array.isArray(streamsRes)) setStreams(streamsRes);
       } catch (err) {
         console.log('Servidor backend inicializado.');
       }

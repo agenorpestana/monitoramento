@@ -258,6 +258,129 @@ async function startServer() {
   let stolenVehicles: StolenVehicle[] = [...INITIAL_STOLEN_VEHICLES];
   let lprSettings: LPRSettings = { ...INITIAL_LPR_SETTINGS };
 
+  // Professional Monitoring Platform (v1) States
+  let personsList: any[] = [
+    {
+      id: 'person-01',
+      name: 'Carlos Eduardo Silva',
+      document: '123.456.789-00',
+      type: 'RESIDENT',
+      status: 'ACTIVE',
+      photoUrls: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80'],
+      consentStatus: 'GRANTED',
+      retentionUntil: '2028-12-31',
+      notes: 'Morador Bloco A - Ap 302',
+      createdAt: '2026-02-10 10:00:00',
+      updatedAt: '2026-07-29 12:00:00',
+    },
+    {
+      id: 'person-02',
+      name: 'Mariana Oliveira Santos',
+      document: '987.654.321-11',
+      type: 'EMPLOYEE',
+      status: 'ACTIVE',
+      photoUrls: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80'],
+      consentStatus: 'GRANTED',
+      retentionUntil: '2027-06-30',
+      notes: 'Supervisora de Operações de Fibra ISP',
+      createdAt: '2026-03-15 14:30:00',
+      updatedAt: '2026-07-29 14:00:00',
+    },
+  ];
+
+  let faceDetectionsList: any[] = [
+    {
+      id: 'facedet-101',
+      cameraId: 'cam-01',
+      cameraName: 'Câmera 01 - Portaria Principal (Fibra)',
+      personId: 'person-01',
+      personName: 'Carlos Eduardo Silva',
+      similarity: 98.4,
+      qualityScore: 94.2,
+      boundingBox: { x: 220, y: 140, width: 110, height: 130 },
+      snapshotUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&auto=format&fit=crop&q=80',
+      faceCropUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
+      timestamp: new Date().toISOString(),
+      isWatchlistAlert: false,
+      decision: 'MATCH',
+      location: 'Entrada Pedestres - Bloco A',
+    },
+  ];
+
+  let faceSettingsObj = {
+    minFaceSizePx: 80,
+    minSimilarityThreshold: 85,
+    qualityFilterMinScore: 70,
+    enableWatchlistAlerts: true,
+    autoPurgeDays: 90,
+    preferredDetector: 'SCRFD',
+    preferredEmbedder: 'ArcFace',
+    vectorEngine: 'pgvector',
+  };
+
+  let aiJobsList: any[] = [
+    {
+      id: 'job-gpu-01',
+      workerName: 'LPR Core Worker (YOLOv11 + PaddleOCR)',
+      type: 'LPR_WORKER',
+      status: 'RUNNING',
+      gpuDeviceId: 0,
+      currentFps: 124.5,
+      processedFrames: 1845200,
+      droppedFrames: 12,
+      latencyMs: 8.4,
+      vramUsedMB: 3420,
+      queueLagMs: 2.1,
+      activeCamerasCount: 16,
+      lastHeartbeat: new Date().toISOString(),
+    },
+    {
+      id: 'job-gpu-02',
+      workerName: 'Facial Worker (SCRFD + ArcFace 512d)',
+      type: 'FACIAL_WORKER',
+      status: 'RUNNING',
+      gpuDeviceId: 0,
+      currentFps: 92.1,
+      processedFrames: 1290100,
+      droppedFrames: 5,
+      latencyMs: 11.2,
+      vramUsedMB: 2850,
+      queueLagMs: 1.8,
+      activeCamerasCount: 12,
+      lastHeartbeat: new Date().toISOString(),
+    },
+  ];
+
+  let lgpdAuditLogsList: any[] = [
+    {
+      id: 'lgpd-log-1001',
+      operatorId: 'user-superadmin-01',
+      operatorName: 'Super Admin Unity',
+      operatorRole: 'ADMIN',
+      action: 'VIEW_BIOMETRIC',
+      targetType: 'PERSON_FACE',
+      targetId: 'person-01',
+      targetDetails: 'Visualização de dados biométricos de Carlos Eduardo Silva',
+      justificationLegalBasis: 'SEGURANCA_PUBLICA',
+      ipAddress: '187.54.12.98',
+      timestamp: new Date().toISOString(),
+    },
+  ];
+
+  let architectureConfigObj = {
+    primaryTopology: 'CENTRAL_GPU',
+    centralMediaMtxUrl: 'rtsp://datacenter-isp.internal:8554',
+    ffmpegPreset: 'gpu_nvenc',
+    gstreamerEnabled: true,
+    onvifAutoDiscovery: true,
+    redisQueueUrl: 'redis://datacenter-isp.internal:6379/0',
+    postgresVectorUrl: 'postgresql://admin:secret@datacenter-isp.internal:5432/vms_pgvector',
+    minioStorageUrl: 'https://s3-storage.datacenter-isp.internal',
+    edgeNodesCount: 4,
+    edgeSyncIntervalSec: 10,
+    offlineCacheEnabled: true,
+  };
+
   // Initialize Gemini AI Client for OCR Vision if API Key exists
   let aiClient: GoogleGenAI | null = null;
   if (process.env.GEMINI_API_KEY) {
@@ -304,6 +427,12 @@ async function startServer() {
         lprDetections,
         stolenVehicles,
         lprSettings,
+        personsList,
+        faceDetectionsList,
+        faceSettingsObj,
+        aiJobsList,
+        lgpdAuditLogsList,
+        architectureConfigObj,
       };
       fs.writeFileSync(LOCAL_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
@@ -340,7 +469,13 @@ async function startServer() {
         if (parsed.lprDetections && Array.isArray(parsed.lprDetections)) lprDetections = parsed.lprDetections;
         if (parsed.stolenVehicles && Array.isArray(parsed.stolenVehicles)) stolenVehicles = parsed.stolenVehicles;
         if (parsed.lprSettings) lprSettings = parsed.lprSettings;
-        console.log(`[ITL Storage] ${cameras.length} câmeras e ${users.length} usuários carregados do arquivo local.`);
+        if (parsed.personsList && Array.isArray(parsed.personsList)) personsList = parsed.personsList;
+        if (parsed.faceDetectionsList && Array.isArray(parsed.faceDetectionsList)) faceDetectionsList = parsed.faceDetectionsList;
+        if (parsed.faceSettingsObj) faceSettingsObj = parsed.faceSettingsObj;
+        if (parsed.aiJobsList && Array.isArray(parsed.aiJobsList)) aiJobsList = parsed.aiJobsList;
+        if (parsed.lgpdAuditLogsList && Array.isArray(parsed.lgpdAuditLogsList)) lgpdAuditLogsList = parsed.lgpdAuditLogsList;
+        if (parsed.architectureConfigObj) architectureConfigObj = parsed.architectureConfigObj;
+        console.log(`[ITL Storage] ${cameras.length} câmeras, ${users.length} usuários e ${personsList.length} pessoas carregadas do arquivo local.`);
         return true;
       }
     } catch (err) {
@@ -3563,145 +3698,6 @@ Responda ESTRITAMENTE um JSON no formato:
   // API VERSION 1 (v1) - PROFESSIONAL MONITORING PLATFORM
   // ==========================================
 
-  // In-memory initial state for v1 modules
-  let personsList: any[] = [
-    {
-      id: 'person-01',
-      name: 'Carlos Eduardo Silva',
-      document: '123.456.789-00',
-      type: 'RESIDENT',
-      status: 'ACTIVE',
-      photoUrls: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80'],
-      consentStatus: 'GRANTED',
-      retentionUntil: '2028-12-31',
-      notes: 'Morador Bloco A - Ap 302',
-      createdAt: '2026-02-10 10:00:00',
-      updatedAt: '2026-07-29 12:00:00',
-    },
-    {
-      id: 'person-02',
-      name: 'Mariana Oliveira Santos',
-      document: '987.654.321-11',
-      type: 'EMPLOYEE',
-      status: 'ACTIVE',
-      photoUrls: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80'],
-      consentStatus: 'GRANTED',
-      retentionUntil: '2027-06-30',
-      notes: 'Supervisora de Operações de Fibra ISP',
-      createdAt: '2026-03-15 14:30:00',
-      updatedAt: '2026-07-29 14:00:00',
-    },
-  ];
-
-  let faceDetectionsList: any[] = [
-    {
-      id: 'facedet-101',
-      cameraId: 'cam-01',
-      cameraName: 'Câmera 01 - Portaria Principal (Fibra)',
-      personId: 'person-01',
-      personName: 'Carlos Eduardo Silva',
-      similarity: 98.4,
-      qualityScore: 94.2,
-      boundingBox: { x: 220, y: 140, width: 110, height: 130 },
-      snapshotUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&auto=format&fit=crop&q=80',
-      faceCropUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
-      timestamp: new Date().toISOString(),
-      isWatchlistAlert: false,
-      decision: 'MATCH',
-      location: 'Entrada Pedestres - Bloco A',
-    },
-  ];
-
-  let faceSettingsObj = {
-    minFaceSizePx: 80,
-    minSimilarityThreshold: 85,
-    qualityFilterMinScore: 70,
-    enableWatchlistAlerts: true,
-    autoPurgeDays: 90,
-    preferredDetector: 'SCRFD',
-    preferredEmbedder: 'ArcFace',
-    vectorEngine: 'pgvector',
-  };
-
-  let aiJobsList: any[] = [
-    {
-      id: 'job-gpu-01',
-      workerName: 'LPR Core Worker (YOLOv11 + PaddleOCR)',
-      type: 'LPR_WORKER',
-      status: 'RUNNING',
-      gpuDeviceId: 0,
-      currentFps: 124.5,
-      processedFrames: 1845200,
-      droppedFrames: 12,
-      latencyMs: 8.4,
-      vramUsedMB: 3420,
-      queueLagMs: 2.1,
-      activeCamerasCount: 16,
-      lastHeartbeat: new Date().toISOString(),
-    },
-    {
-      id: 'job-gpu-02',
-      workerName: 'Facial Worker (SCRFD + ArcFace 512d)',
-      type: 'FACIAL_WORKER',
-      status: 'RUNNING',
-      gpuDeviceId: 0,
-      currentFps: 92.1,
-      processedFrames: 1290100,
-      droppedFrames: 5,
-      latencyMs: 11.2,
-      vramUsedMB: 2850,
-      queueLagMs: 1.8,
-      activeCamerasCount: 12,
-      lastHeartbeat: new Date().toISOString(),
-    },
-  ];
-
-  let gpuMetricsObj = {
-    gpuName: 'NVIDIA RTX 4090 / L40S Datacenter ISP',
-    driverVersion: '550.54.14',
-    cudaVersion: '12.4',
-    utilizationGpuPct: 42,
-    utilizationMemoryPct: 38,
-    vramTotalMB: 24576,
-    vramUsedMB: 9340,
-    vramFreeMB: 15236,
-    temperatureC: 54,
-    powerUsageW: 185,
-    powerLimitW: 350,
-    activeCudaCores: 16384,
-    tensorCoresActive: true,
-  };
-
-  let lgpdAuditLogsList: any[] = [
-    {
-      id: 'lgpd-log-1001',
-      operatorId: 'user-superadmin-01',
-      operatorName: 'Super Admin Unity',
-      operatorRole: 'ADMIN',
-      action: 'VIEW_BIOMETRIC',
-      targetType: 'PERSON_FACE',
-      targetId: 'person-01',
-      targetDetails: 'Visualização de dados biométricos de Carlos Eduardo Silva',
-      justificationLegalBasis: 'SEGURANCA_PUBLICA',
-      ipAddress: '187.54.12.98',
-      timestamp: new Date().toISOString(),
-    },
-  ];
-
-  let architectureConfigObj = {
-    primaryTopology: 'CENTRAL_GPU',
-    centralMediaMtxUrl: 'rtsp://datacenter-isp.internal:8554',
-    ffmpegPreset: 'gpu_nvenc',
-    gstreamerEnabled: true,
-    onvifAutoDiscovery: true,
-    redisQueueUrl: 'redis://datacenter-isp.internal:6379/0',
-    postgresVectorUrl: 'postgresql://admin:secret@datacenter-isp.internal:5432/vms_pgvector',
-    minioStorageUrl: 'https://s3-storage.datacenter-isp.internal',
-    edgeNodesCount: 4,
-    edgeSyncIntervalSec: 10,
-    offlineCacheEnabled: true,
-  };
-
   // 1. Streams & Ingestion APIs
   app.get('/api/v1/streams', (req, res) => {
     const activeStreams = cameras.map((c) => ({
@@ -3740,6 +3736,7 @@ Responda ESTRITAMENTE um JSON no formato:
       status: 'RUNNING',
       lastHeartbeat: new Date().toISOString(),
     }));
+    saveToLocalFile();
     addLog('ITL Admin', 'Workers de IA GPU reiniciados com sucesso', 'SYSTEM');
     res.json({ success: true, message: 'Todos os workers de IA foram reiniciados', jobs: aiJobsList });
   });
@@ -3751,12 +3748,34 @@ Responda ESTRITAMENTE um JSON no formato:
     if (job) {
       job.status = action === 'start' ? 'RUNNING' : 'PAUSED';
       job.lastHeartbeat = new Date().toISOString();
+      saveToLocalFile();
     }
     res.json({ success: true, job });
   });
 
   app.get('/api/v1/system/gpu', (req, res) => {
-    res.json(gpuMetricsObj);
+    const totalMemMB = Math.round(os.totalmem() / (1024 * 1024));
+    const freeMemMB = Math.round(os.freemem() / (1024 * 1024));
+    const usedMemMB = totalMemMB - freeMemMB;
+    const memUsagePct = Math.round((usedMemMB / totalMemMB) * 100);
+
+    res.json({
+      gpuName: 'NVIDIA RTX 4090 / L40S Datacenter ISP',
+      driverVersion: '550.54.14',
+      cudaVersion: '12.4',
+      utilizationGpuPct: Math.min(95, Math.max(15, Math.round(process.cpuUsage().user / 10000) % 60 + 20)),
+      utilizationMemoryPct: memUsagePct,
+      vramTotalMB: 24576,
+      vramUsedMB: Math.min(20000, 3000 + Math.round(process.memoryUsage().rss / (1024 * 1024)) * 10),
+      vramFreeMB: 24576 - Math.min(20000, 3000 + Math.round(process.memoryUsage().rss / (1024 * 1024)) * 10),
+      temperatureC: 52 + (Math.floor(Date.now() / 10000) % 8),
+      powerUsageW: 180 + (Math.floor(Date.now() / 5000) % 30),
+      powerLimitW: 350,
+      activeCudaCores: 16384,
+      tensorCoresActive: true,
+      systemTotalRamMB: totalMemMB,
+      systemUsedRamMB: usedMemMB,
+    });
   });
 
   app.get('/api/v1/system/health', (req, res) => {
@@ -3822,6 +3841,7 @@ Responda ESTRITAMENTE um JSON no formato:
       ipAddress: req.ip || '127.0.0.1',
       timestamp: new Date().toISOString(),
     });
+    saveToLocalFile();
     res.status(201).json(newPerson);
   });
 
@@ -3830,6 +3850,7 @@ Responda ESTRITAMENTE um JSON no formato:
     const idx = personsList.findIndex((p) => p.id === id);
     if (idx !== -1) {
       personsList[idx] = { ...personsList[idx], ...req.body, updatedAt: new Date().toISOString() };
+      saveToLocalFile();
       res.json(personsList[idx]);
     } else {
       res.status(404).json({ error: 'Pessoa não encontrada' });
@@ -3852,6 +3873,7 @@ Responda ESTRITAMENTE um JSON no formato:
       ipAddress: req.ip || '127.0.0.1',
       timestamp: new Date().toISOString(),
     });
+    saveToLocalFile();
     res.json({ success: true, message: 'Cadastro biométrico removido' });
   });
 
@@ -3866,6 +3888,7 @@ Responda ESTRITAMENTE um JSON no formato:
       timestamp: req.body.timestamp || new Date().toISOString(),
     };
     faceDetectionsList.unshift(newFaceDet);
+    saveToLocalFile();
     res.status(201).json(newFaceDet);
   });
 
@@ -3876,6 +3899,7 @@ Responda ESTRITAMENTE um JSON no formato:
     if (det) {
       det.decision = decision;
       if (personId) det.personId = personId;
+      saveToLocalFile();
     }
     res.json(det || { error: 'Detecção não encontrada' });
   });
@@ -3886,6 +3910,7 @@ Responda ESTRITAMENTE um JSON no formato:
 
   app.put('/api/v1/face/settings', (req, res) => {
     faceSettingsObj = { ...faceSettingsObj, ...req.body };
+    saveToLocalFile();
     res.json(faceSettingsObj);
   });
 
@@ -3909,6 +3934,7 @@ Responda ESTRITAMENTE um JSON no formato:
       ipAddress: req.ip || '127.0.0.1',
       timestamp: new Date().toISOString(),
     });
+    saveToLocalFile();
     res.json({ success: true, purgedCount, retentionDays });
   });
 
@@ -3919,6 +3945,7 @@ Responda ESTRITAMENTE um JSON no formato:
 
   app.put('/api/v1/architecture/config', (req, res) => {
     architectureConfigObj = { ...architectureConfigObj, ...req.body };
+    saveToLocalFile();
     addLog('ITL Admin', `Topologia de arquitetura alterada para ${architectureConfigObj.primaryTopology}`, 'SYSTEM');
     res.json(architectureConfigObj);
   });
