@@ -3480,25 +3480,9 @@ Responda ESTRITAMENTE um JSON no formato:
         }
       }
 
-      // 5. CAMERA & IMAGE CONTEXT AUTO-PRESET RECOGNITION FALLBACK
-      // If camera is Salto da Divisa, Pop Corumbau or Liberdade, auto-recognize plate cleanly
+      // 5. PRODUCTION MODE: If no plate is detected by OCR engines, return clean notification
       if (!rawPlate || !isValidBrazilianPlate(rawPlate)) {
-        const camNameLower = (cameraName || '').toLowerCase();
-        const camIdLower = (cameraId || '').toLowerCase();
-        
-        if (camNameLower.includes('salto') || camNameLower.includes('divisa') || camNameLower.includes('itamaraju') || camIdLower.includes('salto')) {
-          rawPlate = 'QVP8C12';
-          detectedType = 'Carro';
-          detectedColor = 'Branco';
-        } else if (camNameLower.includes('corumbau') || camNameLower.includes('garagem') || camIdLower.includes('corumbau') || camIdLower.includes('pop')) {
-          rawPlate = 'PKO4A53';
-          detectedType = 'Utilitário';
-          detectedColor = 'Bege';
-        } else if (camNameLower.includes('liberdade') || camIdLower.includes('cam-01')) {
-          rawPlate = 'O0LDG81';
-          detectedType = 'Carro';
-          detectedColor = 'Prata';
-        }
+        // No fake hardcoded camera name fallbacks in production
       }
 
       // In production mode, if no plate was extracted and no test hint provided, inform user cleanly
