@@ -240,3 +240,153 @@ export interface LPRSettings {
   autoNotifyWebhooks: boolean;
   webhookUrl?: string;
 }
+
+// ----------------------------------------------------------------------
+// Facial Recognition Module
+// ----------------------------------------------------------------------
+export interface Person {
+  id: string;
+  name: string;
+  document?: string;
+  type: 'RESIDENT' | 'EMPLOYEE' | 'VISITOR' | 'WATCHLIST' | 'UNKNOWN';
+  status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED';
+  photoUrls: string[];
+  consentStatus: 'GRANTED' | 'REVOKED' | 'NOT_REQUIRED' | 'PENDING';
+  retentionUntil?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FaceEmbedding {
+  id: string;
+  personId: string;
+  embeddingVector: number[];
+  modelVersion: string; // e.g. 'ArcFace-r100-v2'
+  qualityScore: number;
+  createdAt: string;
+}
+
+export interface FaceDetection {
+  id: string;
+  cameraId: string;
+  cameraName: string;
+  personId?: string;
+  personName?: string;
+  similarity?: number;
+  qualityScore: number;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  snapshotUrl: string;
+  faceCropUrl: string;
+  timestamp: string;
+  isWatchlistAlert: boolean;
+  decision: 'MATCH' | 'NO_MATCH' | 'LOW_QUALITY' | 'MANUAL_REVIEW';
+  location?: string;
+}
+
+export interface FaceSettings {
+  minFaceSizePx: number;
+  minSimilarityThreshold: number; // 0 to 100
+  qualityFilterMinScore: number;
+  enableWatchlistAlerts: boolean;
+  autoPurgeDays: number;
+  preferredDetector: 'SCRFD' | 'RetinaFace' | 'YOLO-Face';
+  preferredEmbedder: 'ArcFace' | 'InsightFace' | 'Facenet';
+  vectorEngine: 'pgvector' | 'Qdrant' | 'Milvus' | 'FAISS';
+}
+
+// ----------------------------------------------------------------------
+// Central AI Engine, GPU & Worker Types
+// ----------------------------------------------------------------------
+export interface AIWorkerJob {
+  id: string;
+  workerName: string;
+  type: 'LPR_WORKER' | 'FACIAL_WORKER' | 'EVENT_WORKER' | 'RECORDING_WORKER';
+  status: 'RUNNING' | 'IDLE' | 'PAUSED' | 'ERROR';
+  gpuDeviceId: number;
+  currentFps: number;
+  processedFrames: number;
+  droppedFrames: number;
+  latencyMs: number;
+  vramUsedMB: number;
+  queueLagMs: number;
+  activeCamerasCount: number;
+  lastHeartbeat: string;
+}
+
+export interface GPUMetrics {
+  gpuName: string;
+  driverVersion: string;
+  cudaVersion: string;
+  utilizationGpuPct: number;
+  utilizationMemoryPct: number;
+  vramTotalMB: number;
+  vramUsedMB: number;
+  vramFreeMB: number;
+  temperatureC: number;
+  powerUsageW: number;
+  powerLimitW: number;
+  activeCudaCores: number;
+  tensorCoresActive: boolean;
+}
+
+export interface CameraAISettings {
+  cameraId: string;
+  cameraName: string;
+  lprEnabled: boolean;
+  facialEnabled: boolean;
+  inferenceFps: number; // e.g. 15 or 30 FPS
+  minPlateConfidence: number;
+  minFaceSimilarity: number;
+  deduplicationWindowSec: number;
+  retentionPolicyDays: number;
+  processingMode: 'CENTRAL_GPU' | 'EDGE_JETSON' | 'HYBRID_SYNC';
+  webhooksEnabled: boolean;
+}
+
+// ----------------------------------------------------------------------
+// LGPD Audit & Compliance
+// ----------------------------------------------------------------------
+export interface LGPDAuditLog {
+  id: string;
+  operatorId: string;
+  operatorName: string;
+  operatorRole: string;
+  action: 'SEARCH' | 'VIEW_BIOMETRIC' | 'EXPORT_EVIDENCE' | 'PURGE_DATA' | 'CONSENT_CHANGE' | 'PLATE_MASK_TOGGLE';
+  targetType: 'PERSON_FACE' | 'LPR_PLATE' | 'AUDIT_EXPORT' | 'CONSENT_RECORD';
+  targetId?: string;
+  targetDetails: string;
+  justificationLegalBasis: 'SEGURANCA_PUBLICA' | 'CONSENTIMENTO' | 'LEGITIMO_INTERESSE' | 'CUMPRIMENTO_OBRIGACAO_LEGAL';
+  ipAddress: string;
+  timestamp: string;
+}
+
+// ----------------------------------------------------------------------
+// Architecture & Edge Topology Config
+// ----------------------------------------------------------------------
+export interface ArchitectureConfig {
+  primaryTopology: 'CENTRAL_GPU' | 'HYBRID_RESILIENT' | 'DISTRIBUTED_EDGE';
+  centralMediaMtxUrl: string;
+  ffmpegPreset: 'ultrafast' | 'medium' | 'gpu_nvenc';
+  gstreamerEnabled: boolean;
+  onvifAutoDiscovery: boolean;
+  redisQueueUrl: string;
+  postgresVectorUrl: string;
+  minioStorageUrl: string;
+  edgeNodesCount: number;
+  edgeSyncIntervalSec: number;
+  offlineCacheEnabled: boolean;
+}
+
+export interface StreamInfo {
+  cameraId: string;
+  cameraName: string;
+  rtspUrl: string;
+  hlsUrl: string;
+  webrtcUrl: string;
+  status: 'ONLINE' | 'OFFLINE' | 'DEGRADED';
+  bitrateKbps: number;
+  codecs: string; // e.g. "H.264 / AAC"
+  ingestGateway: 'MediaMTX-Fiber' | 'FFmpeg-NVENC' | 'GStreamer-DeepStream' | 'ONVIF-Direct';
+}
+

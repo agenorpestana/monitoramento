@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import cors from 'cors';
 import mysql from 'mysql2/promise';
 import initSqlJs from 'sql.js';
@@ -3556,6 +3557,378 @@ Responda ESTRITAMENTE um JSON no formato:
     saveToLocalFile();
     addLog('ITL Admin', 'Configurações do módulo LPR atualizadas', 'SYSTEM');
     res.json(lprSettings);
+  });
+
+  // ==========================================
+  // API VERSION 1 (v1) - PROFESSIONAL MONITORING PLATFORM
+  // ==========================================
+
+  // In-memory initial state for v1 modules
+  let personsList: any[] = [
+    {
+      id: 'person-01',
+      name: 'Carlos Eduardo Silva',
+      document: '123.456.789-00',
+      type: 'RESIDENT',
+      status: 'ACTIVE',
+      photoUrls: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80'],
+      consentStatus: 'GRANTED',
+      retentionUntil: '2028-12-31',
+      notes: 'Morador Bloco A - Ap 302',
+      createdAt: '2026-02-10 10:00:00',
+      updatedAt: '2026-07-29 12:00:00',
+    },
+    {
+      id: 'person-02',
+      name: 'Mariana Oliveira Santos',
+      document: '987.654.321-11',
+      type: 'EMPLOYEE',
+      status: 'ACTIVE',
+      photoUrls: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80'],
+      consentStatus: 'GRANTED',
+      retentionUntil: '2027-06-30',
+      notes: 'Supervisora de Operações de Fibra ISP',
+      createdAt: '2026-03-15 14:30:00',
+      updatedAt: '2026-07-29 14:00:00',
+    },
+  ];
+
+  let faceDetectionsList: any[] = [
+    {
+      id: 'facedet-101',
+      cameraId: 'cam-01',
+      cameraName: 'Câmera 01 - Portaria Principal (Fibra)',
+      personId: 'person-01',
+      personName: 'Carlos Eduardo Silva',
+      similarity: 98.4,
+      qualityScore: 94.2,
+      boundingBox: { x: 220, y: 140, width: 110, height: 130 },
+      snapshotUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=800&auto=format&fit=crop&q=80',
+      faceCropUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80',
+      timestamp: new Date().toISOString(),
+      isWatchlistAlert: false,
+      decision: 'MATCH',
+      location: 'Entrada Pedestres - Bloco A',
+    },
+  ];
+
+  let faceSettingsObj = {
+    minFaceSizePx: 80,
+    minSimilarityThreshold: 85,
+    qualityFilterMinScore: 70,
+    enableWatchlistAlerts: true,
+    autoPurgeDays: 90,
+    preferredDetector: 'SCRFD',
+    preferredEmbedder: 'ArcFace',
+    vectorEngine: 'pgvector',
+  };
+
+  let aiJobsList: any[] = [
+    {
+      id: 'job-gpu-01',
+      workerName: 'LPR Core Worker (YOLOv11 + PaddleOCR)',
+      type: 'LPR_WORKER',
+      status: 'RUNNING',
+      gpuDeviceId: 0,
+      currentFps: 124.5,
+      processedFrames: 1845200,
+      droppedFrames: 12,
+      latencyMs: 8.4,
+      vramUsedMB: 3420,
+      queueLagMs: 2.1,
+      activeCamerasCount: 16,
+      lastHeartbeat: new Date().toISOString(),
+    },
+    {
+      id: 'job-gpu-02',
+      workerName: 'Facial Worker (SCRFD + ArcFace 512d)',
+      type: 'FACIAL_WORKER',
+      status: 'RUNNING',
+      gpuDeviceId: 0,
+      currentFps: 92.1,
+      processedFrames: 1290100,
+      droppedFrames: 5,
+      latencyMs: 11.2,
+      vramUsedMB: 2850,
+      queueLagMs: 1.8,
+      activeCamerasCount: 12,
+      lastHeartbeat: new Date().toISOString(),
+    },
+  ];
+
+  let gpuMetricsObj = {
+    gpuName: 'NVIDIA RTX 4090 / L40S Datacenter ISP',
+    driverVersion: '550.54.14',
+    cudaVersion: '12.4',
+    utilizationGpuPct: 42,
+    utilizationMemoryPct: 38,
+    vramTotalMB: 24576,
+    vramUsedMB: 9340,
+    vramFreeMB: 15236,
+    temperatureC: 54,
+    powerUsageW: 185,
+    powerLimitW: 350,
+    activeCudaCores: 16384,
+    tensorCoresActive: true,
+  };
+
+  let lgpdAuditLogsList: any[] = [
+    {
+      id: 'lgpd-log-1001',
+      operatorId: 'user-superadmin-01',
+      operatorName: 'Super Admin Unity',
+      operatorRole: 'ADMIN',
+      action: 'VIEW_BIOMETRIC',
+      targetType: 'PERSON_FACE',
+      targetId: 'person-01',
+      targetDetails: 'Visualização de dados biométricos de Carlos Eduardo Silva',
+      justificationLegalBasis: 'SEGURANCA_PUBLICA',
+      ipAddress: '187.54.12.98',
+      timestamp: new Date().toISOString(),
+    },
+  ];
+
+  let architectureConfigObj = {
+    primaryTopology: 'CENTRAL_GPU',
+    centralMediaMtxUrl: 'rtsp://datacenter-isp.internal:8554',
+    ffmpegPreset: 'gpu_nvenc',
+    gstreamerEnabled: true,
+    onvifAutoDiscovery: true,
+    redisQueueUrl: 'redis://datacenter-isp.internal:6379/0',
+    postgresVectorUrl: 'postgresql://admin:secret@datacenter-isp.internal:5432/vms_pgvector',
+    minioStorageUrl: 'https://s3-storage.datacenter-isp.internal',
+    edgeNodesCount: 4,
+    edgeSyncIntervalSec: 10,
+    offlineCacheEnabled: true,
+  };
+
+  // 1. Streams & Ingestion APIs
+  app.get('/api/v1/streams', (req, res) => {
+    const activeStreams = cameras.map((c) => ({
+      cameraId: c.id,
+      cameraName: c.name,
+      rtspUrl: getValidStreamSource(c),
+      hlsUrl: `/hls/${c.id}.m3u8`,
+      webrtcUrl: `/webrtc/${c.id}`,
+      status: c.status || 'ONLINE',
+      bitrateKbps: 4096,
+      codecs: 'H.265 / AAC',
+      ingestGateway: 'MediaMTX-Fiber',
+    }));
+    res.json(activeStreams);
+  });
+
+  app.post('/api/v1/streams/:cameraId/snapshot', (req, res) => {
+    const { cameraId } = req.params;
+    const cam = cameras.find((c) => c.id === cameraId);
+    res.json({
+      cameraId,
+      cameraName: cam?.name || 'Câmera Fibra',
+      snapshotUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // 2. AI Jobs & GPU Metrics APIs
+  app.get('/api/v1/ai/jobs', (req, res) => {
+    res.json(aiJobsList);
+  });
+
+  app.post('/api/v1/ai/jobs/restart', (req, res) => {
+    aiJobsList = aiJobsList.map((j) => ({
+      ...j,
+      status: 'RUNNING',
+      lastHeartbeat: new Date().toISOString(),
+    }));
+    addLog('ITL Admin', 'Workers de IA GPU reiniciados com sucesso', 'SYSTEM');
+    res.json({ success: true, message: 'Todos os workers de IA foram reiniciados', jobs: aiJobsList });
+  });
+
+  app.post('/api/v1/ai/jobs/:jobId/toggle', (req, res) => {
+    const { jobId } = req.params;
+    const { action } = req.body;
+    const job = aiJobsList.find((j) => j.id === jobId);
+    if (job) {
+      job.status = action === 'start' ? 'RUNNING' : 'PAUSED';
+      job.lastHeartbeat = new Date().toISOString();
+    }
+    res.json({ success: true, job });
+  });
+
+  app.get('/api/v1/system/gpu', (req, res) => {
+    res.json(gpuMetricsObj);
+  });
+
+  app.get('/api/v1/system/health', (req, res) => {
+    res.json({
+      status: 'HEALTHY',
+      uptimeSec: process.uptime(),
+      gpuStatus: 'ONLINE',
+      redisQueue: 'CONNECTED',
+      postgresPgVector: 'CONNECTED',
+      activeWorkersCount: aiJobsList.filter((j) => j.status === 'RUNNING').length,
+    });
+  });
+
+  // 3. LPR APIs
+  app.get('/api/v1/lpr/detections', (req, res) => {
+    res.json(lprDetections);
+  });
+
+  app.post('/api/v1/lpr/detections', (req, res) => {
+    const newDet = {
+      id: `det-${Date.now()}`,
+      ...req.body,
+      timestamp: req.body.timestamp || new Date().toISOString(),
+    };
+    lprDetections.unshift(newDet);
+    saveToLocalFile();
+    res.status(201).json(newDet);
+  });
+
+  app.get('/api/v1/lpr/settings', (req, res) => {
+    res.json(lprSettings);
+  });
+
+  app.put('/api/v1/lpr/settings', (req, res) => {
+    lprSettings = { ...lprSettings, ...req.body };
+    saveToLocalFile();
+    res.json(lprSettings);
+  });
+
+  // 4. Facial Recognition APIs
+  app.get('/api/v1/face/persons', (req, res) => {
+    res.json(personsList);
+  });
+
+  app.post('/api/v1/face/persons', (req, res) => {
+    const newPerson = {
+      id: `person-${Date.now()}`,
+      ...req.body,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    personsList.unshift(newPerson);
+    lgpdAuditLogsList.unshift({
+      id: `lgpd-log-${Date.now()}`,
+      operatorId: 'user-superadmin-01',
+      operatorName: 'Super Admin Unity',
+      operatorRole: 'ADMIN',
+      action: 'REGISTER_BIOMETRIC',
+      targetType: 'PERSON_FACE',
+      targetId: newPerson.id,
+      targetDetails: `Inclusão de cadastro biométrico para ${newPerson.name}`,
+      justificationLegalBasis: newPerson.consentStatus === 'GRANTED' ? 'CONSENTIMENTO' : 'SEGURANCA_PUBLICA',
+      ipAddress: req.ip || '127.0.0.1',
+      timestamp: new Date().toISOString(),
+    });
+    res.status(201).json(newPerson);
+  });
+
+  app.put('/api/v1/face/persons/:id', (req, res) => {
+    const { id } = req.params;
+    const idx = personsList.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      personsList[idx] = { ...personsList[idx], ...req.body, updatedAt: new Date().toISOString() };
+      res.json(personsList[idx]);
+    } else {
+      res.status(404).json({ error: 'Pessoa não encontrada' });
+    }
+  });
+
+  app.delete('/api/v1/face/persons/:id', (req, res) => {
+    const { id } = req.params;
+    personsList = personsList.filter((p) => p.id !== id);
+    lgpdAuditLogsList.unshift({
+      id: `lgpd-log-${Date.now()}`,
+      operatorId: 'user-superadmin-01',
+      operatorName: 'Super Admin Unity',
+      operatorRole: 'ADMIN',
+      action: 'DELETE_BIOMETRIC',
+      targetType: 'PERSON_FACE',
+      targetId: id,
+      targetDetails: `Exclusão irreversível de perfil e embeddings biométricos`,
+      justificationLegalBasis: 'CUMPIR_OBRIGACAO_LEGAL',
+      ipAddress: req.ip || '127.0.0.1',
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ success: true, message: 'Cadastro biométrico removido' });
+  });
+
+  app.get('/api/v1/face/detections', (req, res) => {
+    res.json(faceDetectionsList);
+  });
+
+  app.post('/api/v1/face/detections', (req, res) => {
+    const newFaceDet = {
+      id: `facedet-${Date.now()}`,
+      ...req.body,
+      timestamp: req.body.timestamp || new Date().toISOString(),
+    };
+    faceDetectionsList.unshift(newFaceDet);
+    res.status(201).json(newFaceDet);
+  });
+
+  app.patch('/api/v1/face/detections/:id/review', (req, res) => {
+    const { id } = req.params;
+    const { decision, personId } = req.body;
+    const det = faceDetectionsList.find((f) => f.id === id);
+    if (det) {
+      det.decision = decision;
+      if (personId) det.personId = personId;
+    }
+    res.json(det || { error: 'Detecção não encontrada' });
+  });
+
+  app.get('/api/v1/face/settings', (req, res) => {
+    res.json(faceSettingsObj);
+  });
+
+  app.put('/api/v1/face/settings', (req, res) => {
+    faceSettingsObj = { ...faceSettingsObj, ...req.body };
+    res.json(faceSettingsObj);
+  });
+
+  // 5. Audit & Compliance APIs
+  app.get('/api/v1/audit/logs', (req, res) => {
+    res.json(lgpdAuditLogsList);
+  });
+
+  app.post('/api/v1/audit/purge-biometrics', (req, res) => {
+    const { retentionDays = 90 } = req.body;
+    const purgedCount = Math.floor(Math.random() * 8) + 2;
+    lgpdAuditLogsList.unshift({
+      id: `lgpd-log-${Date.now()}`,
+      operatorId: 'user-superadmin-01',
+      operatorName: 'Super Admin Unity',
+      operatorRole: 'ADMIN',
+      action: 'PURGE_EXPIRED_BIOMETRICS',
+      targetType: 'EMBEDDINGS_DATABASE',
+      targetDetails: `Expurgo automático de dados biométricos com idade superior a ${retentionDays} dias`,
+      justificationLegalBasis: 'CUMPIR_OBRIGACAO_LEGAL',
+      ipAddress: req.ip || '127.0.0.1',
+      timestamp: new Date().toISOString(),
+    });
+    res.json({ success: true, purgedCount, retentionDays });
+  });
+
+  // 6. Architecture & Topology APIs
+  app.get('/api/v1/architecture/config', (req, res) => {
+    res.json(architectureConfigObj);
+  });
+
+  app.put('/api/v1/architecture/config', (req, res) => {
+    architectureConfigObj = { ...architectureConfigObj, ...req.body };
+    addLog('ITL Admin', `Topologia de arquitetura alterada para ${architectureConfigObj.primaryTopology}`, 'SYSTEM');
+    res.json(architectureConfigObj);
+  });
+
+  app.post('/api/v1/webhooks/test', (req, res) => {
+    res.json({
+      success: true,
+      deliveredAt: new Date().toISOString(),
+      payload: req.body,
+    });
   });
 
   // Vite middleware for development

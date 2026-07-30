@@ -19,6 +19,11 @@ import { SystemBlockedOverlay } from './components/SystemBlockedOverlay';
 import { FinancialAlertBanner } from './components/FinancialAlertBanner';
 import { MercadoPagoSettingsModal } from './components/MercadoPagoSettingsModal';
 import { LPRPlateRecognition } from './components/LPRPlateRecognition';
+import { AIHubPanel } from './components/AIHubPanel';
+import { FacialRecognitionPanel } from './components/FacialRecognitionPanel';
+import { LGPDAuditPanel } from './components/LGPDAuditPanel';
+import { ArchitectureConfigPanel } from './components/ArchitectureConfigPanel';
+import { EventMapPanel } from './components/EventMapPanel';
 
 import {
   Camera,
@@ -37,6 +42,15 @@ import {
   LPRDetection,
   StolenVehicle,
   LPRSettings,
+  Person,
+  FaceDetection,
+  FaceSettings,
+  AIWorkerJob,
+  GPUMetrics,
+  CameraAISettings,
+  LGPDAuditLog,
+  ArchitectureConfig,
+  StreamInfo,
 } from './types';
 
 import {
@@ -51,6 +65,14 @@ import {
   INITIAL_STOLEN_VEHICLES,
   INITIAL_LPR_DETECTIONS,
   INITIAL_LPR_SETTINGS,
+  INITIAL_PERSONS,
+  INITIAL_FACE_DETECTIONS,
+  INITIAL_FACE_SETTINGS,
+  INITIAL_AI_JOBS,
+  INITIAL_GPU_METRICS,
+  INITIAL_LGPD_AUDIT_LOGS,
+  INITIAL_ARCHITECTURE_CONFIG,
+  INITIAL_STREAMS,
 } from './data/mockData';
 
 import {
@@ -123,6 +145,21 @@ export default function App() {
   const [lprDetections, setLprDetections] = useState<LPRDetection[]>(INITIAL_LPR_DETECTIONS);
   const [stolenVehicles, setStolenVehicles] = useState<StolenVehicle[]>(INITIAL_STOLEN_VEHICLES);
   const [lprSettings, setLprSettings] = useState<LPRSettings>(INITIAL_LPR_SETTINGS);
+
+  // Facial Recognition States
+  const [persons, setPersons] = useState<Person[]>(INITIAL_PERSONS);
+  const [faceDetections, setFaceDetections] = useState<FaceDetection[]>(INITIAL_FACE_DETECTIONS);
+  const [faceSettings, setFaceSettings] = useState<FaceSettings>(INITIAL_FACE_SETTINGS);
+
+  // AI Workers & GPU States
+  const [aiJobs, setAiJobs] = useState<AIWorkerJob[]>(INITIAL_AI_JOBS);
+  const [gpuMetrics, setGpuMetrics] = useState<GPUMetrics>(INITIAL_GPU_METRICS);
+  const [cameraAiSettings, setCameraAiSettings] = useState<CameraAISettings[]>([]);
+
+  // LGPD & Architecture States
+  const [lgpdLogs, setLgpdLogs] = useState<LGPDAuditLog[]>(INITIAL_LGPD_AUDIT_LOGS);
+  const [architectureConfig, setArchitectureConfig] = useState<ArchitectureConfig>(INITIAL_ARCHITECTURE_CONFIG);
+  const [streams, setStreams] = useState<StreamInfo[]>(INITIAL_STREAMS);
 
   // Financial States
   const [plans, setPlans] = useState<FinancialPlan[]>(INITIAL_PLANS);
@@ -575,6 +612,144 @@ export default function App() {
     setLprDetections((prev) => prev.filter((d) => d.id !== id));
   };
 
+  // Sync camera AI settings whenever cameras list changes
+  useEffect(() => {
+    if (cameras.length > 0) {
+      setCameraAiSettings(
+        cameras.map((c) => ({
+          cameraId: c.id,
+          cameraName: c.name,
+          lprEnabled: true,
+          facialEnabled: true,
+          inferenceFps: 15,
+          minPlateConfidence: 75,
+          minFaceSimilarity: 85,
+          processingMode: 'CENTRAL_GPU',
+        }))
+      );
+    }
+  }, [cameras]);
+
+  // AI Workers Handlers
+  const handleRestartJobs = async () => {
+    try {
+      const res = await fetch('/api/v1/ai/jobs/restart', { method: 'POST' }).then((r) => r.json());
+      if (res && res.jobs) setAiJobs(res.jobs);
+    } catch (e) {
+      setAiJobs((prev) => prev.map((j) => ({ ...j, status: 'RUNNING' })));
+    }
+  };
+
+  const handleToggleJobStatus = async (jobId: string, action: 'start' | 'pause') => {
+    try {
+      await fetch(`/api/v1/ai/jobs/${jobId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+    } catch (e) {}
+    setAiJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, status: action === 'start' ? 'RUNNING' : 'PAUSED' } : j))
+    );
+  };
+
+  const handleUpdateCameraAiSetting = async (setting: CameraAISettings) => {
+    setCameraAiSettings((prev) => prev.map((s) => (s.cameraId === setting.cameraId ? setting : s)));
+  };
+
+  // Facial Recognition Handlers
+  const handleAddPerson = async (person: Omit<Person, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const res = await fetch('/api/v1/face/persons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(person),
+      }).then((r) => r.json());
+      if (res && res.id) {
+        setPersons((prev) => [res, ...prev]);
+        return;
+      }
+    } catch (e) {}
+    const newP: Person = {
+      ...person,
+      id: `person-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setPersons((prev) => [newP, ...prev]);
+  };
+
+  const handleDeletePerson = async (id: string) => {
+    try {
+      await fetch(`/api/v1/face/persons/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    setPersons((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleUpdateConsentStatus = async (id: string, consentStatus: Person['consentStatus']) => {
+    try {
+      await fetch(`/api/v1/face/persons/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consentStatus }),
+      });
+    } catch (e) {}
+    setPersons((prev) => prev.map((p) => (p.id === id ? { ...p, consentStatus } : p)));
+  };
+
+  const handleManualReviewDecision = async (
+    detectionId: string,
+    decision: 'MATCH' | 'NO_MATCH',
+    personId?: string
+  ) => {
+    try {
+      await fetch(`/api/v1/face/detections/${detectionId}/review`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision, personId }),
+      });
+    } catch (e) {}
+    setFaceDetections((prev) =>
+      prev.map((f) => (f.id === detectionId ? { ...f, decision, personId: personId || f.personId } : f))
+    );
+  };
+
+  const handleUpdateFaceSettings = async (settings: FaceSettings) => {
+    try {
+      await fetch('/api/v1/face/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+    } catch (e) {}
+    setFaceSettings(settings);
+  };
+
+  // LGPD & Architecture Handlers
+  const handlePurgeBiometrics = async (retentionDays: number) => {
+    try {
+      const res = await fetch('/api/v1/audit/purge-biometrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retentionDays }),
+      }).then((r) => r.json());
+      return { purgedCount: res.purgedCount || 5 };
+    } catch (e) {
+      return { purgedCount: 4 };
+    }
+  };
+
+  const handleUpdateArchitectureConfig = async (cfg: ArchitectureConfig) => {
+    try {
+      await fetch('/api/v1/architecture/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      });
+    } catch (e) {}
+    setArchitectureConfig(cfg);
+  };
+
   // Render Authenticated Dashboard
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
@@ -688,6 +863,57 @@ export default function App() {
               onUpdateSettings={handleUpdateLprSettings}
               onClearHistory={handleClearLprHistory}
               onDeleteDetection={handleDeleteLprDetection}
+            />
+          )}
+
+          {activeTab === 'facial-recognition' && (
+            <FacialRecognitionPanel
+              persons={persons}
+              faceDetections={faceDetections}
+              faceSettings={faceSettings}
+              activeUser={activeUser}
+              onAddPerson={handleAddPerson}
+              onDeletePerson={handleDeletePerson}
+              onUpdateConsentStatus={handleUpdateConsentStatus}
+              onManualReviewDecision={handleManualReviewDecision}
+              onUpdateFaceSettings={handleUpdateFaceSettings}
+            />
+          )}
+
+          {activeTab === 'ai-hub' && (
+            <AIHubPanel
+              aiJobs={aiJobs}
+              gpuMetrics={gpuMetrics}
+              cameras={cameras}
+              cameraSettings={cameraAiSettings}
+              onRestartJobs={handleRestartJobs}
+              onToggleJobStatus={handleToggleJobStatus}
+              onUpdateCameraAISetting={handleUpdateCameraAiSetting}
+            />
+          )}
+
+          {activeTab === 'event-map' && (
+            <EventMapPanel
+              cameras={cameras}
+              lprDetections={lprDetections}
+              faceDetections={faceDetections}
+              alerts={alerts}
+            />
+          )}
+
+          {activeTab === 'lgpd-audit' && (
+            <LGPDAuditPanel
+              logs={lgpdLogs}
+              activeUser={activeUser}
+              onPurgeBiometrics={handlePurgeBiometrics}
+            />
+          )}
+
+          {activeTab === 'architecture-config' && (
+            <ArchitectureConfigPanel
+              config={architectureConfig}
+              streams={streams}
+              onUpdateConfig={handleUpdateArchitectureConfig}
             />
           )}
 

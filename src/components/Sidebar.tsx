@@ -12,6 +12,11 @@ import {
   Lock,
   DollarSign,
   Car,
+  Cpu,
+  UserCheck,
+  Scale,
+  Network,
+  MapPin,
 } from 'lucide-react';
 
 import { User } from '../types';
@@ -40,8 +45,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const rawNavItems = [
     { id: 'live-grid', label: 'Câmeras ao Vivo', icon: Grid, badge: totalCameras },
     { id: 'lpr-recognition', label: 'Placas LPR & Roubos', icon: Car },
+    { id: 'facial-recognition', label: 'Reconhecimento Facial', icon: UserCheck },
+    { id: 'ai-hub', label: 'Central de IA & GPU', icon: Cpu },
+    { id: 'event-map', label: 'Mapa de Ocorrências (GIS)', icon: MapPin },
     { id: 'camera-map', label: 'Mapa Vizinhança', icon: Map },
     { id: 'motion-alerts', label: 'Alertas de Movimento', icon: Bell, badge: unreadAlertsCount, alert: unreadAlertsCount > 0 },
+    { id: 'lgpd-audit', label: 'Auditoria LGPD & Biometria', icon: Scale },
+    { id: 'architecture-config', label: 'Arquitetura Fibra & Topology', icon: Network },
     { id: 'cloud-recordings', label: 'Gravações na Nuvem', icon: Film },
     { id: 'camera-admin', label: 'Adicionar / RTSP', icon: PlusCircle },
     { id: 'user-management', label: 'Acesso Multiusuário', icon: Users, adminOnly: true },

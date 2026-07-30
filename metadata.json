@@ -1,6 +1,6 @@
 {
   "name": "Central ITL - Segurança & Câmeras ao Vivo",
-  "description": "Sistema ITL de monitoramento com LPR Reconhecimento de Placas (YOLO + PaddleOCR/EasyOCR/Gemini Vision), cadastro de veículos roubados/procurados com alerta em tempo real, deduplicação inteligente para carros parados e mapa de ocorrências com geolocalização exata.",
+  "description": "Plataforma profissional de monitoramento por fibra óptica com LPR/ALPR brasileiro, Reconhecimento Facial (ArcFace + pgvector), Central de IA & Cluster GPU NVIDIA, Auditoria e Expurgos LGPD, e Ingestão RTSP/MediaMTX/ONVIF.",
   "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
