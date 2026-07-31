@@ -66,7 +66,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
   const [activeTab, setActiveTab] = useState<'scanner' | 'stolen' | 'history' | 'map' | 'settings'>('scanner');
   const [selectedCameraId, setSelectedCameraId] = useState<string>(cameras[0]?.id || 'cam-01');
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [autoScanLoop, setAutoScanLoop] = useState<boolean>(false);
+  const [autoScanLoop, setAutoScanLoop] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(!lprSettings.enableAudioAlerts);
   const [latestDetection, setLatestDetection] = useState<LPRDetection | null>(lprDetections[0] || null);
   const [isThrottledBanner, setIsThrottledBanner] = useState<boolean>(false);
@@ -237,6 +237,8 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
             } else {
               setTestSuccessMessage(`🟢 Modo Produção: Placa ${res.detection.plate} identificada e gravada no banco para rastreamento.`);
             }
+          } else if (res.savedToHistory === false) {
+            setTestSuccessMessage(res.message || `🟢 Modo Produção: Placa identificada. Como não é um veículo cadastrado na lista, não foi adicionada ao histórico.`);
           }
         } else {
           setScanErrorMessage(res.message || 'Nenhuma placa legível foi identificada na imagem.');

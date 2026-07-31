@@ -1,6 +1,6 @@
 export type CameraStatus = 'ONLINE' | 'OFFLINE' | 'RECORDING' | 'ALERT';
 
-export type AlertType = 'HUMAN' | 'VEHICLE' | 'ANIMAL' | 'INTRUSION' | 'SOUND' | 'MOTION';
+export type AlertType = 'HUMAN' | 'VEHICLE' | 'ANIMAL' | 'INTRUSION' | 'SOUND' | 'MOTION' | 'LPR_STOLEN';
 
 export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 

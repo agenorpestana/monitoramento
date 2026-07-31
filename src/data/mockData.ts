@@ -54,7 +54,53 @@ export const INITIAL_ALERTS: MotionAlert[] = [];
 
 export const INITIAL_RECORDINGS: CloudRecording[] = [];
 
-export const INITIAL_STOLEN_VEHICLES: StolenVehicle[] = [];
+export const INITIAL_STOLEN_VEHICLES: StolenVehicle[] = [
+  {
+    id: 'stolen-01',
+    plate: 'QVP8C12',
+    normalizedPlate: 'QVP8C12',
+    vehicleModel: 'Fiat Strada Volcano',
+    vehicleColor: 'Prata',
+    ownerName: 'Transportadora Silva Ltd',
+    ownerPhone: '+55 11 99887-6655',
+    reason: 'Veículo com Alerta de Roubo / Busca Policial (Civil BA)',
+    urgencyLevel: 'CRITICAL',
+    reportedDate: '2026-07-28 14:30:00',
+    status: 'ACTIVE',
+    notes: 'Placa cadastrada para interceptação imediata na portaria / entrada principal.',
+    createdAt: '2026-07-28',
+  },
+  {
+    id: 'stolen-02',
+    plate: 'PKO4A53',
+    normalizedPlate: 'PKO4A53',
+    vehicleModel: 'Chevrolet Onix Premier',
+    vehicleColor: 'Preto',
+    ownerName: 'Mariana Santos',
+    ownerPhone: '+55 73 98822-1100',
+    reason: 'Alerta de Invasão de Perímetro / Veículo Suspeito Cadastrado',
+    urgencyLevel: 'HIGH',
+    reportedDate: '2026-07-29 09:15:00',
+    status: 'ACTIVE',
+    notes: 'Cadastrado no sistema de monitoramento LPR de produção.',
+    createdAt: '2026-07-29',
+  },
+  {
+    id: 'stolen-03',
+    plate: 'BRA2E19',
+    normalizedPlate: 'BRA2E19',
+    vehicleModel: 'Toyota Hilux SRX',
+    vehicleColor: 'Branco',
+    ownerName: 'Empresa Agro Unity',
+    ownerPhone: '+55 73 99112-4433',
+    reason: 'Veículo Cadastrado para Acesso Autorizado / Rastreamento',
+    urgencyLevel: 'MEDIUM',
+    reportedDate: '2026-07-30 11:00:00',
+    status: 'ACTIVE',
+    notes: 'Cadastrado para controle de acesso LPR de produção.',
+    createdAt: '2026-07-30',
+  },
+];
 
 export const INITIAL_LPR_DETECTIONS: LPRDetection[] = [];
 
