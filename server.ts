@@ -3497,21 +3497,20 @@ async function startServer() {
                 role: 'user',
                 parts: [
                   {
-                    text: `Você é um sistema LPR de altíssima precisão e máxima sensibilidade para placas veiculares brasileiras (Mercosul e Tradicional).
+                    text: `Você é um motor de Visão Computacional e OCR LPR/ALPR profissional (YOLO11 + OCR).
 
-SUA MISSÃO:
-Localizar o VEÍCULO principal na imagem (Carro, Utilitário, Moto, Caminhão, Ônibus) e ler a PLACA VEICULAR FÍSICA (traseira ou dianteira) afixada na lataria, para-choque ou tampa do porta-malas.
+ANALISE A IMAGEM FORNECIDA CUIDADOSAMENTE:
+1. VERIFIQUE SE EXISTE UM VEÍCULO (Carro, Moto, Utilitário, Caminhão, Ônibus) PRESENTE NA FOTO.
+2. Se NÃO houver veículo na foto, ou se a foto for um ambiente vazio/rua/estacionamento sem carro em destaque, OU se não houver placa veicular visível, responda ESTRITAMENTE:
+{"hasVehicle": false, "plate": "NENHUMA"}
 
-EXEMPLOS DE PLACAS REALISTAS: QVP8C12, PKO4A53, PK04A53, O0LDG81, BRA2E19, ABC1234, etc.
+3. Se houver um veículo e uma placa veicular física visível (Mercosul ou Tradicional), extraia exatamente a placa (7 caracteres), o tipo do veículo e a cor.
+Exemplos de placas: QVP8C12, PKO4A53, BRA2E19, ABC1234, FLX9A88.
 
-REGRAS MANDATÓRIAS:
-1. FOQUE APENAS NA PLACA DO VEÍCULO: Examine o enquadramento do carro (ex: sedan branco Chevrolet Onix, picape Fiat Strada, etc) e leia os 7 caracteres da placa.
-2. IGNORE TOTALMENTE qualquer texto nos cantos ou bordas da foto (como "GARAGEM", "CORUMBAU", "29/07/2026", "15:58:19", "2026160", "SALTO - LOJA FRENTE", "TELA CHEIA").
-3. NUNCA retorne palavras de OSD/câmera como "GARAGEM", "CORUMBAU" ou relógio "2026160".
-4. Se o veículo for identificado e tiver placa visível, extraia e retorne os 7 caracteres.
+IGNORE totalmente marcas d'água de data/hora (ex: "31/07/2026", "SALTO - LOJA FRENTE", "TELA CHEIA").
 
 Responda ESTRITAMENTE um JSON no formato:
-{"plate": "PLACA_AQUI", "type": "TIPO_AQUI", "color": "COR_AQUI"}`
+{"hasVehicle": true, "plate": "PLACA_ENCONTRADA", "type": "Carro|Moto|Utilitario|Caminhao|Onibus", "color": "CorDoVeiculo"}`
                   },
                   { inlineData: { mimeType: 'image/jpeg', data: activeImageBase64.replace(/^data:image\/\w+;base64,/, '') } },
                 ],
@@ -3527,6 +3526,14 @@ Responda ESTRITAMENTE um JSON no formato:
             }
           } catch (e) {
             console.warn('[LPR OCR] JSON Parse Fallback:', textRes);
+          }
+
+          if (parsed.hasVehicle === false || parsed.plate === 'NENHUMA') {
+            return res.json({
+              success: false,
+              hasVehicle: false,
+              message: 'Nenhum veículo com placa visível foi identificado nesta foto. A foto não contém um carro/moto ou a placa está ilegível.',
+            });
           }
 
           if (parsed.plate && parsed.plate.toUpperCase() !== 'NENHUMA') {
@@ -4087,25 +4094,23 @@ Responda ESTRITAMENTE um JSON no formato:
     });
   }
 
-  function startAutomatedLprWorker() {
-    console.log('[LPR Automated Worker 24/7] Processador de inteligência artificial LPR ativo no backend (Sem dados fictícios).');
-    
-    setInterval(async () => {
-      try {
-        if (!cameras || cameras.length === 0 || !aiClient) return;
+  app.post('/api/lpr/scan-all-cameras', async (req, res) => {
+    try {
+      if (!cameras || cameras.length === 0) {
+        return res.json({ success: false, message: 'Nenhuma câmera cadastrada no sistema.' });
+      }
 
-        const effectiveMode: 'PRODUCTION' | 'TEST' = lprSettings.operatingMode || 'PRODUCTION';
+      const activeCams = cameras.filter((c) => c.status === 'ONLINE');
+      if (activeCams.length === 0) {
+        return res.json({ success: false, message: 'Nenhuma câmera online disponível para captura.' });
+      }
 
-        // Filter active online cameras
-        const activeCams = cameras.filter((c) => c.status === 'ONLINE' && c.aiDetectionEnabled !== false);
-        if (activeCams.length === 0) return;
+      const effectiveMode = lprSettings.operatingMode || 'PRODUCTION';
+      const results: any[] = [];
 
-        const targetCam = activeCams[Math.floor(Math.random() * activeCams.length)];
-        if (!targetCam) return;
-
-        // Obtain camera image snapshot
-        const frameImage = targetCam.thumbnailUrl || targetCam.rtspUrl || '';
-        if (!frameImage) return;
+      for (const cam of activeCams) {
+        const frameImage = cam.thumbnailUrl || cam.rtspUrl || '';
+        if (!frameImage) continue;
 
         let base64Data = '';
         if (frameImage.startsWith('http://') || frameImage.startsWith('https://')) {
@@ -4123,148 +4128,90 @@ Responda ESTRITAMENTE um JSON no formato:
           base64Data = frameImage.replace(/^data:image\/\w+;base64,/, '');
         }
 
-        if (!base64Data) return;
+        if (!base64Data || !aiClient) continue;
 
-        // Run Gemini Vision AI OCR on the real camera image snapshot
-        const response = await aiClient.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  text: `Você é um motor de visão computacional LPR (YOLO11 + OCR). Analise a imagem fornecida da câmera.
-Se houver um veículo (Carro, Moto, Utilitário, Caminhão, Ônibus) e uma PLACA VEICULAR FÍSICA visível, extraia a placa exatamente como escrita.
-Caso NÃO haja veículo ou placa visível na imagem, responda estritamente {"plate": "NENHUMA"}.
-
-Se houver placa, responda ESTRITAMENTE um JSON:
-{"plate": "PLACA_ENCONTRADA", "type": "Carro|Moto|Utilitario|Caminhao|Onibus", "color": "CorDoVeiculo"}`
-                },
-                { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
-              ]
-            }
-          ]
-        });
-
-        const textRes = response.text ? response.text.trim() : '';
-        let parsed: any = {};
         try {
-          const jsonMatch = textRes.replace(/```json/g, '').replace(/```/g, '').match(/\{[\s\S]*\}/);
-          if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
-        } catch (e) {}
-
-        if (!parsed.plate || parsed.plate.toUpperCase() === 'NENHUMA') {
-          // No vehicle plate in image -> skip without inventing fake data!
-          return;
-        }
-
-        const cleanPlate = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        if (cleanPlate.length < 6) return;
-
-        const normalizedPlate = cleanPlate;
-
-        // Deduplication check for same camera
-        const cooldownMs = (lprSettings.cooldownMinutes || 3) * 60 * 1000;
-        const nowMs = Date.now();
-        const existingRecentDet = lprDetections.find((d) => {
-          const isSamePlate = d.normalizedPlate === normalizedPlate;
-          const isSameCamera = d.cameraId === targetCam.id;
-          const ageMs = nowMs - new Date(d.timestamp).getTime();
-          return isSamePlate && isSameCamera && ageMs <= cooldownMs;
-        });
-
-        if (existingRecentDet) {
-          existingRecentDet.ignoredParkedCount = (existingRecentDet.ignoredParkedCount || 0) + 1;
-          saveToLocalFile();
-          return;
-        }
-
-        // Check if plate is in stolenVehicles / cadastrados
-        const matchedStolen = stolenVehicles.find(
-          (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === normalizedPlate
-        );
-        const isRegistered = Boolean(matchedStolen);
-
-        // Production mode rule: only save registered vehicles
-        if (effectiveMode === 'PRODUCTION' && !isRegistered) {
-          addLog(
-            'SISTEMA LPR',
-            `[Modo Produção] Veículo detectado (Placa ${cleanPlate}) na Câmera ${targetCam.name}. Não salvo no histórico por não estar cadastrado.`,
-            'SYSTEM'
-          );
-          return;
-        }
-
-        // Create new real detection from exact camera frame
-        const newDetection: LPRDetection = {
-          id: `lpr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          plate: cleanPlate,
-          normalizedPlate,
-          carImageUrl: targetCam.thumbnailUrl || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
-          plateImageUrl: targetCam.thumbnailUrl || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
-          vehicleType: parsed.type || 'Carro',
-          vehicleColor: matchedStolen ? matchedStolen.vehicleColor : (parsed.color || 'Prata'),
-          cameraId: targetCam.id,
-          cameraName: targetCam.name,
-          address: targetCam.location || 'Portaria Principal - Entrada',
-          latitude: targetCam.lat || -17.0397,
-          longitude: targetCam.lng || -39.5312,
-          timestamp: new Date().toISOString(),
-          confidence: 99.2,
-          isStolenAlert: isRegistered,
-          ocrEngine: lprSettings.preferredOcrEngine || 'GeminiVisionAI',
-          ignoredParkedCount: 0,
-          stolenDetails: matchedStolen
-            ? {
-                ownerName: matchedStolen.ownerName,
-                ownerPhone: matchedStolen.ownerPhone,
-                alertReason: matchedStolen.reason,
-                urgencyLevel: matchedStolen.urgencyLevel,
+          const aiResponse = await aiClient.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text: `Você é um motor de Visão Computacional LPR (YOLO11 + OCR).
+Analise esta imagem da Câmera "${cam.name}".
+1. Verifique se há um VEÍCULO em destaque com PLACA VEICULAR FÍSICA visível.
+2. Se NÃO houver veículo ou placa visível, responda estritamente: {"hasVehicle": false}
+3. Se houver veículo e placa visível, responda: {"hasVehicle": true, "plate": "PLACA", "type": "Carro|Moto|Utilitario", "color": "Cor"}`
+                  },
+                  { inlineData: { mimeType: 'image/jpeg', data: base64Data } }
+                ]
               }
-            : undefined,
-        };
+            ]
+          });
 
-        lprDetections.unshift(newDetection);
-        saveToLocalFile();
-        syncLprDetectionToSqlite(newDetection);
+          const textRes = aiResponse.text ? aiResponse.text.trim() : '';
+          let parsed: any = {};
+          try {
+            const jsonMatch = textRes.replace(/```json/g, '').replace(/```/g, '').match(/\{[\s\S]*\}/);
+            if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+          } catch (e) {}
 
-        if (isRegistered) {
-          addLog(
-            'ALERTA LPR / ROUBO',
-            `🚨 VEÍCULO CADASTRADO DETECTADO: Placa ${cleanPlate} na Câmera ${targetCam.name}`,
-            'LPR',
-            `Endereço: ${targetCam.location} | Lat: ${targetCam.lat}, Lng: ${targetCam.lng}`
-          );
+          if (parsed.hasVehicle && parsed.plate && parsed.plate !== 'NENHUMA') {
+            const clean = parsed.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            if (clean.length >= 6) {
+              const matchedStolen = stolenVehicles.find(
+                (sv) => sv.status === 'ACTIVE' && sv.normalizedPlate === clean
+              );
+              const isRegistered = Boolean(matchedStolen);
 
-          const alertObj: MotionAlert = {
-            id: `alert-lpr-${Date.now()}`,
-            cameraId: targetCam.id,
-            cameraName: targetCam.name,
-            eventType: 'LPR_STOLEN',
-            confidence: 99.8,
-            snapshotUrl: newDetection.carImageUrl,
-            videoClipUrl: '',
-            timestamp: new Date().toLocaleTimeString(),
-            severity: 'HIGH',
-            readStatus: false,
-            pushedToMobile: true,
-          };
-          alerts.unshift(alertObj);
-          syncAlertToMysql(alertObj);
-        } else {
-          addLog(
-            'SISTEMA LPR',
-            `[Modo Teste] Foto processada via Visão Computacional. Placa ${cleanPlate} gravada no Histórico!`,
-            'SYSTEM'
-          );
+              const newDet: LPRDetection = {
+                id: `lpr-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                plate: clean,
+                normalizedPlate: clean,
+                carImageUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+                plateImageUrl: cam.thumbnailUrl || 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=200&auto=format&fit=crop&q=80',
+                vehicleType: parsed.type || 'Carro',
+                vehicleColor: matchedStolen ? matchedStolen.vehicleColor : (parsed.color || 'Prata'),
+                cameraId: cam.id,
+                cameraName: cam.name,
+                address: cam.location || 'Portaria Principal',
+                latitude: cam.lat || -17.0397,
+                longitude: cam.lng || -39.5312,
+                timestamp: new Date().toISOString(),
+                confidence: 99.2,
+                isStolenAlert: isRegistered,
+                ocrEngine: 'GeminiVisionAI',
+                ignoredParkedCount: 0,
+              };
+
+              if (effectiveMode === 'TEST' || isRegistered) {
+                lprDetections.unshift(newDet);
+                saveToLocalFile();
+                syncLprDetectionToSqlite(newDet);
+              }
+              results.push(newDet);
+            }
+          }
+        } catch (camErr) {
+          console.warn(`[Scan All Cameras] Erro na câmera ${cam.name}:`, camErr);
         }
-      } catch (err) {
-        console.error('[Automated LPR Worker Error]:', err);
       }
-    }, 15000);
-  }
 
-  startAutomatedLprWorker();
+      return res.json({
+        success: true,
+        scannedCamerasCount: activeCams.length,
+        vehiclesDetectedCount: results.length,
+        operatingMode: effectiveMode,
+        detections: results,
+        message: results.length > 0
+          ? `🔍 Varredura concluída nas ${activeCams.length} câmeras! ${results.length} veículo(s) identificado(s).`
+          : `🔍 Varredura concluída nas ${activeCams.length} câmeras. Nenhum veículo em movimento/placa visível no momento.`
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[Central ITL] Servidor rodando na porta ${PORT}`);

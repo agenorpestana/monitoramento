@@ -66,7 +66,6 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
   const [activeTab, setActiveTab] = useState<'scanner' | 'stolen' | 'history' | 'map' | 'settings'>('scanner');
   const [selectedCameraId, setSelectedCameraId] = useState<string>(cameras[0]?.id || 'cam-01');
   const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [autoScanLoop, setAutoScanLoop] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(!lprSettings.enableAudioAlerts);
   const [latestDetection, setLatestDetection] = useState<LPRDetection | null>(lprDetections[0] || null);
   const [isThrottledBanner, setIsThrottledBanner] = useState<boolean>(false);
@@ -266,24 +265,44 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
     e.target.value = '';
   };
 
-  // Auto scanner interval simulation loop
+  // Update latest detection from history prop
   useEffect(() => {
     if (lprDetections && lprDetections.length > 0) {
       setLatestDetection(lprDetections[0]);
     }
   }, [lprDetections]);
 
-  useEffect(() => {
-    let interval: any = null;
-    if (autoScanLoop) {
-      interval = setInterval(() => {
-        handleRunDetection();
-      }, 5000);
+  // Handle simultaneous scan across all cameras
+  const handleScanAllCameras = async () => {
+    setIsScanning(true);
+    setIsThrottledBanner(false);
+    setScanErrorMessage('');
+    setTestSuccessMessage('');
+
+    try {
+      const response = await fetch('/api/lpr/scan-all-cameras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        if (data.detections && data.detections.length > 0) {
+          setLatestDetection(data.detections[0]);
+          setTestSuccessMessage(`🔍 Varredura em tempo real concluída: ${data.vehiclesDetectedCount} veículo(s) identificado(s)!`);
+        } else {
+          setTestSuccessMessage(data.message || '🔍 Varredura concluída nas câmeras. Nenhum veículo em movimento/placa visível no momento.');
+        }
+      } else {
+        setScanErrorMessage(data.message || 'Erro ao realizar varredura de câmeras.');
+      }
+    } catch (err) {
+      console.error('[Scan All Cameras Error]:', err);
+      setScanErrorMessage('Erro ao comunicar com o backend para varredura simultânea.');
+    } finally {
+      setIsScanning(false);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [autoScanLoop, selectedCam]);
+  };
 
   // Leaflet Map Initialization for LPR Locations
   useEffect(() => {
@@ -588,8 +607,8 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden relative group">
-              {/* Camera Selector Bar */}
-              <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+              {/* Camera Selector & Mode Header Bar */}
+              <div className="p-3 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
                   <CameraIcon className="w-4 h-4 text-emerald-400" />
                   {cameras.length > 0 ? (
@@ -600,7 +619,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                     >
                       {cameras.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {c.name} ({c.location || 'Localização Geral'})
+                          {c.name} ({c.location || 'Portaria'})
                         </option>
                       ))}
                     </select>
@@ -609,89 +628,91 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2 text-[11px] font-bold">
-                  <span className={`w-2 h-2 rounded-full ${operatingMode === 'PRODUCTION' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400 animate-ping'}`}></span>
-                  <span className={operatingMode === 'PRODUCTION' ? 'text-emerald-400' : 'text-amber-400'}>
-                    {operatingMode === 'PRODUCTION' ? 'Fluxo LPR Produção' : 'Fluxo LPR Teste (Validação)'}
-                  </span>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleOperatingMode(operatingMode === 'PRODUCTION' ? 'TEST' : 'PRODUCTION')}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 border ${
+                      operatingMode === 'PRODUCTION'
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-400 border-amber-500/40 hover:bg-amber-500/30'
+                    }`}
+                  >
+                    <span>{operatingMode === 'PRODUCTION' ? '🟢 Modo Produção' : '🧪 Modo Teste'}</span>
+                    <span className="text-[10px] opacity-75 underline">(Alternar)</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Video / Canvas Stage */}
-              <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
-                {cameras.length > 0 && selectedCam ? (
-                  <div id="lpr-player-container" className="w-full h-full relative">
-                    <LiveStreamPlayer
-                      key={selectedCam.id}
-                      camera={selectedCam}
-                      isMuted={true}
-                      showOverlayControls={false}
+              {/* Main Vehicle Capture & OCR Display Stage */}
+              <div className="relative aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
+                {latestDetection && latestDetection.carImageUrl ? (
+                  <div className="w-full h-full relative group/stage">
+                    <img
+                      src={latestDetection.carImageUrl}
+                      alt={`Veículo ${latestDetection.plate}`}
+                      className="w-full h-full object-cover"
                     />
 
-                    {/* YOLO Bounding Box Overlay */}
-                    <div className="absolute inset-0 pointer-events-none p-8 flex items-center justify-center">
-                      <div className="relative border-2 border-emerald-400/80 rounded-lg w-3/4 h-2/3 flex items-start justify-start p-2 shadow-[0_0_15px_rgba(52,211,153,0.3)]">
-                        <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded shadow uppercase tracking-wide">
-                          LPR OCR {operatingMode === 'PRODUCTION' ? 'PRODUÇÃO' : 'TESTE'} ({selectedCam.name})
+                    {/* OCR Detection Box Overlay */}
+                    <div className="absolute inset-0 pointer-events-none p-6 flex items-center justify-center">
+                      <div className="relative border-2 border-emerald-400/90 rounded-xl w-3/4 h-2/3 flex items-start justify-between p-3 bg-black/20 backdrop-blur-[2px] shadow-[0_0_20px_rgba(52,211,153,0.3)]">
+                        <span className="bg-emerald-500 text-slate-950 text-[10px] font-black px-2.5 py-1 rounded shadow uppercase tracking-wide flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3" />
+                          VEÍCULO DETECTADO ({latestDetection.vehicleType})
                         </span>
 
-                        {latestDetection && (
-                          <div className="absolute bottom-4 right-1/4 border-2 border-yellow-400 rounded bg-black/70 px-3 py-1.5 flex items-center space-x-2 shadow-[0_0_12px_rgba(250,204,21,0.5)]">
-                            <span className="bg-yellow-400 text-slate-950 text-[9px] font-bold px-1 rounded">
-                              ÚLTIMA PLACA
-                            </span>
-                            <span className="font-mono font-black text-white text-sm tracking-widest">
-                              {latestDetection.plate}
-                            </span>
+                        <div className="bg-gradient-to-r from-blue-900 to-blue-950 border border-blue-400/60 rounded-lg px-3 py-1 text-center shadow-lg">
+                          <div className="text-[8px] font-black text-blue-200 tracking-widest uppercase">BRASIL - MERCOSUL</div>
+                          <div className="font-mono font-black text-white text-base tracking-widest">
+                            {latestDetection.plate}
                           </div>
-                        )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-700 text-xs space-y-0.5">
+                      <div className="font-bold text-white flex items-center gap-2">
+                        <span>{latestDetection.cameraName}</span>
+                        <span className="text-[10px] text-emerald-400 font-normal">({latestDetection.vehicleColor})</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {latestDetection.address} • {new Date(latestDetection.timestamp).toLocaleTimeString()}
                       </div>
                     </div>
                   </div>
                 ) : (
                   <div className="p-8 text-center space-y-3">
-                    <CameraIcon className="w-12 h-12 mx-auto text-slate-600" />
-                    <h3 className="text-sm font-bold text-white">Nenhuma Câmera Cadastrada</h3>
+                    <CameraIcon className="w-12 h-12 mx-auto text-slate-600 animate-pulse" />
+                    <h3 className="text-sm font-bold text-white">Aguardando Captura de Veículo</h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                      Cadastre suas câmeras na aba &quot;Câmeras ao Vivo&quot; para habilitar o escaneamento de placas em tempo real.
+                      Execute a varredura nas câmeras, envie uma foto do veículo ou clique em uma foto de amostra abaixo para processar em tempo real.
                     </p>
                   </div>
                 )}
 
                 {/* Scanning Spinner Overlay */}
                 {isScanning && (
-                  <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 z-20">
+                  <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-3 z-20">
                     <RefreshCw className="w-10 h-10 text-emerald-400 animate-spin" />
                     <span className="text-xs font-bold text-emerald-300 tracking-wider uppercase animate-pulse">
-                      Processando Visão Computacional / OCR ({operatingMode})...
+                      Analisando Visão Computacional / OCR ({operatingMode})...
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Controls Footer */}
+              {/* Action Controls Footer */}
               <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => handleRunDetection()}
+                    type="button"
+                    onClick={handleScanAllCameras}
                     disabled={isScanning || cameras.length === 0}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
+                    className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs flex items-center space-x-2 shadow-lg shadow-emerald-500/20 transition-all disabled:opacity-50"
                   >
                     <Sparkles className="w-4 h-4" />
-                    <span>Processar Frame LPR Agora</span>
-                  </button>
-
-                  <button
-                    onClick={() => setAutoScanLoop(!autoScanLoop)}
-                    disabled={cameras.length === 0}
-                    className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center space-x-2 border transition-all ${
-                      autoScanLoop
-                        ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                    }`}
-                  >
-                    <Radio className={`w-3.5 h-3.5 ${autoScanLoop ? 'animate-ping' : ''}`} />
-                    <span>Auto-Leitura (5s)</span>
+                    <span>Varredura LPR (Todas as Câmeras)</span>
                   </button>
 
                   <input
@@ -702,16 +723,27 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                     className="hidden"
                   />
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center space-x-2 transition-all"
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center space-x-2 transition-all"
                   >
                     <Upload className="w-3.5 h-3.5 text-slate-400" />
                     <span>Enviar Foto de Veículo</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRunDetection()}
+                    disabled={isScanning || cameras.length === 0}
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium text-xs flex items-center space-x-1.5 transition-all disabled:opacity-50"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Processar Câmera Atual</span>
+                  </button>
                 </div>
 
                 <div className="text-[11px] text-slate-400">
-                  📍 GPS Câmera: <span className="text-slate-200 font-mono">{selectedCam.lat || -17.0397}, {selectedCam.lng || -39.5312}</span>
+                  📍 GPS: <span className="text-slate-200 font-mono">{selectedCam.lat || -17.0397}, {selectedCam.lng || -39.5312}</span>
                 </div>
               </div>
             </div>
