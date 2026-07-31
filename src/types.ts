@@ -239,6 +239,7 @@ export interface LPRSettings {
   enableAudioAlerts: boolean;
   autoNotifyWebhooks: boolean;
   webhookUrl?: string;
+  operatingMode?: 'PRODUCTION' | 'TEST';
 }
 
 // ----------------------------------------------------------------------

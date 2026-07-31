@@ -3229,9 +3229,12 @@ async function startServer() {
         longitude = -39.5312,
         address = 'Av. Liberdade, 1200',
         testPlateHint,
+        operatingMode,
       } = req.body || {};
 
-      let rawPlate = testPlateHint || '';
+      const effectiveMode: 'PRODUCTION' | 'TEST' = operatingMode || lprSettings.operatingMode || 'PRODUCTION';
+
+      let rawPlate = testPlateHint ? testPlateHint.toUpperCase().trim() : '';
       let detectedType: 'Carro' | 'Moto' | 'Caminhão' | 'Ônibus' | 'Utilitário' | 'Desconhecido' = 'Carro';
       let detectedColor = 'Prata';
       let activeImageBase64 = imageBase64;
@@ -3567,7 +3570,7 @@ Responda ESTRITAMENTE um JSON no formato:
       } else {
         addLog(
           'SISTEMA LPR',
-          `Captura de placa ${formattedPlate} realizada na Câmera ${cameraName}`,
+          `Captura de placa ${formattedPlate} realizada na Câmera ${cameraName} [${effectiveMode}]`,
           'SYSTEM'
         );
       }
@@ -3576,6 +3579,12 @@ Responda ESTRITAMENTE um JSON no formato:
         success: true,
         isThrottled: false,
         isStolenAlert,
+        operatingMode: effectiveMode,
+        message: effectiveMode === 'TEST'
+          ? `🧪 [Modo Teste] Placa ${formattedPlate} lida e gravada no Histórico de Capturas!`
+          : (isStolenAlert
+              ? `🚨 ALERTA CRÍTICO: Veículo Roubado/Procurado Detectado! Placa ${formattedPlate} registrada nas coordenadas (${latitude}, ${longitude}).`
+              : `Veículo identificado (Placa ${formattedPlate}). Coordenadas salvas no banco de dados para rastreamento.`),
         detection: newDetection,
       });
     } catch (err) {

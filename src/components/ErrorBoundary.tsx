@@ -1,5 +1,5 @@
 import React, { ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Key } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -31,13 +31,6 @@ export class ErrorBoundary extends React.Component<Props, State> {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 
-  handleResetMapsKey = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('GOOGLE_MAPS_KEY');
-    }
-    window.location.reload();
-  };
-
   render() {
     if (this.state.hasError) {
       return (
@@ -52,7 +45,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <div className="space-y-2">
               <h2 className="text-lg font-black text-white">Falha ao Carregar Componente</h2>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Ocorreu uma falha de script (provavelmente devido a uma Chave de API do Google Maps incorreta ou com restrições).
+                Ocorreu um erro inesperado ao renderizar este componente. Tente recarregar a página.
               </p>
             </div>
 
@@ -62,20 +55,12 @@ export class ErrorBoundary extends React.Component<Props, State> {
               </div>
             )}
 
-            <div className="space-y-2.5 pt-2">
-              <button
-                onClick={this.handleResetMapsKey}
-                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition"
-              >
-                <Key className="w-4 h-4" />
-                <span>Limpar Chave do Google Maps e Recarregar</span>
-              </button>
-
+            <div className="pt-2">
               <button
                 onClick={() => window.location.reload()}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-2xl border border-slate-700 flex items-center justify-center space-x-2 transition"
+                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center space-x-2 transition"
               >
-                <RefreshCw className="w-4 h-4 text-emerald-400" />
+                <RefreshCw className="w-4 h-4" />
                 <span>Recarregar Página</span>
               </button>
             </div>
