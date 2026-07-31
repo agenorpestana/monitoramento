@@ -106,12 +106,23 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
 
-  const selectedCam = cameras.find((c) => c.id === selectedCameraId) || cameras[0] || {
+  const selectedCam: Camera = cameras.find((c) => c.id === selectedCameraId) || cameras[0] || {
     id: 'cam-01',
     name: 'Câmera Principal LPR - Portal Norte',
     location: 'Av. Liberdade, 1200',
     lat: -17.0397,
     lng: -39.5312,
+    status: 'ONLINE',
+    rtspUrl: 'rtsp://187.85.12.90:554/live/stream1',
+    resolution: '1080p',
+    fps: 30,
+    cloudRecordingsActive: true,
+    storageUsedGB: 12.4,
+    isE2EEEncrypted: true,
+    motionSensitivity: 8,
+    aiDetectionEnabled: true,
+    twoWayAudioEnabled: false,
+    thumbnailUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=600',
   };
 
   // Play police siren alert sound

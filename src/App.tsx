@@ -662,6 +662,9 @@ export default function App() {
           minPlateConfidence: 75,
           minFaceSimilarity: 85,
           processingMode: 'CENTRAL_GPU',
+          deduplicationWindowSec: 60,
+          retentionPolicyDays: 30,
+          webhooksEnabled: true,
         }))
       );
     }

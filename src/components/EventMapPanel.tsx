@@ -2,14 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 import {
   MapPin,
-  Filter,
-  Car,
-  UserCheck,
-  AlertTriangle,
-  Calendar,
-  Layers,
-  Search,
-  Eye,
 } from 'lucide-react';
 import { Camera, LPRDetection, FaceDetection, MotionAlert } from '../types';
 
@@ -39,10 +31,16 @@ export const EventMapPanel: React.FC<EventMapPanelProps> = ({
     : { lat: -17.0397, lng: -39.5312 };
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
 
-    if (!mapInstance.current) {
-      const map = L.map(containerRef.current, {
+    if ((el as any)._leaflet_id) {
+      (el as any)._leaflet_id = null;
+    }
+
+    let map: L.Map;
+    try {
+      map = L.map(el, {
         center: [defaultCenter.lat, defaultCenter.lng],
         zoom: 12,
       });
@@ -52,10 +50,29 @@ export const EventMapPanel: React.FC<EventMapPanelProps> = ({
         attribution: '&copy; OpenStreetMap contributors',
       }).addTo(map);
 
-      layerGroupRef.current = L.layerGroup().addTo(map);
+      const layerGroup = L.layerGroup().addTo(map);
+      layerGroupRef.current = layerGroup;
       mapInstance.current = map;
+    } catch (err) {
+      console.warn('EventMapPanel Leaflet init warning:', err);
     }
 
+    return () => {
+      if (layerGroupRef.current) {
+        try { layerGroupRef.current.clearLayers(); } catch {}
+        layerGroupRef.current = null;
+      }
+      if (mapInstance.current) {
+        try { mapInstance.current.remove(); } catch {}
+        mapInstance.current = null;
+      }
+      if (el && (el as any)._leaflet_id) {
+        (el as any)._leaflet_id = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const layerGroup = layerGroupRef.current;
     if (!layerGroup) return;
 

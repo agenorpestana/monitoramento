@@ -214,7 +214,7 @@ export const MotionAlertsPanel: React.FC<MotionAlertsPanelProps> = ({
 
                 {alert.videoClipUrl && (
                   <button
-                    onClick={() => alert('Abrindo clipe de gravação associado ao alerta de movimento')}
+                    onClick={() => window.alert('Abrindo clipe de gravação associado ao alerta de movimento')}
                     className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl flex items-center space-x-1.5 transition shadow"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />

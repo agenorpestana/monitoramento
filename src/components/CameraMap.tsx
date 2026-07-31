@@ -3,10 +3,7 @@ import L from 'leaflet';
 import {
   MapPin,
   Camera as CameraIcon,
-  Radio,
-  Eye,
   Layers,
-  Compass,
   Maximize2,
   Lock,
   Globe
@@ -32,27 +29,48 @@ const FreeOpenStreetMapComponent: React.FC<FreeOSMMapProps> = ({
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const el = containerRef.current;
+    if (!el) return;
 
-    if (!mapInstance.current) {
-      const map = L.map(containerRef.current, {
+    // Reset container leaflet instance if leftover
+    if ((el as any)._leaflet_id) {
+      (el as any)._leaflet_id = null;
+    }
+
+    let map: L.Map;
+    try {
+      map = L.map(el, {
         center: [center.lat, center.lng],
         zoom: 9,
         zoomControl: true,
       });
 
-      // Standard OpenStreetMap Tiles
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         subdomains: 'abc',
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }).addTo(map);
 
-      layerGroupRef.current = L.layerGroup().addTo(map);
+      const layerGroup = L.layerGroup().addTo(map);
+      layerGroupRef.current = layerGroup;
       mapInstance.current = map;
-    } else {
-      mapInstance.current.setView([center.lat, center.lng], 9);
+    } catch (err) {
+      console.warn('Leaflet map init warning:', err);
     }
+
+    return () => {
+      if (layerGroupRef.current) {
+        try { layerGroupRef.current.clearLayers(); } catch {}
+        layerGroupRef.current = null;
+      }
+      if (mapInstance.current) {
+        try { mapInstance.current.remove(); } catch {}
+        mapInstance.current = null;
+      }
+      if (el && (el as any)._leaflet_id) {
+        (el as any)._leaflet_id = null;
+      }
+    };
   }, [center.lat, center.lng]);
 
   useEffect(() => {
