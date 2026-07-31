@@ -284,6 +284,27 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isLoggedIn]);
 
+  // Sync camera AI settings whenever cameras list changes
+  useEffect(() => {
+    if (cameras.length > 0) {
+      setCameraAiSettings(
+        cameras.map((c) => ({
+          cameraId: c.id,
+          cameraName: c.name,
+          lprEnabled: true,
+          facialEnabled: true,
+          inferenceFps: 15,
+          minPlateConfidence: 75,
+          minFaceSimilarity: 85,
+          processingMode: 'CENTRAL_GPU',
+          deduplicationWindowSec: 60,
+          retentionPolicyDays: 30,
+          webhooksEnabled: true,
+        }))
+      );
+    }
+  }, [cameras]);
+
   // Handlers
   const triggerMotionAlert = async (camId: string, eventType?: AlertType, severity?: AlertSeverity) => {
     try {
@@ -648,27 +669,6 @@ export default function App() {
     } catch (e) {}
     setLprDetections((prev) => prev.filter((d) => d.id !== id));
   };
-
-  // Sync camera AI settings whenever cameras list changes
-  useEffect(() => {
-    if (cameras.length > 0) {
-      setCameraAiSettings(
-        cameras.map((c) => ({
-          cameraId: c.id,
-          cameraName: c.name,
-          lprEnabled: true,
-          facialEnabled: true,
-          inferenceFps: 15,
-          minPlateConfidence: 75,
-          minFaceSimilarity: 85,
-          processingMode: 'CENTRAL_GPU',
-          deduplicationWindowSec: 60,
-          retentionPolicyDays: 30,
-          webhooksEnabled: true,
-        }))
-      );
-    }
-  }, [cameras]);
 
   // AI Workers Handlers
   const handleRestartJobs = async () => {
