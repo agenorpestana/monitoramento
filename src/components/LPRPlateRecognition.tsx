@@ -751,13 +751,82 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
               </div>
             )}
 
+            {/* Sample Vehicle Photos for Live Validation Test */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  Amostras de Fotos para Validação (OCR Placa x Imagem)
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${operatingMode === 'PRODUCTION' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {operatingMode === 'PRODUCTION' ? 'Modo Produção' : '🧪 Modo Teste'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Clique em uma foto de veículo para rodar a Inteligência Artificial Gemini (YOLO11 + OCR) na foto real e verificar se a placa lida condiz 100% com a imagem:
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  {
+                    name: 'Fiat Strada (Roubo BA)',
+                    plate: 'QVP8C12',
+                    type: 'Utilitário',
+                    color: 'Prata',
+                    img: 'https://images.unsplash.com/photo-1542282088-72c9c27ed0cd?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    name: 'Chevrolet Onix (Alerta)',
+                    plate: 'PKO4A53',
+                    type: 'Carro',
+                    color: 'Preto',
+                    img: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    name: 'Toyota Hilux (Agro)',
+                    plate: 'BRA2E19',
+                    type: 'Utilitário',
+                    color: 'Branco',
+                    img: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    name: 'Honda Civic (Comum)',
+                    plate: 'ABC1234',
+                    type: 'Carro',
+                    color: 'Cinza',
+                    img: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?w=600&auto=format&fit=crop&q=80',
+                  },
+                  {
+                    name: 'Fiat Toro (Moto/Picape)',
+                    plate: 'FLX9A88',
+                    type: 'Utilitário',
+                    color: 'Vermelho',
+                    img: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&auto=format&fit=crop&q=80',
+                  },
+                ].map((sample, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleRunDetection(sample.plate, sample.img)}
+                    disabled={isScanning}
+                    className="p-2 rounded-xl bg-slate-950 border border-slate-800 hover:border-emerald-500/50 transition-all text-left group flex flex-col space-y-1.5 relative overflow-hidden"
+                  >
+                    <div className="aspect-video bg-black rounded-lg overflow-hidden relative">
+                      <img src={sample.img} alt={sample.name} className="w-full h-full object-cover group-hover:scale-105 transition-all" />
+                      <div className="absolute top-1 left-1 bg-black/80 font-mono font-bold text-[9px] text-emerald-400 px-1.5 py-0.5 rounded">
+                        {sample.plate}
+                      </div>
+                    </div>
+                    <div className="text-[10px] font-bold text-slate-300 truncate">{sample.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Manual Plate Scan / Query Control */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
               <div className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                <span>Entrada / Validação Técnica de Placa</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${operatingMode === 'PRODUCTION' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                  {operatingMode === 'PRODUCTION' ? 'Modo Produção' : 'Modo Teste'}
-                </span>
+                <span>Entrada Manual de Placa para Consulta</span>
               </div>
 
               <form
@@ -782,7 +851,7 @@ export const LPRPlateRecognition: React.FC<LPRPlateRecognitionProps> = ({
                   className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all flex items-center space-x-1.5 shrink-0"
                 >
                   <Search className="w-4 h-4" />
-                  <span>Escanear / Validar Placa</span>
+                  <span>Validar Placa</span>
                 </button>
               </form>
             </div>
