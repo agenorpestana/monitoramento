@@ -243,6 +243,38 @@ async function startServer() {
   let pool: mysql.Pool | null = null;
   let isMysqlActive = false;
 
+  const DB_CONFIG_FILE = path.join(process.cwd(), 'itl_db_config.json');
+
+  let activeDbConfig = {
+    host: process.env.DB_HOST || '45.183.218.118',
+    port: Number(process.env.DB_PORT) || 3306,
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026',
+    database: process.env.DB_NAME || 'itl_cameras',
+  };
+
+  const loadDbConfig = () => {
+    try {
+      if (fs.existsSync(DB_CONFIG_FILE)) {
+        const raw = fs.readFileSync(DB_CONFIG_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.host) activeDbConfig.host = parsed.host;
+        if (parsed.port) activeDbConfig.port = Number(parsed.port);
+        if (parsed.user) activeDbConfig.user = parsed.user;
+        if (parsed.password !== undefined) activeDbConfig.password = parsed.password;
+        if (parsed.database) activeDbConfig.database = parsed.database;
+      }
+    } catch (e) {}
+  };
+
+  const saveDbConfig = () => {
+    try {
+      fs.writeFileSync(DB_CONFIG_FILE, JSON.stringify(activeDbConfig, null, 2), 'utf-8');
+    } catch (e) {}
+  };
+
+  loadDbConfig();
+
   // In-memory data repositories
   let cameras: Camera[] = [...INITIAL_CAMERAS];
   let alerts: MotionAlert[] = [...INITIAL_ALERTS];
@@ -1627,12 +1659,15 @@ async function startServer() {
   const initMysqlAndSync = async () => {
     // Load local JSON state first
     loadFromLocalFile();
-    const dbHost = process.env.DB_HOST || '127.0.0.1';
-    const dbUser = process.env.DB_USER || 'itl_user';
-    const dbPassword = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026';
-    const dbName = process.env.DB_NAME || 'itl_cameras';
+    loadDbConfig();
 
-    const hostsToTry = [dbHost, '127.0.0.1', 'localhost'];
+    const dbHost = activeDbConfig.host || process.env.DB_HOST || '45.183.218.118';
+    const dbPort = activeDbConfig.port || Number(process.env.DB_PORT) || 3306;
+    const dbUser = activeDbConfig.user || process.env.DB_USER || 'root';
+    const dbPassword = activeDbConfig.password !== undefined ? activeDbConfig.password : (process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : 'itl_pass_2026');
+    const dbName = activeDbConfig.database || process.env.DB_NAME || 'itl_cameras';
+
+    const hostsToTry = Array.from(new Set([dbHost, '45.183.218.118', '127.0.0.1', 'localhost'])).filter(Boolean);
     const credentials = [
       { user: dbUser, pass: dbPassword },
       { user: dbUser, pass: 'itl_pass_2026' },
@@ -1640,6 +1675,7 @@ async function startServer() {
       { user: 'root', pass: dbPassword },
       { user: 'root', pass: 'itl_pass_2026' },
       { user: 'root', pass: '' },
+      { user: 'unity', pass: dbPassword },
     ];
 
     let connectedHost = '';
@@ -1651,12 +1687,13 @@ async function startServer() {
           // Step 1: Connect without database to ensure database exists
           const rootPool = mysql.createPool({
             host: hostCandidate,
+            port: dbPort,
             user: cred.user,
             password: cred.pass,
             waitForConnections: true,
             connectionLimit: 5,
             queueLimit: 0,
-            connectTimeout: 3000,
+            connectTimeout: 4000,
           });
 
           const conn = await rootPool.getConnection();
@@ -1669,13 +1706,14 @@ async function startServer() {
           // Step 2: Create pool connected to the target database
           const targetPool = mysql.createPool({
             host: hostCandidate,
+            port: dbPort,
             user: cred.user,
             password: cred.pass,
             database: dbName,
             waitForConnections: true,
             connectionLimit: 10,
             queueLimit: 0,
-            connectTimeout: 3000,
+            connectTimeout: 4000,
           });
 
           const testConn = await targetPool.getConnection();
@@ -1685,7 +1723,11 @@ async function startServer() {
           pool = targetPool;
           isMysqlActive = true;
           connectedHost = hostCandidate;
-          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost} (banco '${dbName}', usuário '${cred.user}')`);
+          activeDbConfig.host = hostCandidate;
+          activeDbConfig.user = cred.user;
+          activeDbConfig.password = cred.pass;
+          saveDbConfig();
+          console.log(`[MySQL ITL] Conectado com SUCESSO ao MySQL em ${connectedHost}:${dbPort} (banco '${dbName}', usuário '${cred.user}')`);
           break;
         } catch (err: any) {
           // Continue trying host/credential candidates
@@ -2667,6 +2709,208 @@ async function startServer() {
     } else {
       return res.status(500).json({ success: false, message: 'Não foi possível conectar ao MySQL para sincronizar.' });
     }
+  });
+
+  // Endpoints avançados de Diagnóstico e Conexão com MySQL Remoto / VPS
+  app.get('/api/db/config', (req, res) => {
+    res.json({
+      config: {
+        host: activeDbConfig.host,
+        port: activeDbConfig.port,
+        user: activeDbConfig.user,
+        database: activeDbConfig.database,
+        hasPassword: Boolean(activeDbConfig.password),
+      },
+      isMysqlActive,
+      camerasInMemory: cameras.length,
+      usersInMemory: users.length,
+    });
+  });
+
+  app.post('/api/db/test-connection', async (req, res) => {
+    const host = req.body.host || activeDbConfig.host;
+    const port = Number(req.body.port || activeDbConfig.port || 3306);
+    const user = req.body.user || activeDbConfig.user;
+    const password = req.body.password !== undefined ? req.body.password : activeDbConfig.password;
+    const database = req.body.database || activeDbConfig.database;
+
+    try {
+      const conn = await mysql.createConnection({
+        host,
+        port,
+        user,
+        password,
+        connectTimeout: 5000,
+      });
+
+      const [rows]: any = await conn.query('SHOW DATABASES LIKE ?', [database]);
+      const dbExists = Array.isArray(rows) && rows.length > 0;
+
+      let tablesCount = 0;
+      let camerasInMysql = 0;
+
+      if (dbExists) {
+        await conn.changeUser({ database });
+        const [tableRows]: any = await conn.query('SHOW TABLES');
+        tablesCount = Array.isArray(tableRows) ? tableRows.length : 0;
+
+        try {
+          const [camRows]: any = await conn.query('SELECT COUNT(*) as cnt FROM cameras');
+          camerasInMysql = camRows[0]?.cnt || 0;
+        } catch (e) {}
+      }
+
+      await conn.end();
+
+      return res.json({
+        success: true,
+        message: `Conexão efetuada com SUCESSO no MySQL (${host}:${port})!`,
+        details: {
+          host,
+          port,
+          user,
+          database,
+          dbExists,
+          tablesCount,
+          camerasInMysql,
+          camerasInMemory: cameras.length,
+        },
+      });
+    } catch (err: any) {
+      let guide = '';
+      if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+        guide = `Não foi possível conectar ao IP ${host}:${port}.\n1. Verifique se a porta 3306 está liberada no Firewall da sua VPS/Servidor (ex: 'ufw allow 3306/tcp').\n2. Verifique se o MySQL no arquivo /etc/mysql/mysql.conf.d/mysqld.cnf tem 'bind-address = 0.0.0.0'.\n3. Reinicie o serviço do MySQL com 'systemctl restart mysql'.`;
+      } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+        guide = `Usuário '${user}' ou senha incorretos, ou sem permissão de conexão remota '%'.\nNo servidor MySQL via SSH (como você está no Bitvise), execute:\n\nCREATE USER '${user}'@'%' IDENTIFIED BY '${password}';\nGRANT ALL PRIVILEGES ON \`${database}\`.* TO '${user}'@'%';\nFLUSH PRIVILEGES;`;
+      } else {
+        guide = `Erro do MySQL [${err.code || 'ERRO'}]: ${err.message}`;
+      }
+
+      return res.json({
+        success: false,
+        message: `Falha na conexão com MySQL (${host}:${port}): ${err.message}`,
+        code: err.code || 'CONN_ERROR',
+        guide,
+        details: { host, port, user, database },
+      });
+    }
+  });
+
+  app.post('/api/db/connect-and-sync', async (req, res) => {
+    if (req.body.host) {
+      activeDbConfig.host = req.body.host;
+      activeDbConfig.port = Number(req.body.port || 3306);
+      activeDbConfig.user = req.body.user || 'root';
+      activeDbConfig.password = req.body.password !== undefined ? req.body.password : '';
+      activeDbConfig.database = req.body.database || 'itl_cameras';
+      saveDbConfig();
+    }
+
+    try {
+      // 1. Root pool to ensure database exists
+      const rootPool = mysql.createPool({
+        host: activeDbConfig.host,
+        port: activeDbConfig.port,
+        user: activeDbConfig.user,
+        password: activeDbConfig.password,
+        waitForConnections: true,
+        connectionLimit: 5,
+        connectTimeout: 5000,
+      });
+
+      const conn = await rootPool.getConnection();
+      await conn.query(`CREATE DATABASE IF NOT EXISTS \`${activeDbConfig.database}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      conn.release();
+      await rootPool.end();
+
+      // 2. Connect target pool
+      if (pool) {
+        try { await pool.end(); } catch (e) {}
+      }
+
+      pool = mysql.createPool({
+        host: activeDbConfig.host,
+        port: activeDbConfig.port,
+        user: activeDbConfig.user,
+        password: activeDbConfig.password,
+        database: activeDbConfig.database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        connectTimeout: 5000,
+      });
+
+      const testConn = await pool.getConnection();
+      await testConn.ping();
+      testConn.release();
+
+      isMysqlActive = true;
+
+      // 3. Initialize tables
+      await initMysqlAndSync();
+
+      // 4. Force push all 11 cameras and users
+      loadFromLocalFile();
+      let syncedCams = 0;
+      for (const cam of cameras) {
+        await syncCameraToMysql(cam);
+        syncedCams++;
+      }
+      for (const u of users) {
+        await syncUserToMysql(u);
+      }
+
+      return res.json({
+        success: true,
+        message: `Servidor MySQL ${activeDbConfig.host}:${activeDbConfig.port} CONECTADO! ${syncedCams} câmeras e ${users.length} usuários salvos com SUCESSO na tabela 'cameras' do MySQL!`,
+        activeHost: activeDbConfig.host,
+        database: activeDbConfig.database,
+        camerasSynced: syncedCams,
+        usersSynced: users.length,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        message: `Erro ao conectar e sincronizar MySQL: ${err.message}`,
+        error: err.message,
+      });
+    }
+  });
+
+  app.post('/api/db/force-push-cameras', async (req, res) => {
+    loadFromLocalFile();
+    if (!isMysqlActive || !pool) {
+      await initMysqlAndSync();
+    }
+
+    if (!isMysqlActive || !pool) {
+      return res.status(400).json({
+        success: false,
+        message: 'O MySQL não está conectado ativamente. Utilize o botão de teste/conexão para estabelecer a comunicação.',
+      });
+    }
+
+    let synced = 0;
+    const syncedNames: string[] = [];
+    const errors: string[] = [];
+
+    for (const cam of cameras) {
+      try {
+        await syncCameraToMysql(cam);
+        synced++;
+        syncedNames.push(cam.name);
+      } catch (e: any) {
+        errors.push(`${cam.name}: ${e.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${synced} câmeras (de ${cameras.length} cadastradas) foram gravadas com SUCESSO na tabela 'cameras' do MySQL!`,
+      syncedCount: synced,
+      totalInMemory: cameras.length,
+      syncedNames,
+      errors,
+    });
   });
 
   // Financial Plans Endpoints

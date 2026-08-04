@@ -59,7 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'api-docs', label: 'Documentação API REST', icon: Code },
     { id: 'financial-management', label: 'Financeiro & Planos', icon: DollarSign },
     { id: 'activity-reports', label: 'Relatórios Diários', icon: FileText },
-    { id: 'backup-manager', label: 'Backup Automático', icon: Database },
+    { id: 'backup-manager', label: 'Banco MySQL & Backup', icon: Database },
     { id: 'push-notifications', label: 'Notificações Push', icon: Smartphone },
     { id: 'e2ee-vault', label: 'Criptografia E2EE', icon: Lock },
   ];

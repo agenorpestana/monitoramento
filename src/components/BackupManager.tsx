@@ -11,8 +11,10 @@ import {
   Lock,
   Server,
   Cloud,
+  Zap,
 } from 'lucide-react';
 import { BackupConfig, User } from '../types';
+import { DatabaseSyncPanel } from './DatabaseSyncPanel';
 
 interface BackupManagerProps {
   config: BackupConfig;
@@ -27,6 +29,7 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
   onTriggerBackup,
   onUpdateConfig,
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'mysql' | 'backup'>('mysql');
   const [isRunning, setIsRunning] = useState(false);
   const [backupSuccess, setBackupSuccess] = useState(false);
 
@@ -43,8 +46,39 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Top Banner */}
+    <div className="space-y-6">
+      {/* Sub-navigation bar */}
+      <div className="flex border-b border-slate-800 space-x-4">
+        <button
+          onClick={() => setActiveSubTab('mysql')}
+          className={`pb-3 text-xs font-bold flex items-center space-x-2 border-b-2 transition ${
+            activeSubTab === 'mysql'
+              ? 'border-emerald-500 text-emerald-400 font-black'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>Conexão & Sincronização MySQL Remoto</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('backup')}
+          className={`pb-3 text-xs font-bold flex items-center space-x-2 border-b-2 transition ${
+            activeSubTab === 'backup'
+              ? 'border-emerald-500 text-emerald-400 font-black'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <HardDrive className="w-4 h-4" />
+          <span>Rotinas de Backup Automático & Downloads</span>
+        </button>
+      </div>
+
+      {activeSubTab === 'mysql' ? (
+        <DatabaseSyncPanel />
+      ) : (
+        <div className="space-y-4">
+          {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
         <div>
           <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
@@ -215,6 +249,8 @@ export const BackupManager: React.FC<BackupManagerProps> = ({
           </p>
         </div>
       </div>
+      </div>
+      )}
     </div>
   );
 };
