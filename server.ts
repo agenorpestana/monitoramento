@@ -600,6 +600,8 @@ async function startServer() {
           lat: parseFloat(getVal(row, 'lat') || '-17.0397'),
           lng: parseFloat(getVal(row, 'lng') || '-39.5312'),
           thumbnailUrl: String(getVal(row, 'thumbnail_url') || ''),
+          isDemo: Boolean(getVal(row, 'is_demo')),
+          isLiveWebcam: Boolean(getVal(row, 'is_live_webcam')),
           createdAt: String(getVal(row, 'created_at') || '2026-01-01'),
         }));
         if (loadedCams.length > 0) cameras = loadedCams;
@@ -754,9 +756,14 @@ async function startServer() {
           lat REAL,
           lng REAL,
           thumbnail_url TEXT,
+          is_demo INTEGER DEFAULT 0,
+          is_live_webcam INTEGER DEFAULT 0,
           created_at TEXT
         );
       `);
+
+      try { sqliteDb.run('ALTER TABLE cameras ADD COLUMN is_demo INTEGER DEFAULT 0'); } catch (e) {}
+      try { sqliteDb.run('ALTER TABLE cameras ADD COLUMN is_live_webcam INTEGER DEFAULT 0'); } catch (e) {}
 
       sqliteDb.run(`
         CREATE TABLE IF NOT EXISTS users (
@@ -871,8 +878,8 @@ async function startServer() {
     try {
       sqliteDb.run(
         `INSERT OR REPLACE INTO cameras (
-          id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, is_demo, is_live_webcam, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           cam.id,
           cam.name,
@@ -898,6 +905,8 @@ async function startServer() {
           cam.lat || -17.0397,
           cam.lng || -39.5312,
           cam.thumbnailUrl || '',
+          cam.isDemo ? 1 : 0,
+          cam.isLiveWebcam ? 1 : 0,
           cam.createdAt || new Date().toISOString().split('T')[0],
         ]
       );
@@ -1111,10 +1120,10 @@ async function startServer() {
       const safeStorage = isNaN(Number(cam.storageUsedGB)) ? 0.1 : Number(cam.storageUsedGB);
 
       await pool.query(
-        `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO cameras (id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, is_demo, is_live_webcam, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
-         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), encryption_key_hash=VALUES(encryption_key_hash), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url)`,
+         name=VALUES(name), location=VALUES(location), protocol=VALUES(protocol), rtsp_url=VALUES(rtsp_url), rtmp_url=VALUES(rtmp_url), stream_key=VALUES(stream_key), rtmp_server_url=VALUES(rtmp_server_url), full_rtmp_url=VALUES(full_rtmp_url), state_uf=VALUES(state_uf), city=VALUES(city), status=VALUES(status), is_e2ee_encrypted=VALUES(is_e2ee_encrypted), encryption_key_hash=VALUES(encryption_key_hash), fps=VALUES(fps), resolution=VALUES(resolution), storage_used_gb=VALUES(storage_used_gb), cloud_recordings_active=VALUES(cloud_recordings_active), motion_sensitivity=VALUES(motion_sensitivity), ai_detection_enabled=VALUES(ai_detection_enabled), two_way_audio_enabled=VALUES(two_way_audio_enabled), lat=VALUES(lat), lng=VALUES(lng), thumbnail_url=VALUES(thumbnail_url), is_demo=VALUES(is_demo), is_live_webcam=VALUES(is_live_webcam)`,
         [
           cam.id,
           cam.name,
@@ -1140,6 +1149,8 @@ async function startServer() {
           safeLat,
           safeLng,
           cam.thumbnailUrl || '',
+          cam.isDemo ? 1 : 0,
+          cam.isLiveWebcam ? 1 : 0,
           cam.createdAt || new Date().toISOString().split('T')[0],
         ]
       );
@@ -1472,6 +1483,8 @@ async function startServer() {
           lat: parseFloat(row.lat || -17.0397),
           lng: parseFloat(row.lng || -39.5312),
           thumbnailUrl: row.thumbnail_url || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+          isDemo: Boolean(row.is_demo),
+          isLiveWebcam: Boolean(row.is_live_webcam),
           createdAt: row.created_at || '2026-01-01',
         }));
 
@@ -1798,10 +1811,14 @@ async function startServer() {
           \`lat\` DOUBLE NULL,
           \`lng\` DOUBLE NULL,
           \`thumbnail_url\` TEXT,
+          \`is_demo\` TINYINT(1) DEFAULT 0,
+          \`is_live_webcam\` TINYINT(1) DEFAULT 0,
           \`created_at\` VARCHAR(100),
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `);
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `is_demo` TINYINT(1) DEFAULT 0'); } catch (e) {}
+      try { await pool.query('ALTER TABLE `cameras` ADD COLUMN `is_live_webcam` TINYINT(1) DEFAULT 0'); } catch (e) {}
     } catch (e: any) { console.error('[MySQL Table Error] cameras:', e.message); }
 
     try {
@@ -3163,6 +3180,8 @@ async function startServer() {
       lat: lat ? parseFloat(lat) : -17.0397 + (Math.random() - 0.5) * 0.02,
       lng: lng ? parseFloat(lng) : -39.5312 + (Math.random() - 0.5) * 0.02,
       thumbnailUrl: 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+      isDemo: req.body.isDemo !== undefined ? Boolean(req.body.isDemo) : false,
+      isLiveWebcam: req.body.isLiveWebcam !== undefined ? Boolean(req.body.isLiveWebcam) : false,
       createdAt: new Date().toISOString().split('T')[0],
     };
 
