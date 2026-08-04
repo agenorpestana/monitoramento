@@ -24,6 +24,7 @@ import { FacialRecognitionPanel } from './components/FacialRecognitionPanel';
 import { LGPDAuditPanel } from './components/LGPDAuditPanel';
 import { ArchitectureConfigPanel } from './components/ArchitectureConfigPanel';
 import { EventMapPanel } from './components/EventMapPanel';
+import { APIDocumentationPanel } from './components/APIDocumentationPanel';
 
 import {
   Camera,
@@ -1013,6 +1014,10 @@ export default function App() {
                 </p>
               </div>
             )
+          )}
+
+          {activeTab === 'api-docs' && (
+            <APIDocumentationPanel />
           )}
 
           {activeTab === 'financial-management' && (

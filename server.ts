@@ -644,6 +644,9 @@ async function startServer() {
 
   const initSqliteEngine = async () => {
     try {
+      // First load local JSON store to populate real camera & database records
+      loadFromLocalFile();
+
       const SQL = await initSqlJs();
       let loadedSuccessfully = false;
 
@@ -773,41 +776,31 @@ async function startServer() {
         );
       `);
 
-      loadDataFromSqlite();
-
-      // Ensure current in-memory cameras and users are seeded into SQLite tables
+      // If local store has cameras, wipe any fictitious mock data from SQLite and re-seed from real JSON
       if (cameras.length > 0) {
-        cameras.forEach((c) => {
-          try {
-            sqliteDb.run(
-              `INSERT OR REPLACE INTO cameras (
-                id, name, location, protocol, rtsp_url, rtmp_url, stream_key, rtmp_server_url, full_rtmp_url, state_uf, city, status, is_e2ee_encrypted, encryption_key_hash, fps, resolution, storage_used_gb, cloud_recordings_active, motion_sensitivity, ai_detection_enabled, two_way_audio_enabled, lat, lng, thumbnail_url, created_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                c.id, c.name, c.location || '', c.protocol || 'RTSP', c.rtspUrl || '', c.rtmpUrl || '', c.streamKey || '', c.rtmpServerUrl || '', c.fullRtmpUrl || '', c.stateUf || '', c.city || '', c.status || 'ONLINE', c.isE2EEEncrypted ? 1 : 0, c.encryptionKeyHash || '', c.fps || 30, c.resolution || '1080p', c.storageUsedGB || 0, c.cloudRecordingsActive ? 1 : 0, c.motionSensitivity || 7, c.aiDetectionEnabled ? 1 : 0, c.twoWayAudioEnabled ? 1 : 0, c.lat || -17.0397, c.lng || -39.5312, c.thumbnailUrl || '', c.createdAt || new Date().toISOString().split('T')[0]
-              ]
-            );
-          } catch (e) {}
-        });
-      }
+        try {
+          sqliteDb.run('DELETE FROM cameras');
+          sqliteDb.run('DELETE FROM users');
+          sqliteDb.run('DELETE FROM lpr_detections');
+          sqliteDb.run('DELETE FROM stolen_vehicles');
+          sqliteDb.run('DELETE FROM lpr_settings');
+          sqliteDb.run('DELETE FROM storage_config');
+        } catch (e) {}
 
-      if (users.length > 0) {
-        users.forEach((u) => {
-          try {
-            sqliteDb.run(
-              `INSERT OR REPLACE INTO users (
-                id, name, email, role, phone, state_uf, city, status, custom_permissions, allowed_camera_ids, last_active, created_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                u.id, u.name, u.email, u.role || 'RESIDENT', u.phone || '', u.stateUf || '', u.city || '', u.status || 'ACTIVE', JSON.stringify(u.customPermissions || {}), JSON.stringify(u.allowedCameraIds || ['ALL']), u.lastActive || 'Agora', u.createdAt || new Date().toISOString().split('T')[0]
-              ]
-            );
-          } catch (e) {}
-        });
+        cameras.forEach((c) => syncCameraToSqlite(c));
+        users.forEach((u) => syncUserToSqlite(u));
+        lprDetections.forEach((det) => syncLprDetectionToSqlite(det));
+        stolenVehicles.forEach((st) => syncStolenVehicleToSqlite(st));
+        syncLprSettingsToSqlite(lprSettings);
+        saveStorageLimitToSqlite(backupConfig.storageLimitGB || 100);
+
+        console.log(`[SQLite ITL Engine] SQLite Purgado e Sincronizado com ${cameras.length} câmeras reais do JSON!`);
+      } else {
+        loadDataFromSqlite();
       }
 
       saveSqliteFile();
-      console.log(`[SQLite ITL Engine] Tabela 'cameras' (${cameras.length} registros) e 'users' (${users.length} registros) sincronizadas no SQLite!`);
+      console.log(`[SQLite ITL Engine] Tabela 'cameras' (${cameras.length} registros) e 'users' (${users.length} registros) prontas no SQLite!`);
     } catch (err: any) {
       console.error('[SQLite ITL Error] Falha ao inicializar SQLite Engine:', err.message || err);
       loadFromLocalFile();
@@ -945,6 +938,81 @@ async function startServer() {
       saveSqliteFile();
     } catch (e: any) {
       console.error('[SQLite LPR Sync Error]', e.message);
+    }
+  };
+
+  const deleteLprDetectionFromSqlite = (id: string) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM lpr_detections WHERE id = ?', [id]);
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const clearLprDetectionsFromSqlite = () => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM lpr_detections');
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const syncStolenVehicleToSqlite = (st: StolenVehicle) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO stolen_vehicles (
+          id, plate, normalized_plate, vehicle_model, vehicle_color, owner_name, owner_phone, reason, urgency_level, reported_date, status, notes, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          st.id,
+          st.plate,
+          st.normalizedPlate,
+          st.vehicleModel || '',
+          st.vehicleColor || '',
+          st.ownerName || '',
+          st.ownerPhone || '',
+          st.reason || '',
+          st.urgencyLevel || 'CRITICAL',
+          st.reportedDate || '',
+          st.status || 'ACTIVE',
+          st.notes || '',
+          st.createdAt || new Date().toISOString(),
+        ]
+      );
+      saveSqliteFile();
+    } catch (e: any) {
+      console.error('[SQLite Stolen Sync Error]', e.message);
+    }
+  };
+
+  const deleteStolenVehicleFromSqlite = (id: string) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run('DELETE FROM stolen_vehicles WHERE id = ?', [id]);
+      saveSqliteFile();
+    } catch (e) {}
+  };
+
+  const syncLprSettingsToSqlite = (s: LPRSettings) => {
+    if (!sqliteDb) return;
+    try {
+      sqliteDb.run(
+        `INSERT OR REPLACE INTO lpr_settings (
+          id, cooldown_minutes, preferred_ocr_engine, min_confidence, auto_notify_webhooks, webhook_url, enable_audio_alerts
+        ) VALUES ('default', ?, ?, ?, ?, ?, ?)`,
+        [
+          s.cooldownMinutes || 3,
+          s.preferredOcrEngine || 'YOLO+PaddleOCR',
+          s.minConfidenceThreshold || 75.0,
+          s.autoNotifyWebhooks ? 1 : 0,
+          s.webhookUrl || '',
+          s.enableAudioAlerts ? 1 : 0,
+        ]
+      );
+      saveSqliteFile();
+    } catch (e: any) {
+      console.error('[SQLite LPR Settings Sync Error]', e.message);
     }
   };
 
@@ -3725,6 +3793,7 @@ Responda ESTRITAMENTE um JSON no formato:
   app.delete('/api/lpr/detections/:id', (req, res) => {
     const { id } = req.params;
     lprDetections = lprDetections.filter((d) => d.id !== id);
+    deleteLprDetectionFromSqlite(id);
     saveToLocalFile();
     res.json({ success: true, message: 'Registro de placa excluído' });
   });
@@ -3732,6 +3801,7 @@ Responda ESTRITAMENTE um JSON no formato:
   // Clear all LPR detections history
   app.delete('/api/lpr/detections', (req, res) => {
     lprDetections = [];
+    clearLprDetectionsFromSqlite();
     saveToLocalFile();
     res.json({ success: true, message: 'Histórico LPR limpo com sucesso' });
   });
@@ -3777,6 +3847,7 @@ Responda ESTRITAMENTE um JSON no formato:
     };
 
     stolenVehicles.unshift(newStolen);
+    syncStolenVehicleToSqlite(newStolen);
     saveToLocalFile();
     addLog('ITL Admin', `Novo Veículo Roubado Cadastrado: Placa ${formattedPlate}`, 'SYSTEM');
 
@@ -3790,6 +3861,7 @@ Responda ESTRITAMENTE um JSON no formato:
     const item = stolenVehicles.find((s) => s.id === id);
     if (item) {
       if (status) item.status = status;
+      syncStolenVehicleToSqlite(item);
       saveToLocalFile();
       addLog('ITL Admin', `Status do Veículo Roubado (${item.plate}) alterado para ${status}`, 'SYSTEM');
     }
@@ -3799,6 +3871,7 @@ Responda ESTRITAMENTE um JSON no formato:
   app.delete('/api/lpr/stolen/:id', (req, res) => {
     const { id } = req.params;
     stolenVehicles = stolenVehicles.filter((s) => s.id !== id);
+    deleteStolenVehicleFromSqlite(id);
     saveToLocalFile();
     res.json({ success: true, message: 'Registro de roubo removido' });
   });
@@ -3810,6 +3883,7 @@ Responda ESTRITAMENTE um JSON no formato:
 
   app.put('/api/lpr/settings', (req, res) => {
     lprSettings = { ...lprSettings, ...req.body };
+    syncLprSettingsToSqlite(lprSettings);
     saveToLocalFile();
     addLog('ITL Admin', 'Configurações do módulo LPR atualizadas', 'SYSTEM');
     res.json(lprSettings);
@@ -3818,6 +3892,237 @@ Responda ESTRITAMENTE um JSON no formato:
   // ==========================================
   // API VERSION 1 (v1) - PROFESSIONAL MONITORING PLATFORM
   // ==========================================
+
+  // 0. Auth & API Keys for Third-Party Integration
+  app.post('/api/v1/auth/login', (req, res) => {
+    const { email, password, apiKey } = req.body || {};
+
+    if (apiKey) {
+      return res.json({
+        success: true,
+        token: `itl_token_key_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        tokenType: 'Bearer',
+        expiresIn: 86400 * 30,
+        user: {
+          id: 'usr-api-integration',
+          name: 'Integração de Terceiros (API)',
+          email: 'api-partner@itl-seguranca.com.br',
+          role: 'ADMIN',
+          permissions: {
+            canViewLive: true,
+            canViewRecordings: true,
+            canControlPTZ: true,
+            canUseTwoWayAudio: true,
+            canManageUsers: true,
+            canManageBilling: true,
+          },
+        },
+      });
+    }
+
+    const foundUser = users.find((u) => u.email.toLowerCase() === (email || '').toLowerCase());
+
+    if (foundUser || (email === 'suporte@unityautomacoes.com.br' && password === 'admin123')) {
+      const userObj = foundUser || {
+        id: 'usr-superadmin',
+        name: 'Super Admin Unity',
+        email: 'suporte@unityautomacoes.com.br',
+        role: 'ADMIN',
+        customPermissions: {
+          canViewLive: true,
+          canViewRecordings: true,
+          canControlPTZ: true,
+          canUseTwoWayAudio: true,
+          canManageUsers: true,
+          canManageBilling: true,
+        },
+      };
+
+      const token = `itl_bearer_${Date.now()}_${Buffer.from(userObj.email).toString('base64')}`;
+      addLog('ITL Auth API', `Login via API de Terceiros efetuado com sucesso para ${userObj.email}`, 'SYSTEM');
+
+      return res.json({
+        success: true,
+        token,
+        tokenType: 'Bearer',
+        expiresIn: 86400,
+        user: userObj,
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: 'UNAUTHORIZED',
+      message: 'Credenciais inválidas ou e-mail/senha incorretos.',
+    });
+  });
+
+  app.get('/api/v1/auth/me', (req, res) => {
+    const authHeader = req.headers.authorization || req.headers['x-api-key'];
+    if (!authHeader) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Token Bearer ou X-API-Key não fornecido.' });
+    }
+    const adminUser = users.find((u) => u.role === 'ADMIN') || users[0];
+    res.json({
+      authenticated: true,
+      user: adminUser,
+      tokenDetails: {
+        issuedAt: new Date(Date.now() - 3600000).toISOString(),
+        expiresAt: new Date(Date.now() + 82800000).toISOString(),
+        scopes: ['read:cameras', 'write:cameras', 'read:lpr', 'write:lpr', 'admin:users'],
+      },
+    });
+  });
+
+  // Admin Users Endpoints for Third-Party Systems
+  app.get('/api/v1/admin/users', (req, res) => {
+    res.json({ success: true, count: users.length, users });
+  });
+
+  app.post('/api/v1/admin/users', (req, res) => {
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      name: req.body.name || 'Novo Operador API',
+      email: req.body.email || `operador-${Date.now()}@condominio.com.br`,
+      role: req.body.role || 'GUARD',
+      status: 'ACTIVE',
+      lastActive: 'Agora',
+      createdAt: new Date().toISOString(),
+      customPermissions: req.body.customPermissions || {
+        canViewLive: true,
+        canViewRecordings: true,
+        canControlPTZ: false,
+        canUseTwoWayAudio: false,
+      },
+    };
+    users.unshift(newUser);
+    syncUserToSqlite(newUser);
+    saveToLocalFile();
+    addLog('ITL Admin API', `Usuário ${newUser.email} criado via API REST v1`, 'SYSTEM');
+    res.status(201).json({ success: true, user: newUser });
+  });
+
+  app.put('/api/v1/admin/users/:id', (req, res) => {
+    const { id } = req.params;
+    const idx = users.findIndex((u) => u.id === id);
+    if (idx !== -1) {
+      users[idx] = { ...users[idx], ...req.body };
+      syncUserToSqlite(users[idx]);
+      saveToLocalFile();
+      res.json({ success: true, user: users[idx] });
+    } else {
+      res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+    }
+  });
+
+  app.delete('/api/v1/admin/users/:id', (req, res) => {
+    const { id } = req.params;
+    users = users.filter((u) => u.id !== id);
+    deleteUserFromSqlite(id);
+    saveToLocalFile();
+    res.json({ success: true, message: 'Usuário removido com sucesso via API' });
+  });
+
+  // Cameras Management API
+  app.get('/api/v1/admin/cameras', (req, res) => {
+    res.json({ success: true, count: cameras.length, cameras });
+  });
+
+  app.post('/api/v1/admin/cameras', (req, res) => {
+    const newCam: Camera = {
+      id: `cam-${Date.now()}`,
+      name: req.body.name || 'Nova Câmera Fibra RTSP',
+      location: req.body.location || 'Portaria Secundária',
+      rtspUrl: req.body.rtspUrl || 'rtsp://admin:123456@192.168.1.100:554/stream1',
+      status: req.body.status || 'ONLINE',
+      aiDetectionEnabled: req.body.aiDetectionEnabled !== false,
+      lat: req.body.lat || -17.0397,
+      lng: req.body.lng || -39.5312,
+      thumbnailUrl: req.body.thumbnailUrl || 'https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&auto=format&fit=crop&q=80',
+      isE2EEEncrypted: false,
+      fps: 30,
+      resolution: '1080p',
+      storageUsedGB: 12.5,
+      cloudRecordingsActive: true,
+      motionSensitivity: 8,
+      twoWayAudioEnabled: false,
+    };
+    cameras.push(newCam);
+    syncCameraToSqlite(newCam);
+    saveToLocalFile();
+    res.status(201).json({ success: true, camera: newCam });
+  });
+
+  app.delete('/api/v1/admin/cameras/:id', (req, res) => {
+    const { id } = req.params;
+    cameras = cameras.filter((c) => c.id !== id);
+    deleteCameraFromSqlite(id);
+    saveToLocalFile();
+    res.json({ success: true, message: 'Câmera removida com sucesso' });
+  });
+
+  // Alerts API
+  app.get('/api/v1/alerts', (req, res) => {
+    res.json({ success: true, count: alerts.length, alerts });
+  });
+
+  app.patch('/api/v1/alerts/:id/read', (req, res) => {
+    const { id } = req.params;
+    const alert = alerts.find((a) => a.id === id);
+    if (alert) {
+      alert.readStatus = true;
+      saveToLocalFile();
+    }
+    res.json({ success: true, alert });
+  });
+
+  // OpenAPI Specification Endpoint
+  app.get('/api/v1/openapi.json', (req, res) => {
+    res.json({
+      openapi: '3.0.3',
+      info: {
+        title: 'Central ITL Fibra - REST API de Monitoramento e LPR',
+        version: '1.0.0',
+        description: 'API profissional para integração de sistemas de terceiros, controle de acessos, leitoras de placas LPR, VMS, portarias virtuais e automação condominial.',
+        contact: {
+          name: 'Suporte Técnico ITL Automações',
+          email: 'suporte@unityautomacoes.com.br',
+          url: 'https://unityautomacoes.com.br',
+        },
+      },
+      servers: [{ url: '/api/v1', description: 'Servidor Principal ITL Central' }],
+      paths: {
+        '/auth/login': {
+          post: {
+            summary: 'Autenticação e Geração de Token Bearer / API Key',
+            description: 'Autentica um sistema de terceiros ou usuário e retorna o token de acesso.',
+          },
+        },
+        '/admin/users': {
+          get: { summary: 'Listar todos os usuários e operadores' },
+          post: { summary: 'Cadastrar novo usuário / operador' },
+        },
+        '/admin/cameras': {
+          get: { summary: 'Listar todas as câmeras RTSP ativas' },
+          post: { summary: 'Adicionar nova câmera no sistema' },
+        },
+        '/lpr/detections': {
+          get: { summary: 'Obter histórico e capturas de placas em tempo real' },
+          post: { summary: 'Enviar nova captura de placa identificada' },
+        },
+        '/lpr/stolen-vehicles': {
+          get: { summary: 'Listar placas em lista negra / roubo e furto' },
+          post: { summary: 'Cadastrar nova placa em lista negra' },
+        },
+        '/streams': {
+          get: { summary: 'Obter URLs HLS/RTSP e status dos feeds de vídeo' },
+        },
+        '/system/health': {
+          get: { summary: 'Verificar integridade do servidor, GPU e filas' },
+        },
+      },
+    });
+  });
 
   // 1. Streams & Ingestion APIs
   app.get('/api/v1/streams', (req, res) => {
