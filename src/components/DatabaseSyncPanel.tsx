@@ -118,7 +118,10 @@ export const DatabaseSyncPanel: React.FC = () => {
     }
   };
 
-  const grantCommand = `CREATE USER IF NOT EXISTS '${user || 'root'}'@'%' IDENTIFIED BY '${password}';\nGRANT ALL PRIVILEGES ON \`${database || 'itl_cameras'}\`.* TO '${user || 'root'}'@'%';\nFLUSH PRIVILEGES;`;
+  const grantCommand =
+    user === 'root'
+      ? `ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${password || 'itl_pass_2026'}';\nCREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY '${password || 'itl_pass_2026'}';\nGRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;\nFLUSH PRIVILEGES;`
+      : `CREATE USER IF NOT EXISTS '${user}'@'%' IDENTIFIED BY '${password || 'itl123.789'}';\nGRANT ALL PRIVILEGES ON \`${database || 'itl_cameras'}\`.* TO '${user}'@'%';\nALTER USER '${user}'@'%' IDENTIFIED BY '${password || 'itl123.789'}';\nFLUSH PRIVILEGES;`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -203,10 +206,59 @@ export const DatabaseSyncPanel: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Credentials Form */}
         <div className="md:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
-          <h3 className="text-sm font-bold text-slate-200 flex items-center space-x-2">
-            <Server className="w-4 h-4 text-emerald-400" />
-            <span>Parâmetros de Conexão MySQL (Servidor Remoto / VPS)</span>
-          </h3>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-200 flex items-center space-x-2">
+              <Server className="w-4 h-4 text-emerald-400" />
+              <span>Parâmetros de Conexão MySQL (Servidor Remoto / VPS)</span>
+            </h3>
+
+            {/* Quick Presets */}
+            <div className="flex items-center space-x-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setHost('45.183.218.118');
+                  setUser('root');
+                  setPassword('itl_pass_2026');
+                }}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                  host === '45.183.218.118'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                🌐 IP VPS (45.183.218.118)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHost('localhost');
+                  setUser('root');
+                  setPassword('');
+                }}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                  host === 'localhost'
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                💻 Localhost VPS
+              </button>
+            </div>
+          </div>
+
+          {/* Host Explanation Alert */}
+          {host === 'localhost' && (
+            <div className="bg-amber-950/60 border border-amber-500/40 rounded-xl p-3 text-amber-300 text-xs space-y-1">
+              <p className="font-bold flex items-center gap-1">
+                <AlertTriangle className="w-4 h-4 text-amber-400" /> Atenção com "localhost" no Preview Web:
+              </p>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                Quando você testa pelo navegador no <b>Preview da Nuvem</b>, colocar <code>localhost</code> tenta conectar ao contêiner interno do preview (onde o MySQL não está instalado), resultando no erro <i>Access denied for user 'root'@'localhost'</i>.
+                Para conectar do Preview à sua VPS, troque o Host para o IP público <b><code>45.183.218.118</code></b>.
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

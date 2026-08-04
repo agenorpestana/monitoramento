@@ -2778,12 +2778,17 @@ async function startServer() {
       });
     } catch (err: any) {
       let guide = '';
+      const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+      const localhostNote = isLocalhost
+        ? '\n\n⚠️ NOTA IMPORTANTE: Ao testar pelo Preview da Nuvem (Navegador), colocar "localhost" faz a aplicação tentar conectar dentro do próprio servidor em nuvem (onde o MySQL não está rodando). Para conectar à sua VPS remota, troque o Host por "45.183.218.118".'
+        : '';
+
       if (err.code === 'ETIMEDOUT' || err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-        guide = `Não foi possível conectar ao IP ${host}:${port}.\n1. Verifique se a porta 3306 está liberada no Firewall da sua VPS/Servidor (ex: 'ufw allow 3306/tcp').\n2. Verifique se o MySQL no arquivo /etc/mysql/mysql.conf.d/mysqld.cnf tem 'bind-address = 0.0.0.0'.\n3. Reinicie o serviço do MySQL com 'systemctl restart mysql'.`;
-      } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
-        guide = `Usuário '${user}' ou senha incorretos, ou sem permissão de conexão remota '%'.\nNo servidor MySQL via SSH (como você está no Bitvise), execute:\n\nCREATE USER '${user}'@'%' IDENTIFIED BY '${password}';\nGRANT ALL PRIVILEGES ON \`${database}\`.* TO '${user}'@'%';\nFLUSH PRIVILEGES;`;
+        guide = `Não foi possível conectar ao IP ${host}:${port}.\n1. Verifique se a porta 3306 está liberada no Firewall da sua VPS/Servidor (ex: 'sudo ufw allow 3306/tcp').\n2. Verifique se o MySQL em /etc/mysql/mysql.conf.d/mysqld.cnf tem 'bind-address = 0.0.0.0'.\n3. Reinicie o MySQL com 'sudo systemctl restart mysql'.${localhostNote}`;
+      } else if (err.code === 'ER_ACCESS_DENIED_ERROR' || err.code === 'ER_ACCESS_DENIED_NO_PASSWORD_ERROR') {
+        guide = `O MySQL no servidor ${host} recusou a senha/usuário '${user}'.\n\nNo terminal SSH da sua VPS (Bitvise), abra o MySQL ('mysql -u root -p') e cole:\n\n-- Para criar e liberar o usuário '${user}':\nCREATE USER IF NOT EXISTS '${user}'@'%' IDENTIFIED BY '${password || 'sua_senha'}';\nGRANT ALL PRIVILEGES ON \`${database}\`.* TO '${user}'@'%';\nALTER USER '${user}'@'%' IDENTIFIED BY '${password || 'sua_senha'}';\nFLUSH PRIVILEGES;${localhostNote}`;
       } else {
-        guide = `Erro do MySQL [${err.code || 'ERRO'}]: ${err.message}`;
+        guide = `Erro do MySQL [${err.code || 'ERRO'}]: ${err.message}${localhostNote}`;
       }
 
       return res.json({
