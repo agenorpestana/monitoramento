@@ -35,6 +35,8 @@ export interface User {
   allowedCameraIds?: string[]; // If empty or contains 'ALL', user has access to all cameras
   lastActive: string;
   createdAt: string;
+  password?: string;
+  passwordHash?: string;
 
   // Financial fields
   planId?: string;

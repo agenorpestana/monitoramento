@@ -13,6 +13,7 @@ import {
   Edit2,
   MapPin,
   DollarSign,
+  AlertCircle,
 } from 'lucide-react';
 import { User, UserRole, CustomPermissions, Camera } from '../types';
 
@@ -67,6 +68,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [editCities, setEditCities] = useState<IbgeCity[]>([]);
   const [loadingFormCities, setLoadingFormCities] = useState(false);
   const [loadingEditCities, setLoadingEditCities] = useState(false);
+
+  const [formPassword, setFormPassword] = useState('');
+  const [formError, setFormError] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editError, setEditError] = useState('');
 
   const [formState, setFormState] = useState({
     name: '',
@@ -131,65 +137,107 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       .catch(() => setLoadingEditCities(false));
   }, [editingUser?.stateUf]);
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
+
     if (!activeUser.customPermissions.canManageUsers) {
       alert('Sua conta não tem permissão para gerenciar usuários.');
       return;
     }
+
     if (!formState.name || !formState.email) {
-      alert('Nome e Email são obrigatórios');
+      setFormError('Nome e Email são campos obrigatórios.');
       return;
     }
 
-    onAddUser({
-      ...formState,
-      allowedCameraIds: formState.allowedCameraIds.length === 0 ? ['ALL'] : formState.allowedCameraIds,
-    });
+    const cleanEmail = formState.email.trim().toLowerCase();
 
-    setShowAddModal(false);
-    setFormState({
-      name: '',
-      email: '',
-      role: 'RESIDENT',
-      phone: '',
-      stateUf: 'BA',
-      city: 'Itamaraju',
-      allowedCameraIds: ['ALL'],
-      customPermissions: {
-        canViewLive: true,
-        canViewRecordings: true,
-        canControlPTZ: false,
-        canUseTwoWayAudio: false,
-        canManageCameras: false,
-        canDeleteRecordings: false,
-        canAccessAuditLogs: false,
-        canManageUsers: false,
-        canExportReports: false,
-      },
-    });
+    // Check duplicate email
+    const duplicate = users.find((u) => u.email.trim().toLowerCase() === cleanEmail);
+    if (duplicate) {
+      setFormError(`O e-mail '${cleanEmail}' já está cadastrado para o usuário '${duplicate.name}'. Não é permitido utilizar o mesmo e-mail para mais de uma conta.`);
+      return;
+    }
+
+    if (!formPassword || formPassword.trim().length < 4) {
+      setFormError('Defina uma senha de acesso com no mínimo 4 caracteres.');
+      return;
+    }
+
+    try {
+      await onAddUser({
+        ...formState,
+        email: cleanEmail,
+        password: formPassword.trim(),
+        allowedCameraIds: formState.allowedCameraIds.length === 0 ? ['ALL'] : formState.allowedCameraIds,
+      });
+
+      setShowAddModal(false);
+      setFormPassword('');
+      setFormError('');
+      setFormState({
+        name: '',
+        email: '',
+        role: 'RESIDENT',
+        phone: '',
+        stateUf: 'BA',
+        city: 'Itamaraju',
+        allowedCameraIds: ['ALL'],
+        customPermissions: {
+          canViewLive: true,
+          canViewRecordings: true,
+          canControlPTZ: false,
+          canUseTwoWayAudio: false,
+          canManageCameras: false,
+          canDeleteRecordings: false,
+          canAccessAuditLogs: false,
+          canManageUsers: false,
+          canExportReports: false,
+        },
+      });
+    } catch (err: any) {
+      setFormError(err.message || 'Erro ao criar usuário.');
+    }
   };
 
   const handleUpdateEditUserSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setEditError('');
     if (!editingUser) return;
     if (!editingUser.name || !editingUser.email) {
-      alert('Nome e Email são obrigatórios');
+      setEditError('Nome e E-mail de acesso são obrigatórios.');
       return;
     }
 
-    onUpdateUser(editingUser.id, {
+    const cleanEmail = editingUser.email.trim().toLowerCase();
+
+    // Prevent duplicate email with other users
+    const duplicate = users.find((u) => u.id !== editingUser.id && u.email.trim().toLowerCase() === cleanEmail);
+    if (duplicate) {
+      setEditError(`O e-mail '${cleanEmail}' já pertence ao usuário '${duplicate.name}'. Não é permitido atribuir um e-mail já cadastrado.`);
+      return;
+    }
+
+    const updatePayload: Partial<User> = {
       name: editingUser.name,
-      email: editingUser.email,
+      email: cleanEmail,
       role: editingUser.role,
       phone: editingUser.phone,
       stateUf: editingUser.stateUf || 'BA',
       city: editingUser.city || 'Itamaraju',
       allowedCameraIds: (editingUser.allowedCameraIds || []).length === 0 ? ['ALL'] : editingUser.allowedCameraIds,
       customPermissions: editingUser.customPermissions,
-    });
+    };
 
+    if (editPassword.trim()) {
+      updatePayload.password = editPassword.trim();
+    }
+
+    onUpdateUser(editingUser.id, updatePayload);
     setEditingUser(null);
+    setEditPassword('');
+    setEditError('');
   };
 
   const handleTogglePermission = (key: keyof CustomPermissions, targetUser?: User) => {
@@ -320,6 +368,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <UserPlus className="w-4 h-4" /> Cadastrar Usuário e Vincular Câmeras
           </h3>
 
+          {formError && (
+            <div className="p-3 bg-rose-500/20 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center space-x-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
               <label className="block text-slate-300 font-medium mb-1">Nome Completo:</label>
@@ -334,12 +389,24 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Email:</label>
+              <label className="block text-slate-300 font-medium mb-1">Email (Login):</label>
               <input
                 type="email"
                 placeholder="joao@email.com"
                 value={formState.email}
                 onChange={(e) => setFormState({ ...formState, email: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-100 px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-slate-300 font-medium mb-1">Senha de Acesso Criptografada:</label>
+              <input
+                type="password"
+                placeholder="Mínimo 4 caracteres"
+                value={formPassword}
+                onChange={(e) => setFormPassword(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-100 px-3 py-2 rounded-xl outline-none focus:border-emerald-500"
                 required
               />
@@ -697,6 +764,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             </div>
 
             <form onSubmit={handleUpdateEditUserSubmit} className="space-y-4 text-xs">
+              {editError && (
+                <div className="p-3 bg-rose-500/20 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Nome Completo:</label>
@@ -717,6 +791,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
                     required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Nova Senha (Deixe em branco para manter a atual):</label>
+                  <input
+                    type="password"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 p-2.5 rounded-xl outline-none focus:border-emerald-500"
                   />
                 </div>
 

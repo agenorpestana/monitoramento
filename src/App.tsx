@@ -445,11 +445,18 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
-      const newUser = await res.json();
-      if (newUser && newUser.id) {
-        setUsers((prev) => [...prev, newUser]);
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(`Erro ao cadastrar usuário: ${data.error || 'Falha no cadastro'}`);
+        throw new Error(data.error || 'Falha no cadastro');
       }
-    } catch (e) {
+      if (data && data.id) {
+        setUsers((prev) => [...prev.filter((u) => u.id !== data.id), data]);
+      }
+    } catch (e: any) {
+      if (e.message && e.message.includes('já está cadastrado')) {
+        throw e;
+      }
       const fallbackUser: User = {
         id: `user-${Date.now()}`,
         name: userData.name || 'Novo Usuário',
@@ -466,11 +473,20 @@ export default function App() {
 
   const handleUpdateUser = async (userId: string, userData: Partial<User>) => {
     try {
-      await fetch(`/api/users/${userId}`, {
+      const res = await fetch(`/api/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        alert(`Erro ao atualizar usuário: ${data.error || 'Falha na atualização'}`);
+        return;
+      }
+      if (data && data.id) {
+        setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...data } : u)));
+        return;
+      }
     } catch (e) {}
     setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, ...userData } : u)));
   };
